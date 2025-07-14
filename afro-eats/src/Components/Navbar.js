@@ -35,6 +35,8 @@ function Navbar() {
             <>
               <Link to="/login" className="text-gray-700 hover:text-green-600">Login</Link>
               <Link to="/register" className="text-gray-700 hover:text-green-600">Register</Link>
+              <Link to="/register-owner" className="text-blue-600 underline">Register as Restaurant Owner</Link>
+
             </>
           )}
         </div>

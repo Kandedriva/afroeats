@@ -3,6 +3,7 @@ import Navbar from "./Components/Navbar";
 import RestaurantList from "./pages/RestaurantList";
 import RestaurantDetails from "./pages/RestaurantDetails";
 import Register from "./pages/Register";
+import RegisterOwner from "./pages/RegisterOwner";
 import Login from "./pages/Login";
 import { AuthProvider, AuthContext } from "./context/AuthContext";
 import { CartProvider } from "./context/CartContext";
@@ -23,6 +24,7 @@ function AppContent() {
         <Route path="/login" element={<Login />} />
         <Route path="/cart" element={<CartPage />} />
         <Route path="/checkout" element={<Checkout user={user} />} />
+        <Route path="/register-owner" element={<RegisterOwner />} />
       </Routes>
     </>
   );

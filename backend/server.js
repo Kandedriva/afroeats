@@ -8,7 +8,7 @@ import authRoutes from "./routes/authRoutes.js";
 import orderRoutes from "./routes/orderRoutes.js";
 import cartRoutes from "./routes/cartRoutes.js";
 import restaurantRoutes from "./routes/restaurantRoutes.js";
-
+import ownerRoutes from "./routes/ownerRoutes.js";
 
 
 
@@ -23,6 +23,9 @@ app.use(cors({
   origin: "http://localhost:3000",
   credentials: true,
 }));
+
+app.use("/uploads", express.static("uploads"));
+
 
 // Session store setup
 const PgSession = pgSession(session);
@@ -48,6 +51,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/cart", cartRoutes);
 app.use("/api", restaurantRoutes);
+app.use("/api/owners", ownerRoutes);
 // app.use("/api/cart", cartRoutes);
 
 
