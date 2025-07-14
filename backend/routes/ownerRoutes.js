@@ -68,6 +68,46 @@ router.post("/register", upload.single("logo"), async (req, res) => {
     console.error("Owner registration error:", err);
     res.status(500).json({ error: "Server error during registration" });
   }
+
+
+
+
+
+  router.get("/dashboard", async (req, res) => {
+    const ownerId = req.session.ownerId;
+  
+    if (!ownerId) {
+      return res.status(401).json({ error: "Not authenticated as owner" });
+    }
+  
+    try {
+      // 1. Get the owner's restaurant
+      const restaurantResult = await pool.query(
+        "SELECT * FROM restaurants WHERE owner_id = $1",
+        [ownerId]
+      );
+  
+      if (restaurantResult.rows.length === 0) {
+        return res.status(404).json({ error: "No restaurant found for this owner" });
+      }
+  
+      const restaurant = restaurantResult.rows[0];
+  
+      // 2. Get dishes for that restaurant
+      const dishesResult = await pool.query(
+        "SELECT * FROM dishes WHERE restaurant_id = $1",
+        [restaurant.id]
+      );
+  
+      res.json({
+        restaurant,
+        dishes: dishesResult.rows,
+      });
+    } catch (err) {
+      console.error("Dashboard fetch error:", err);
+      res.status(500).json({ error: "Failed to load dashboard data" });
+    }
+  });
 });
 
 export default router;
