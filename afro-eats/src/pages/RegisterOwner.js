@@ -1,0 +1,148 @@
+// src/pages/RegisterOwner.jsx
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+
+const RegisterOwner = () => {
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    password: "",
+    restaurant_name: "",
+    location: "",
+    phone_number: "",
+  });
+  const [logo, setLogo] = useState(null);
+  const [error, setError] = useState("");
+  const navigate = useNavigate();
+
+  const handleChange = (e) => {
+    if (e.target.name === "logo") {
+      setLogo(e.target.files[0]);
+    } else {
+      setFormData({ ...formData, [e.target.name]: e.target.value });
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    const data = new FormData();
+    for (const key in formData) {
+      data.append(key, formData[key]);
+    }
+    if (logo) {
+      data.append("logo", logo);
+    }
+
+    try {
+      const res = await fetch("http://localhost:5001/api/owners/register", {
+        method: "POST",
+        body: data,
+        credentials: "include",
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        setError(errorData.error || "Failed to register owner");
+        return;
+      }
+
+      const result = await res.json();
+      console.log("Registered:", result);
+
+      // Redirect to owner's dashboard or dish form
+      navigate("/owner/dashboard");
+
+    } catch (err) {
+      console.error("Registration error:", err);
+      setError("Server error");
+    }
+  };
+
+  return (
+    <div className="max-w-xl mx-auto mt-10 bg-white p-6 shadow rounded">
+      <h2 className="text-2xl font-bold mb-4">Register as Restaurant Owner</h2>
+
+      {error && <p className="text-red-500 mb-4">{error}</p>}
+
+      <form onSubmit={handleSubmit} encType="multipart/form-data">
+        <input
+          type="text"
+          name="name"
+          placeholder="Owner Name"
+          value={formData.name}
+          onChange={handleChange}
+          className="block w-full mb-3 border p-2 rounded"
+          required
+        />
+
+        <input
+          type="email"
+          name="email"
+          placeholder="Owner Email"
+          value={formData.email}
+          onChange={handleChange}
+          className="block w-full mb-3 border p-2 rounded"
+          required
+        />
+
+        <input
+          type="password"
+          name="password"
+          placeholder="Password"
+          value={formData.password}
+          onChange={handleChange}
+          className="block w-full mb-3 border p-2 rounded"
+          required
+        />
+
+        <input
+          type="text"
+          name="restaurant_name"
+          placeholder="Restaurant Name"
+          value={formData.restaurant_name}
+          onChange={handleChange}
+          className="block w-full mb-3 border p-2 rounded"
+          required
+        />
+
+        <input
+          type="text"
+          name="location"
+          placeholder="Restaurant Address"
+          value={formData.location}
+          onChange={handleChange}
+          className="block w-full mb-3 border p-2 rounded"
+          required
+        />
+
+        <input
+          type="number"
+          name="phone_number"
+          placeholder="Restaurant contact"
+          value={formData.phone_number}
+          onChange={handleChange}
+          className="block w-full mb-3 border p-2 rounded"
+          required
+        />
+
+        <input
+          type="file"
+          name="logo"
+          accept="image/*"
+          onChange={handleChange}
+          className="block mb-3"
+        />
+
+        <button
+          type="submit"
+          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+        >
+          Register
+        </button>
+      </form>
+    </div>
+  );
+};
+
+export default RegisterOwner;
