@@ -1,0 +1,165 @@
+import { createContext, useContext, useEffect, useState, useCallback } from "react";
+import { useAuth } from "./AuthContext";
+
+export const CartContext = createContext();
+
+export const CartProvider = ({ children }) => {
+  const [cart, setCart] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
+
+  const fetchCart = useCallback(async () => {
+    try {
+      const res = await fetch("http://localhost:5001/api/cart", {
+        credentials: "include",
+      });
+  
+      if (res.status === 401) {
+        // User is not logged in — clear cart silently
+        setCart([]);
+        return;
+      }
+  
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(errorText || "Failed to fetch cart");
+      }
+  
+      const data = await res.json();
+      const formatted = data.map((item) => ({
+        id: item.dish_id,
+        name: item.name,
+        price: item.price,
+        quantity: item.quantity,
+      }));
+  
+      setCart(formatted);
+    } catch (err) {
+      // Only log if it's not unauthorized
+      if (!err.message.includes("401")) {
+        console.error("Error fetching cart:", err.message);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  
+
+  useEffect(() => {
+    if (user) {
+      fetchCart(); // Load cart after login
+    } else {
+      setCart([]); // Clear cart after logout
+    }
+  }, [user, fetchCart]);
+  const addToCart = async (dish) => {
+    try {
+      const res = await fetch("http://localhost:5001/api/cart", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ dishId: dish.id, quantity: 1 }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to add to cart");
+      }
+
+      const existing = cart.find((item) => item.id === dish.id);
+      if (existing) {
+        setCart((prev) =>
+          prev.map((item) =>
+            item.id === dish.id ? { ...item, quantity: item.quantity + 1 } : item
+          )
+        );
+      } else {
+        setCart((prev) => [...prev, { ...dish, quantity: 1 }]);
+      }
+    } catch (err) {
+      console.error("Error adding to cart:", err);
+    }
+  };
+
+  const updateQuantity = async (id, quantity) => {
+    try {
+      const res = await fetch("http://localhost:5001/api/cart", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ dishId: id, quantity }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to update quantity");
+      }
+
+      setCart((prev) =>
+        prev.map((item) =>
+          item.id === id ? { ...item, quantity: Math.max(quantity, 1) } : item
+        )
+      );
+    } catch (err) {
+      console.error("Error updating quantity:", err);
+    }
+  };
+
+  const removeFromCart = async (id) => {
+    try {
+      const res = await fetch(`http://localhost:5001/api/cart/${id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to remove item");
+      }
+
+      setCart((prev) => prev.filter((item) => item.id !== id));
+    } catch (err) {
+      console.error("Error removing from cart:", err);
+    }
+  };
+
+  const clearCart = async () => {
+    try {
+      const res = await fetch("http://localhost:5001/api/cart", {
+        method: "DELETE",
+        credentials: "include",
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to clear cart");
+      }
+
+      setCart([]);
+    } catch (err) {
+      console.error("Error clearing cart:", err);
+    }
+  };
+
+  const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+
+  return (
+    <CartContext.Provider
+      value={{
+        cart,
+        loading,
+        addToCart,
+        updateQuantity,
+        removeFromCart,
+        clearCart,
+        total,
+        fetchCart, // 👈 exported for AuthContext to use
+        setCart,   // 👈 also exported
+      }}
+    >
+      {children}
+    </CartContext.Provider>
+  );
+};
+
+export const useCart = () => useContext(CartContext);
