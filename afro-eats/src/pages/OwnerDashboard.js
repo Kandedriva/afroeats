@@ -1,9 +1,13 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useContext } from "react";
+import { OwnerAuthContext } from "../context/OwnerAuthContext";
+import { Navigate, useNavigate } from "react-router-dom";
 
 function OwnerDashboard() {
+  const { owner, loading: authLoading } = useContext(OwnerAuthContext);
   const [restaurant, setRestaurant] = useState(null);
   const [dishes, setDishes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchDashboard = async () => {
@@ -30,7 +34,28 @@ function OwnerDashboard() {
     fetchDashboard();
   }, []);
 
-  if (loading) return <div className="text-center p-6">Loading dashboard...</div>;
+  const handleLogout = async () => {
+    try {
+      const res = await fetch("http://localhost:5001/api/owners/logout", {
+        method: "POST",
+        credentials: "include",
+      });
+
+      if (!res.ok) throw new Error("Logout failed");
+
+      navigate("/owner/login");
+    } catch (err) {
+      console.error("Logout error:", err.message);
+    }
+  };
+
+  if (authLoading || loading) {
+    return <div className="text-center p-6">Loading dashboard...</div>;
+  }
+
+  if (!owner) {
+    return <Navigate to="/owner/login" />;
+  }
 
   return (
     <div className="max-w-4xl mx-auto p-6">
@@ -42,7 +67,7 @@ function OwnerDashboard() {
           <p className="text-gray-600">📍 {restaurant.address}</p>
           {restaurant.image_url && (
             <img
-              src={`http://localhost:5001/${restaurant.image_url}`}
+              src={`http://localhost:5001/${restaurant.image_url.replace(/\\/g, "/")}`}
               alt="Logo"
               className="w-32 h-32 object-cover mt-4 rounded"
             />
@@ -54,7 +79,7 @@ function OwnerDashboard() {
         <h3 className="text-lg font-semibold">Your Dishes</h3>
         <button
           className="bg-green-600 text-white px-4 py-2 rounded"
-          onClick={() => window.location.href = "/owner/add-dish"}
+          onClick={() => navigate("/owner/add-dish")}
         >
           ➕ Add Dish
         </button>
@@ -68,7 +93,16 @@ function OwnerDashboard() {
             <div key={dish.id} className="border p-4 rounded bg-white">
               <h4 className="font-semibold">{dish.name}</h4>
               <p>${dish.price}</p>
-              <p className="text-sm text-gray-500">{dish.available ? "Available" : "Not Available"}</p>
+              <p className="text-sm text-gray-500">
+                {dish.is_available ? "Available" : "Not Available"}
+              </p>
+              {dish.image_url && (
+                <img
+                  src={`http://localhost:5001${dish.image_url.replace(/\\/g, "/")}`}
+                  alt={dish.name}
+                  className="w-24 h-24 object-cover mt-2 rounded"
+                />
+              )}
             </div>
           ))
         )}

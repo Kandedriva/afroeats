@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 
 function RestaurantCard({ restaurant }) {
   const imageUrl = restaurant.image_url
-    ? `http://localhost:5001/${restaurant.image_url.replace(/\\/g, "/")}`
+    ? `http://localhost:5001${restaurant.image_url.replace(/\\/g, "/")}`
     : "https://via.placeholder.com/300x200?text=No+Image";
 
   return (

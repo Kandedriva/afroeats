@@ -92,6 +92,21 @@ router.post("/login", async (req, res) => {
   }
 });
 
+
+// ========= OWNER LOGOUT ==========
+router.post("/logout", (req, res) => {
+  req.session.destroy((err) => {
+    if (err) {
+      console.error("Logout error:", err);
+      return res.status(500).json({ error: "Failed to log out" });
+    }
+
+    res.clearCookie("connect.sid"); // default session cookie name
+    res.status(200).json({ message: "Logged out successfully" });
+  });
+});
+
+
 // ========= MULTER STORAGE FOR DISH IMAGES ==========
 const dishStorage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -232,5 +247,32 @@ router.patch("/dishes/:id/availability", async (req, res) => {
     res.status(500).json({ error: "Server error while updating availability" });
   }
 });
+
+// GET /api/owners/check-session
+router.get("/check-session", (req, res) => {
+  if (req.session.ownerId) {
+    res.json({
+      owner: {
+        id: req.session.ownerId,
+        name: req.session.ownerName,
+      },
+    });
+  } else {
+    res.status(401).json({ error: "Not logged in" });
+  }
+});
+
+// Check current owner session
+router.get("/me", (req, res) => {
+  if (req.session.ownerId) {
+    res.json({
+      id: req.session.ownerId,
+      name: req.session.ownerName,
+    });
+  } else {
+    res.status(401).json({ error: "Not logged in" });
+  }
+});
+
 
 export default router;
