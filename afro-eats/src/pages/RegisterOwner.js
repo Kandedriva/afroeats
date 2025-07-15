@@ -1,6 +1,7 @@
 // src/pages/RegisterOwner.jsx
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 
 const RegisterOwner = () => {
   const [formData, setFormData] = useState({
@@ -139,8 +140,12 @@ const RegisterOwner = () => {
           className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
         >
           Register
-        </button>
+        </button><br></br>
+        Or
       </form>
+      <Link to="/owner/login" className="text-blue-600 underline">Login</Link>
+
+
     </div>
   );
 };

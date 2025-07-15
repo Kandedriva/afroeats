@@ -12,6 +12,7 @@ import { CartProvider } from "./context/CartContext";
 import CartPage from "./pages/CartPage";
 import Checkout from "./pages/Checkout";
 import { useContext } from "react";
+import OwnerLogin from "./Components/OwnerLogin";
 
 function AppContent() {
   const { user } = useContext(AuthContext);
@@ -29,6 +30,7 @@ function AppContent() {
         <Route path="/register-owner" element={<RegisterOwner />} />
         <Route path="/owner/dashboard" element={<OwnerDashboard />} />
         <Route path="/owner/add-dish" element={<AddDish />} />
+        <Route path="/owner/login" element={<OwnerLogin />} />
         {/* <Route path="/owner/dashboard" element={<OwnerDashboard />} /> */}
       </Routes>
     </>

@@ -1,9 +1,13 @@
 import React, { useEffect, useState } from "react";
+import useOwnerAuth from "../hooks/useOwnerAuth";
 
 const OwnerDashboard = () => {
   const [orders, setOrders] = useState([]);
   const [dishes, setDishes] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  const { checking } = useOwnerAuth();
+
 
   useEffect(() => {
     const fetchDashboard = async () => {
@@ -51,7 +55,7 @@ const OwnerDashboard = () => {
     }
   };
 
-  if (loading) return <p>Loading dashboard...</p>;
+  if (checking || loading) return <p>Loading dashboard...</p>;
 
   return (
     <div className="p-6">

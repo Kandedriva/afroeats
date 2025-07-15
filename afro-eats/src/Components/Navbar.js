@@ -17,9 +17,9 @@ function Navbar() {
         </Link>
 
         <div className="space-x-4 flex items-center">
-          <Link to="/cart" className="text-gray-700 hover:text-green-600">
+          {/* <Link to="/cart" className="text-gray-700 hover:text-green-600">
             Cart {cartItemCount > 0 && `(${cartItemCount})`}
-          </Link>
+          </Link> */}
 
           {user ? (
             <>
@@ -35,7 +35,7 @@ function Navbar() {
             <>
               <Link to="/login" className="text-gray-700 hover:text-green-600">Login</Link>
               <Link to="/register" className="text-gray-700 hover:text-green-600">Register</Link>
-              <Link to="/register-owner" className="text-blue-600 underline">Register as Restaurant Owner</Link>
+              <Link to="/register-owner" className="text-blue-600 underline">Register or Login as Restaurant Owner</Link>
 
             </>
           )}
