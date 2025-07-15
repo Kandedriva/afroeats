@@ -1,5 +1,6 @@
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, useLocation } from "react-router-dom";
 import Navbar from "./Components/Navbar";
+import OwnerNavbar from "./Components/OwnerNavbar";
 import RestaurantList from "./pages/RestaurantList";
 import RestaurantDetails from "./pages/RestaurantDetails";
 import Register from "./pages/Register";
@@ -13,13 +14,19 @@ import CartPage from "./pages/CartPage";
 import Checkout from "./pages/Checkout";
 import { useContext } from "react";
 import OwnerLogin from "./Components/OwnerLogin";
+import ProtectedOwnerRoute from "./Components/ProtectedOwnerRoute";
+import { OwnerAuthProvider, OwnerAuthContext } from "./context/OwnerAuthContext"; // if you set this up separately
 
 function AppContent() {
   const { user } = useContext(AuthContext);
+  const { owner } = useContext(OwnerAuthContext); // use owner context
+  const location = useLocation();
+  const isOwnerRoute = location.pathname.startsWith("/owner");
 
   return (
     <>
-      <Navbar />
+      {!isOwnerRoute && <Navbar />}
+      {isOwnerRoute && <OwnerNavbar />}
       <Routes>
         <Route path="/" element={<RestaurantList />} />
         <Route path="/restaurants/:id" element={<RestaurantDetails />} />
@@ -28,10 +35,25 @@ function AppContent() {
         <Route path="/cart" element={<CartPage />} />
         <Route path="/checkout" element={<Checkout user={user} />} />
         <Route path="/register-owner" element={<RegisterOwner />} />
-        <Route path="/owner/dashboard" element={<OwnerDashboard />} />
-        <Route path="/owner/add-dish" element={<AddDish />} />
         <Route path="/owner/login" element={<OwnerLogin />} />
-        {/* <Route path="/owner/dashboard" element={<OwnerDashboard />} /> */}
+
+        {/* ✅ Protected Owner Routes */}
+        <Route
+          path="/owner/dashboard"
+          element={
+            <ProtectedOwnerRoute owner={owner}>
+              <OwnerDashboard />
+            </ProtectedOwnerRoute>
+          }
+        />
+        <Route
+          path="/owner/add-dish"
+          element={
+            <ProtectedOwnerRoute owner={owner}>
+              <AddDish />
+            </ProtectedOwnerRoute>
+          }
+        />
       </Routes>
     </>
   );
@@ -40,13 +62,13 @@ function AppContent() {
 function App() {
   return (
     <div className="min-h-screen bg-gray-100">
-   
-    <AuthProvider>
-    <CartProvider>
-          <AppContent />
+      <AuthProvider>
+        <OwnerAuthProvider>
+          <CartProvider>
+            <AppContent />
           </CartProvider>
+        </OwnerAuthProvider>
       </AuthProvider>
-     
     </div>
   );
 }

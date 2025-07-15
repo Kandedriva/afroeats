@@ -17,9 +17,9 @@ function Navbar() {
         </Link>
 
         <div className="space-x-4 flex items-center">
-          {/* <Link to="/cart" className="text-gray-700 hover:text-green-600">
+          <Link to="/cart" className="text-gray-700 hover:text-green-600">
             Cart {cartItemCount > 0 && `(${cartItemCount})`}
-          </Link> */}
+          </Link>
 
           {user ? (
             <>

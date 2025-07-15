@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import useOwnerAuth from "../hooks/useOwnerAuth";
+import OwnerNavbar from "./OwnerNavbar";
 
 const OwnerDashboard = () => {
   const [orders, setOrders] = useState([]);
@@ -58,6 +59,8 @@ const OwnerDashboard = () => {
   if (checking || loading) return <p>Loading dashboard...</p>;
 
   return (
+    <>
+      <OwnerNavbar />
     <div className="p-6">
       <h1 className="text-2xl font-bold mb-6">Owner Dashboard</h1>
 
@@ -141,7 +144,9 @@ const OwnerDashboard = () => {
         )}
       </section>
     </div>
-  );
+  
+    </>
+    );
 };
 
 export default OwnerDashboard;

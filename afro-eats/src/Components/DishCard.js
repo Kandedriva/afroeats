@@ -10,7 +10,7 @@ function DishCard({ dish }) {
   return (
     <div className="bg-white rounded-2xl shadow p-4">
       <img
-  src={`http://localhost:5001/${dish.image_url}`}
+  src={`http://localhost:5001${dish.image_url}`}
   alt={dish.name}
   className="w-full h-40 object-cover rounded"
 />
