@@ -2,12 +2,16 @@ import React from "react";
 import { Link } from "react-router-dom";
 
 function RestaurantCard({ restaurant }) {
+  const imageUrl = restaurant.image_url
+    ? `http://localhost:5001/${restaurant.image_url.replace(/\\/g, "/")}`
+    : "https://via.placeholder.com/300x200?text=No+Image";
+
   return (
     <Link to={`/restaurants/${restaurant.id}`}>
       <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-shadow duration-300 cursor-pointer">
         <img
           className="w-full h-40 object-cover"
-          src={restaurant.imageUrl}
+          src={imageUrl}
           alt={restaurant.name}
         />
         <div className="p-4">

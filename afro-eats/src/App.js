@@ -29,6 +29,7 @@ function AppContent() {
         <Route path="/register-owner" element={<RegisterOwner />} />
         <Route path="/owner/dashboard" element={<OwnerDashboard />} />
         <Route path="/owner/add-dish" element={<AddDish />} />
+        {/* <Route path="/owner/dashboard" element={<OwnerDashboard />} /> */}
       </Routes>
     </>
   );
