@@ -61,6 +61,37 @@ router.post("/register", uploadLogo.single("logo"), async (req, res) => {
   }
 });
 
+// ========= OWNER LOGING ==========
+router.post("/login", async (req, res) => {
+  const { email, password } = req.body;
+
+  try {
+    // Check if owner exists
+    const ownerRes = await pool.query("SELECT * FROM restaurant_owners WHERE email = $1", [email]);
+
+    if (ownerRes.rows.length === 0) {
+      return res.status(400).json({ error: "Invalid email or password" });
+    }
+
+    const owner = ownerRes.rows[0];
+
+    // Compare password
+    const match = await bcrypt.compare(password, owner.password);
+    if (!match) {
+      return res.status(400).json({ error: "Invalid email or password" });
+    }
+
+    // Set session
+    req.session.ownerId = owner.id;
+    req.session.ownerName = owner.name;
+
+    res.json({ message: "Login successful", owner: { id: owner.id, name: owner.name, email: owner.email } });
+  } catch (err) {
+    console.error("Owner login error:", err);
+    res.status(500).json({ error: "Server error during login" });
+  }
+});
+
 // ========= MULTER STORAGE FOR DISH IMAGES ==========
 const dishStorage = multer.diskStorage({
   destination: (req, file, cb) => {
