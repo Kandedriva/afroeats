@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useContext } from "react";
 import { OwnerAuthContext } from "../context/OwnerAuthContext";
 import { Navigate, useNavigate } from "react-router-dom";
+import ToggleSwitch from "../Components/ToggleSwitch";
 
 function OwnerDashboard() {
   const { owner, loading: authLoading } = useContext(OwnerAuthContext);
@@ -34,18 +35,30 @@ function OwnerDashboard() {
     fetchDashboard();
   }, []);
 
-  const handleLogout = async () => {
+  const toggleAvailability = async (dishId, currentStatus) => {
     try {
-      const res = await fetch("http://localhost:5001/api/owners/logout", {
-        method: "POST",
-        credentials: "include",
-      });
+      const res = await fetch(
+        `http://localhost:5001/api/owners/dishes/${dishId}/availability`,
+        {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ isAvailable: !currentStatus }),
+        }
+      );
 
-      if (!res.ok) throw new Error("Logout failed");
+      if (!res.ok) throw new Error("Failed to update availability");
 
-      navigate("/owner/login");
+      setDishes((prev) =>
+        prev.map((dish) =>
+          dish.id === dishId
+            ? { ...dish, is_available: !currentStatus }
+            : dish
+        )
+      );
     } catch (err) {
-      console.error("Logout error:", err.message);
+      console.error(err);
+      alert("Error updating availability");
     }
   };
 
@@ -90,19 +103,34 @@ function OwnerDashboard() {
           <p>No dishes yet.</p>
         ) : (
           dishes.map((dish) => (
-            <div key={dish.id} className="border p-4 rounded bg-white">
-              <h4 className="font-semibold">{dish.name}</h4>
-              <p>${dish.price}</p>
-              <p className="text-sm text-gray-500">
-                {dish.is_available ? "Available" : "Not Available"}
-              </p>
-              {dish.image_url && (
-                <img
-                  src={`http://localhost:5001${dish.image_url.replace(/\\/g, "/")}`}
-                  alt={dish.name}
-                  className="w-24 h-24 object-cover mt-2 rounded"
+            <div key={dish.id} className="border p-4 rounded bg-white flex justify-between items-center">
+              <div className="flex items-center gap-4">
+                {dish.image_url && (
+                  <img
+                    src={`http://localhost:5001${dish.image_url.replace(/\\/g, "/")}`}
+                    alt={dish.name}
+                    className="w-24 h-24 object-cover rounded"
+                  />
+                )}
+                <div>
+                  <h4 className="font-semibold text-lg">{dish.name}</h4>
+                  <p className="text-gray-600">${dish.price}</p>
+                  <p className="text-sm text-gray-500">
+                    {dish.is_available ? "✅ Available" : "❌ Not Available"}
+                  </p>
+                </div>
+              </div>
+
+              {/* Toggle availability switch */}
+              <div className="flex flex-col items-end">
+                <ToggleSwitch
+                  checked={!!dish.is_available}
+                  onChange={() => toggleAvailability(dish.id, !!dish.is_available)}
                 />
-              )}
+                <span className="text-xs mt-1 text-gray-500">
+                  {dish.is_available ? "In Stock" : "Out of Stock"}
+                </span>
+              </div>
             </div>
           ))
         )}

@@ -28,6 +28,10 @@ export default function RestaurantDetails() {
   }, [id]);
 
   function handleAddToCart(dish) {
+    if (!dish.is_available) {
+      alert(`${dish.name} is currently unavailable.`);
+      return;
+    }
     setCart((prev) => [...prev, dish]);
   }
 
@@ -50,7 +54,35 @@ export default function RestaurantDetails() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
           {dishes.map((dish) => (
-            <DishCard key={dish.id} dish={dish} onAddToCart={handleAddToCart} />
+            <div
+              key={dish.id}
+              className={`border rounded-lg p-4 shadow-sm bg-white ${
+                !dish.is_available ? "opacity-50 pointer-events-none" : ""
+              }`}
+            >
+              <img
+                src={`http://localhost:5001${dish.image_url}`}
+                alt={dish.name}
+                className="w-full h-40 object-cover rounded mb-3"
+              />
+              <h4 className="text-lg font-semibold">{dish.name}</h4>
+              <p className="text-gray-600">{dish.description}</p>
+              <p className="text-sm text-gray-500 mb-1">
+                {dish.is_available ? "✅ Available" : "❌ Not Available"}
+              </p>
+              <p className="font-bold">${Number(dish.price).toFixed(2)}</p>
+              <button
+                onClick={() => handleAddToCart(dish)}
+                disabled={!dish.is_available}
+                className={`mt-2 px-4 py-2 rounded text-white w-full ${
+                  dish.is_available
+                    ? "bg-blue-600 hover:bg-blue-700"
+                    : "bg-gray-400 cursor-not-allowed"
+                }`}
+              >
+                {dish.is_available ? "Add to Cart" : "Unavailable"}
+              </button>
+            </div>
           ))}
         </div>
       )}
