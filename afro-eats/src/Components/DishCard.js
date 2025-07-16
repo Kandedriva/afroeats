@@ -15,6 +15,7 @@ function DishCard({ dish }) {
   className="w-full h-40 object-cover rounded"
 />
       <h3 className="text-lg font-semibold text-gray-800">{dish.name}</h3>
+      <p className="text-gray-600">{dish.description}</p>
       <p className="text-green-600 font-bold mb-2">${dish.price}</p>
       <button
         onClick={() => {addToCart(dish)
