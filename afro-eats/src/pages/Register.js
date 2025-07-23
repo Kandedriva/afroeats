@@ -4,7 +4,8 @@ export default function Register() {
   const [form, setForm] = useState({
     name: "",
     email: "",
-    password: ""
+    password: "",
+    secret_word: ""
   });
 
   const handleChange = (e) => {
@@ -65,6 +66,18 @@ export default function Register() {
           className="w-full px-4 py-2 border rounded"
           required
         />
+        <input
+          type="text"
+          name="secret_word"
+          placeholder="Secret Word (for password recovery)"
+          value={form.secret_word}
+          onChange={handleChange}
+          className="w-full px-4 py-2 border rounded"
+          required
+        />
+        <p className="text-sm text-gray-600 -mt-2">
+          💡 Remember this word - you'll need it to update your password later
+        </p>
         <button type="submit" className="w-full bg-green-600 text-white py-2 rounded hover:bg-green-700">
           Register
         </button>

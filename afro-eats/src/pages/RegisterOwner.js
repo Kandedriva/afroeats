@@ -2,18 +2,21 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Link } from "react-router-dom";
+import { useOwnerAuth } from "../context/OwnerAuthContext";
 
 const RegisterOwner = () => {
   const [formData, setFormData] = useState({
     name: "",
     email: "",
     password: "",
+    secret_word: "",
     restaurant_name: "",
     location: "",
     phone_number: "",
   });
   const [logo, setLogo] = useState(null);
   const [error, setError] = useState("");
+  const { refreshAuth } = useOwnerAuth();
   const navigate = useNavigate();
 
   const handleChange = (e) => {
@@ -51,7 +54,8 @@ const RegisterOwner = () => {
       const result = await res.json();
       console.log("Registered:", result);
 
-      // Redirect to owner's dashboard or dish form
+      // Refresh auth context and redirect
+      await refreshAuth();
       navigate("/owner/dashboard");
 
     } catch (err) {
@@ -96,6 +100,19 @@ const RegisterOwner = () => {
           className="block w-full mb-3 border p-2 rounded"
           required
         />
+
+        <input
+          type="text"
+          name="secret_word"
+          placeholder="Secret Word (for password recovery)"
+          value={formData.secret_word}
+          onChange={handleChange}
+          className="block w-full mb-3 border p-2 rounded"
+          required
+        />
+        <p className="text-sm text-gray-600 mb-3 -mt-2">
+          💡 Remember this word - you'll need it to update your password later
+        </p>
 
         <input
           type="text"

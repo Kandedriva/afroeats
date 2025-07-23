@@ -10,6 +10,10 @@ import cartRoutes from "./routes/cartRoutes.js";
 import restaurantRoutes from "./routes/restaurantRoutes.js";
 import ownerRoutes from "./routes/ownerRoutes.js";
 import ownerAuthRoutes from "./routes/ownerAuthRoutes.js";
+import stripeRoutes from "./routes/stripeRoutes.js";
+import subscriptionRoutes from "./routes/subscriptionRoutes.js";
+import webhookRoutes from "./routes/webhook.js";
+
 
 
 
@@ -54,6 +58,10 @@ app.use("/api/cart", cartRoutes);
 app.use("/api", restaurantRoutes);
 app.use("/api/owners", ownerRoutes);
 app.use("/api/auth", ownerAuthRoutes);
+app.use("/api", stripeRoutes);
+app.use("/api/subscription", subscriptionRoutes);
+app.use("/api", webhookRoutes);
+
 
 app.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);

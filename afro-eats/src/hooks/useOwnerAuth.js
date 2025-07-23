@@ -17,7 +17,7 @@ export default function useOwnerAuth() {
         if (res.ok) {
           setIsAuthenticated(true);
         } else {
-          navigate("/owner/login");
+          navigate("/owner/dashboard");
         }
       } catch (err) {
         console.error("Auth check error:", err);

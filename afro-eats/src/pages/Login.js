@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
 import { useContext } from "react";
 
@@ -80,6 +80,15 @@ export default function Login() {
           Login
         </button>
       </form>
+
+      <div className="mt-4 text-center">
+        <Link
+          to="/password-update"
+          className="text-sm text-blue-600 hover:text-blue-800 underline"
+        >
+          Forgot your password? Update it here
+        </Link>
+      </div>
 
       {error && <p className="text-red-600 mt-2">{error}</p>}
     </div>

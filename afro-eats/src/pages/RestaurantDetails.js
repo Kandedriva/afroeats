@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import DishCard from "../Components/DishCard";
+import { useCart } from "../context/CartContext";
 
 export default function RestaurantDetails() {
   const { id } = useParams();
   const [restaurant, setRestaurant] = useState(null);
   const [dishes, setDishes] = useState([]);
-  const [cart, setCart] = useState([]);
   const [error, setError] = useState("");
+
+  const { addToCart } = useCart();
 
   useEffect(() => {
     const fetchRestaurantDetails = async () => {
@@ -32,7 +33,14 @@ export default function RestaurantDetails() {
       alert(`${dish.name} is currently unavailable.`);
       return;
     }
-    setCart((prev) => [...prev, dish]);
+
+    const dishWithRestaurantInfo = {
+      ...dish,
+      restaurant_id: restaurant.id,
+      restaurant_name: restaurant.name,
+    };
+
+    addToCart(dishWithRestaurantInfo);
   }
 
   if (error) {

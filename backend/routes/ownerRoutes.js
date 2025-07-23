@@ -24,7 +24,7 @@ const uploadLogo = multer({ storage: logoStorage });
 
 // ========= OWNER REGISTRATION ==========
 router.post("/register", uploadLogo.single("logo"), async (req, res) => {
-  const { name, email, password, restaurant_name, address, phone_number } = req.body;
+  const { name, email, password, secret_word, restaurant_name, location, phone_number } = req.body;
   const logoPath = req.file ? `/uploads/restaurant_logos/${req.file.filename}` : null;
 
   try {
@@ -34,20 +34,46 @@ router.post("/register", uploadLogo.single("logo"), async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedSecretWord = await bcrypt.hash(secret_word, 10);
 
-    const ownerResult = await pool.query(
-      `INSERT INTO restaurant_owners (name, email, password)
-       VALUES ($1, $2, $3) RETURNING id, name, email`,
-      [name, email, hashedPassword]
-    );
+    // Create owner (handle case where columns might not exist)
+    let ownerResult;
+    try {
+      // Try with both secret_word and is_subscribed columns
+      ownerResult = await pool.query(
+        `INSERT INTO restaurant_owners (name, email, password, secret_word, is_subscribed)
+         VALUES ($1, $2, $3, $4, $5) RETURNING id, name, email`,
+        [name, email, hashedPassword, hashedSecretWord, false]
+      );
+    } catch (err) {
+      console.log("Trying registration without some columns:", err.message);
+      try {
+        // Try with just secret_word (no is_subscribed)
+        ownerResult = await pool.query(
+          `INSERT INTO restaurant_owners (name, email, password, secret_word)
+           VALUES ($1, $2, $3, $4) RETURNING id, name, email`,
+          [name, email, hashedPassword, hashedSecretWord]
+        );
+      } catch (err2) {
+        // If secret_word column doesn't exist either, fallback to basic registration
+        console.log("Trying registration with basic columns only");
+        ownerResult = await pool.query(
+          `INSERT INTO restaurant_owners (name, email, password)
+           VALUES ($1, $2, $3) RETURNING id, name, email`,
+          [name, email, hashedPassword]
+        );
+      }
+    }
     const ownerId = ownerResult.rows[0].id;
 
+    // Create restaurant
     const restaurantResult = await pool.query(
       `INSERT INTO restaurants (name, address, phone_number, image_url, owner_id)
        VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [restaurant_name, address, phone_number, logoPath, ownerId]
+      [restaurant_name, location, phone_number, logoPath, ownerId]
     );
 
+    // Set session
     req.session.ownerId = ownerId;
     req.session.ownerName = name;
 
@@ -274,5 +300,164 @@ router.get("/me", (req, res) => {
   }
 });
 
+// Get restaurant info for owner
+router.get("/restaurant", async (req, res) => {
+  const ownerId = req.session.ownerId;
+  if (!ownerId) return res.status(401).json({ error: "Not authorized" });
+
+  try {
+    const restaurantRes = await pool.query(
+      "SELECT * FROM restaurants WHERE owner_id = $1",
+      [ownerId]
+    );
+
+    if (restaurantRes.rows.length === 0) {
+      return res.status(404).json({ error: "No restaurant found for this owner." });
+    }
+
+    const restaurant = restaurantRes.rows[0];
+    
+    res.json({
+      ...restaurant,
+      image_url: restaurant.image_url ? restaurant.image_url.replace(/\\/g, "/") : null
+    });
+  } catch (err) {
+    console.error("Restaurant fetch error:", err);
+    res.status(500).json({ error: "Server error while fetching restaurant data" });
+  }
+});
+
+// GET /api/owners/orders - Get orders for restaurant owner
+router.get("/orders", async (req, res) => {
+  try {
+    const ownerId = req.session.ownerId;
+    
+    if (!ownerId) {
+      return res.status(401).json({ error: "Must be logged in as owner" });
+    }
+
+    // Get all orders for restaurants owned by this owner
+    const ordersResult = await pool.query(`
+      SELECT 
+        o.id as order_id,
+        o.total,
+        COALESCE(o.platform_fee, 0) as platform_fee,
+        o.created_at,
+        o.paid_at,
+        u.name as customer_name,
+        u.email as customer_email,
+        oi.id as item_id,
+        oi.name as item_name,
+        oi.price as item_price,
+        oi.quantity,
+        r.name as restaurant_name,
+        r.id as restaurant_id
+      FROM orders o
+      JOIN order_items oi ON o.id = oi.order_id
+      LEFT JOIN dishes d ON oi.dish_id = d.id
+      LEFT JOIN restaurants r ON d.restaurant_id = r.id
+      JOIN restaurant_owners ro ON r.owner_id = ro.id
+      JOIN users u ON o.user_id = u.id
+      WHERE ro.id = $1
+      ORDER BY o.created_at DESC
+    `, [ownerId]);
+
+    // Group orders by order_id
+    const groupedOrders = ordersResult.rows.reduce((acc, row) => {
+      if (!acc[row.order_id]) {
+        acc[row.order_id] = {
+          id: row.order_id,
+          total: row.total,
+          status: row.status,
+          platform_fee: row.platform_fee,
+          created_at: row.created_at,
+          paid_at: row.paid_at,
+          customer_name: row.customer_name,
+          customer_email: row.customer_email,
+          items: []
+        };
+      }
+      
+      // Only include items from this owner's restaurants
+      acc[row.order_id].items.push({
+        id: row.item_id,
+        name: row.item_name,
+        price: row.item_price,
+        quantity: row.quantity,
+        restaurant_name: row.restaurant_name,
+        restaurant_id: row.restaurant_id
+      });
+      
+      return acc;
+    }, {});
+
+    const orders = Object.values(groupedOrders);
+
+    res.json({ orders });
+  } catch (err) {
+    console.error("Get owner orders error:", err);
+    res.status(500).json({ error: "Failed to get orders" });
+  }
+});
+
+// POST /api/owners/update-password - Update owner password using secret word
+router.post("/update-password", async (req, res) => {
+  try {
+    const { email, secret_word, new_password } = req.body;
+
+    // Validate input
+    if (!email || !secret_word || !new_password) {
+      return res.status(400).json({ error: "Email, secret word, and new password are required" });
+    }
+
+    if (new_password.length < 6) {
+      return res.status(400).json({ error: "New password must be at least 6 characters long" });
+    }
+
+    // Find owner by email
+    const ownerResult = await pool.query(
+      "SELECT * FROM restaurant_owners WHERE email = $1",
+      [email]
+    );
+
+    if (ownerResult.rows.length === 0) {
+      return res.status(404).json({ error: "No account found with this email address" });
+    }
+
+    const owner = ownerResult.rows[0];
+
+    // Verify secret word
+    if (!owner.secret_word) {
+      return res.status(400).json({ 
+        error: "This account was created before secret word feature. Please contact support." 
+      });
+    }
+
+    const secretWordMatch = await bcrypt.compare(secret_word, owner.secret_word);
+    if (!secretWordMatch) {
+      return res.status(400).json({ error: "Invalid secret word" });
+    }
+
+    // Hash new password
+    const hashedNewPassword = await bcrypt.hash(new_password, 10);
+
+    // Update password
+    await pool.query(
+      "UPDATE restaurant_owners SET password = $1 WHERE id = $2",
+      [hashedNewPassword, owner.id]
+    );
+
+    console.log(`🔐 Password updated for owner: ${owner.email}`);
+
+    res.json({ 
+      success: true, 
+      message: "Password updated successfully" 
+    });
+
+  } catch (err) {
+    console.error("Password update error:", err);
+    res.status(500).json({ error: "Server error during password update" });
+  }
+});
 
 export default router;
