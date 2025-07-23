@@ -1,4 +1,4 @@
-// In routes/authRoutes.js (or create routes/ownerAuthRoutes.js)
+// routes/ownerAuthRoutes.js
 import express from "express";
 import pool from "../db.js";
 import bcrypt from "bcrypt";
@@ -26,11 +26,19 @@ router.post("/owners/login", async (req, res) => {
       return res.status(400).json({ error: "Invalid credentials" });
     }
 
+    // Allow login without subscription - subscription will be checked when adding dishes
+
     // Save owner info to session
     req.session.ownerId = owner.id;
     req.session.ownerName = owner.name;
 
-    res.json({ message: "Login successful", owner: { id: owner.id, name: owner.name } });
+    res.json({
+      message: "Login successful",
+      owner: {
+        id: owner.id,
+        name: owner.name,
+      },
+    });
   } catch (err) {
     console.error("Owner login error:", err);
     res.status(500).json({ error: "Server error during login" });

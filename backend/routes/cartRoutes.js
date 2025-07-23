@@ -4,11 +4,24 @@ import { requireAuth } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-// Get current user's cart
+// Get current user's cart with restaurant info
 router.get("/", requireAuth, async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT c.id, c.dish_id, d.name, d.price, c.quantity FROM carts c JOIN dishes d ON c.dish_id = d.id WHERE c.user_id = $1",
+      `
+      SELECT 
+        c.id, 
+        c.dish_id, 
+        d.name, 
+        d.price, 
+        c.quantity, 
+        r.id AS restaurant_id, 
+        r.name AS restaurant_name
+      FROM carts c
+      JOIN dishes d ON c.dish_id = d.id
+      JOIN restaurants r ON d.restaurant_id = r.id
+      WHERE c.user_id = $1
+      `,
       [req.session.userId]
     );
     res.json(result.rows);

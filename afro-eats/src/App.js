@@ -14,6 +14,12 @@ import CartPage from "./pages/CartPage";
 import Checkout from "./pages/Checkout";
 import { useContext } from "react";
 import OwnerLogin from "./Components/OwnerLogin";
+import OwnerSubscribePage from "./pages/OwnerSubscribePage";
+import OwnerPasswordUpdate from "./pages/OwnerPasswordUpdate";
+import UserPasswordUpdate from "./pages/UserPasswordUpdate";
+import DemoCheckout from "./pages/DemoCheckout";
+import DemoOrderCheckout from "./pages/DemoOrderCheckout";
+import OrderSuccess from "./pages/OrderSuccess";
 import ProtectedOwnerRoute from "./Components/ProtectedOwnerRoute";
 import { OwnerAuthProvider, OwnerAuthContext } from "./context/OwnerAuthContext"; // if you set this up separately
 
@@ -32,16 +38,22 @@ function AppContent() {
         <Route path="/restaurants/:id" element={<RestaurantDetails />} />
         <Route path="/register" element={<Register />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/password-update" element={<UserPasswordUpdate />} />
         <Route path="/cart" element={<CartPage />} />
         <Route path="/checkout" element={<Checkout user={user} />} />
         <Route path="/register-owner" element={<RegisterOwner />} />
         <Route path="/owner/login" element={<OwnerLogin />} />
+        <Route path="/owner/password-update" element={<OwnerPasswordUpdate />} />
+        <Route path="/owner/subscribe" element={<OwnerSubscribePage />} />
+        <Route path="/owner/demo-checkout" element={<DemoCheckout />} />
+        <Route path="/demo-order-checkout" element={<DemoOrderCheckout />} />
+        <Route path="/order-success" element={<OrderSuccess />} />
 
         {/* ✅ Protected Owner Routes */}
         <Route
           path="/owner/dashboard"
           element={
-            <ProtectedOwnerRoute owner={owner}>
+            <ProtectedOwnerRoute>
               <OwnerDashboard />
             </ProtectedOwnerRoute>
           }
@@ -49,7 +61,7 @@ function AppContent() {
         <Route
           path="/owner/add-dish"
           element={
-            <ProtectedOwnerRoute owner={owner}>
+            <ProtectedOwnerRoute>
               <AddDish />
             </ProtectedOwnerRoute>
           }

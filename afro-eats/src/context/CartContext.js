@@ -13,29 +13,30 @@ export const CartProvider = ({ children }) => {
       const res = await fetch("http://localhost:5001/api/cart", {
         credentials: "include",
       });
-  
+
       if (res.status === 401) {
-        // User is not logged in — clear cart silently
         setCart([]);
         return;
       }
-  
+
       if (!res.ok) {
         const errorText = await res.text();
         throw new Error(errorText || "Failed to fetch cart");
       }
-  
+
       const data = await res.json();
+
       const formatted = data.map((item) => ({
         id: item.dish_id,
         name: item.name,
-        price: item.price,
+        price: parseFloat(item.price),
         quantity: item.quantity,
+        restaurantId: item.restaurant_id,
+        restaurantName: item.restaurant_name,
       }));
-  
+
       setCart(formatted);
     } catch (err) {
-      // Only log if it's not unauthorized
       if (!err.message.includes("401")) {
         console.error("Error fetching cart:", err.message);
       }
@@ -43,15 +44,15 @@ export const CartProvider = ({ children }) => {
       setLoading(false);
     }
   }, []);
-  
 
   useEffect(() => {
     if (user) {
-      fetchCart(); // Load cart after login
+      fetchCart();
     } else {
-      setCart([]); // Clear cart after logout
+      setCart([]);
     }
   }, [user, fetchCart]);
+
   const addToCart = async (dish) => {
     try {
       const res = await fetch("http://localhost:5001/api/cart", {
@@ -74,7 +75,15 @@ export const CartProvider = ({ children }) => {
           )
         );
       } else {
-        setCart((prev) => [...prev, { ...dish, quantity: 1 }]);
+        setCart((prev) => [
+          ...prev,
+          {
+            ...dish,
+            quantity: 1,
+            restaurantId: dish.restaurant_id,
+            restaurantName: dish.restaurant_name,
+          },
+        ]);
       }
     } catch (err) {
       console.error("Error adding to cart:", err);
@@ -153,8 +162,8 @@ export const CartProvider = ({ children }) => {
         removeFromCart,
         clearCart,
         total,
-        fetchCart, // 👈 exported for AuthContext to use
-        setCart,   // 👈 also exported
+        fetchCart,
+        setCart,
       }}
     >
       {children}

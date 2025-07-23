@@ -1,32 +1,41 @@
 import React from "react";
 import { useCart } from "../context/CartContext";
-import { Link } from "react-router-dom";
 
 function DishCard({ dish }) {
   const { addToCart } = useCart();
-  console.log("Dish image:", dish.image_url);
 
+  const handleAddToCart = () => {
+    if (!dish.is_available) {
+      alert("This dish is currently unavailable.");
+      return;
+    }
+
+    addToCart(dish);
+    console.log("Added to cart:", dish.name);
+  };
 
   return (
     <div className="bg-white rounded-2xl shadow p-4">
       <img
-  src={`http://localhost:5001${dish.image_url}`}
-  alt={dish.name}
-  className="w-full h-40 object-cover rounded"
-/>
+        src={`http://localhost:5001${dish.image_url}`}
+        alt={dish.name}
+        className="w-full h-40 object-cover rounded mb-2"
+      />
       <h3 className="text-lg font-semibold text-gray-800">{dish.name}</h3>
       <p className="text-gray-600">{dish.description}</p>
-      <p className="text-green-600 font-bold mb-2">${dish.price}</p>
+      <p className="text-green-600 font-bold mb-2">${Number(dish.price).toFixed(2)}</p>
+
       <button
-        onClick={() => {addToCart(dish)
-          console.log("Clicked:", dish.name);
-        
-        }}
-        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+        onClick={handleAddToCart}
+        disabled={!dish.is_available}
+        className={`px-4 py-2 rounded-lg w-full ${
+          dish.is_available
+            ? "bg-green-600 text-white hover:bg-green-700"
+            : "bg-gray-400 text-white cursor-not-allowed"
+        }`}
       >
-        Add to Cart
+        {dish.is_available ? "Add to Cart" : "Unavailable"}
       </button>
-      
     </div>
   );
 }

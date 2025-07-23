@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import useOwnerAuth from "../hooks/useOwnerAuth";
 import OwnerNavbar from "./OwnerNavbar";
 import ToggleSwitch from "./ToggleSwitch";
@@ -7,17 +8,54 @@ const OwnerDashboard = () => {
   const [orders, setOrders] = useState([]);
   const [dishes, setDishes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [stripeStatus, setStripeStatus] = useState(null);
+  const [stripeLoading, setStripeLoading] = useState(false);
+  const [subscriptionActive, setSubscriptionActive] = useState(false);
 
+  const navigate = useNavigate();
   const { checking } = useOwnerAuth();
 
   useEffect(() => {
-    const fetchDashboard = async () => {
+    const checkSubscriptionStatus = async () => {
+      try {
+        const res = await fetch("http://localhost:5001/api/stripe/subscription-status", {
+          credentials: "include",
+        });
+
+        if (res.status === 403) {
+          // Not subscribed
+          return navigate("/owner/subscribe");
+        } else if (res.status === 401) {
+          // Not logged in
+          return navigate("/owner/login");
+        }
+
+        const data = await res.json();
+        setSubscriptionActive(data.subscription_active);
+      } catch (err) {
+        console.error("Subscription status check error:", err);
+      }
+    };
+
+    const fetchStripeStatus = async () => {
+      try {
+        const res = await fetch("http://localhost:5001/api/owners/stripe/account-status", {
+          credentials: "include",
+        });
+        if (!res.ok) throw new Error("Could not fetch Stripe account status");
+        const data = await res.json();
+        setStripeStatus(data.details_submitted);
+      } catch (err) {
+        console.error("Stripe status error:", err.message);
+      }
+    };
+
+    const fetchDashboardData = async () => {
       try {
         const res = await fetch("http://localhost:5001/api/owners/dashboard", {
           credentials: "include",
         });
-        if (!res.ok) throw new Error("Server error while fetching dashboard data");
-
+        if (!res.ok) throw new Error("Error fetching dashboard data");
         const data = await res.json();
         setDishes(Array.isArray(data.dishes) ? data.dishes : []);
         setOrders(Array.isArray(data.orders) ? data.orders : []);
@@ -28,8 +66,32 @@ const OwnerDashboard = () => {
       }
     };
 
-    fetchDashboard();
-  }, []);
+    // Check auth/subscription first before fetching data
+    checkSubscriptionStatus().then(() => {
+      fetchStripeStatus();
+      fetchDashboardData();
+    });
+  }, [navigate]);
+
+  const connectStripe = async () => {
+    try {
+      setStripeLoading(true);
+      const res = await fetch("http://localhost:5001/api/owners/stripe/create-stripe-account", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (!res.ok) throw new Error("Stripe onboarding failed");
+      const data = await res.json();
+      window.location.href = data.url;
+    } catch (err) {
+      console.error("Stripe Connect error", err.message);
+      alert("Failed to connect to Stripe.");
+    } finally {
+      setStripeLoading(false);
+    }
+  };
 
   const toggleAvailability = async (dishId, currentStatus) => {
     try {
@@ -56,6 +118,10 @@ const OwnerDashboard = () => {
     }
   };
 
+  const handleAddDish = () => {
+    navigate("/owner/add-dish");
+  };
+
   if (checking || loading) return <p>Loading dashboard...</p>;
 
   return (
@@ -63,6 +129,34 @@ const OwnerDashboard = () => {
       <OwnerNavbar />
       <div className="p-6">
         <h1 className="text-2xl font-bold mb-6">Owner Dashboard</h1>
+
+        {/* Stripe Connect Section */}
+        <section className="mb-8">
+          <h2 className="text-xl font-semibold mb-2">Stripe Connect</h2>
+          {stripeStatus ? (
+            <p className="text-green-600 font-medium">
+              ✅ Stripe account connected.
+            </p>
+          ) : (
+            <button
+              onClick={connectStripe}
+              className="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700"
+              disabled={stripeLoading}
+            >
+              {stripeLoading ? "Redirecting..." : "Connect with Stripe"}
+            </button>
+          )}
+        </section>
+
+        {/* Add Dish Button */}
+        <div className="mb-6">
+          <button
+            onClick={handleAddDish}
+            className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+          >
+            + Add Dish
+          </button>
+        </div>
 
         {/* Dishes Section */}
         <section className="mb-10">
