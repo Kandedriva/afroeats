@@ -23,6 +23,9 @@ function Navbar() {
 
           {user ? (
             <>
+              <Link to="/my-orders" className="text-gray-700 hover:text-green-600">
+                My Orders
+              </Link>
               <span className="text-gray-700">Welcome, {user.name.split(" ")[0]}</span>
               <button
                 onClick={logout}

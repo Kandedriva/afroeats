@@ -6,7 +6,7 @@ const router = express.Router();
 
 // 🔐 REGISTER
 router.post("/register", async (req, res) => {
-  const { name, email, password, secret_word } = req.body;
+  const { name, email, password, secret_word, address, phone } = req.body;
 
   try {
     const userExists = await pool.query("SELECT * FROM users WHERE email = $1", [email]);
@@ -18,20 +18,29 @@ router.post("/register", async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, saltRounds);
     const hashedSecretWord = await bcrypt.hash(secret_word, saltRounds);
 
-    // Try to insert with secret_word, fallback to basic registration if column doesn't exist
+    // Try to insert with all fields, with graceful fallbacks
     let newUser;
     try {
       newUser = await pool.query(
-        "INSERT INTO users (name, email, password, secret_word) VALUES ($1, $2, $3, $4) RETURNING id, name, email",
-        [name, email, hashedPassword, hashedSecretWord]
+        "INSERT INTO users (name, email, password, secret_word, address, phone) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, name, email",
+        [name, email, hashedPassword, hashedSecretWord, address, phone]
       );
     } catch (err) {
-      console.log("Trying user registration without secret_word column:", err.message);
-      // Fallback to basic registration if secret_word column doesn't exist
-      newUser = await pool.query(
-        "INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING id, name, email",
-        [name, email, hashedPassword]
-      );
+      console.log("Trying user registration without some columns:", err.message);
+      try {
+        // Try with just secret_word (no address/phone)
+        newUser = await pool.query(
+          "INSERT INTO users (name, email, password, secret_word) VALUES ($1, $2, $3, $4) RETURNING id, name, email",
+          [name, email, hashedPassword, hashedSecretWord]
+        );
+      } catch (err2) {
+        // Fallback to basic registration if other columns don't exist
+        console.log("Trying basic user registration:", err2.message);
+        newUser = await pool.query(
+          "INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING id, name, email",
+          [name, email, hashedPassword]
+        );
+      }
     }
 
     req.session.userId = newUser.rows[0].id;
@@ -166,6 +175,187 @@ router.post("/update-password", async (req, res) => {
   } catch (err) {
     console.error("User password update error:", err);
     res.status(500).json({ error: "Server error during password update" });
+  }
+});
+
+// GET /api/auth/orders - Get customer's orders
+router.get("/orders", async (req, res) => {
+  try {
+    const userId = req.session.userId;
+
+    if (!userId) {
+      return res.status(401).json({ error: "Must be logged in to view orders" });
+    }
+
+    // Get all orders for the customer with order items
+    const ordersResult = await pool.query(`
+      SELECT 
+        o.id as order_id,
+        o.total,
+        o.status,
+        COALESCE(o.platform_fee, 0) as platform_fee,
+        o.created_at,
+        o.paid_at,
+        oi.id as item_id,
+        oi.name as item_name,
+        oi.price as item_price,
+        oi.quantity,
+        r.name as restaurant_name,
+        r.id as restaurant_id
+      FROM orders o
+      JOIN order_items oi ON o.id = oi.order_id
+      LEFT JOIN dishes d ON oi.dish_id = d.id
+      LEFT JOIN restaurants r ON d.restaurant_id = r.id
+      WHERE o.user_id = $1
+      ORDER BY o.created_at DESC
+    `, [userId]);
+
+    // Group orders by order_id
+    const groupedOrders = ordersResult.rows.reduce((acc, row) => {
+      if (!acc[row.order_id]) {
+        acc[row.order_id] = {
+          id: row.order_id,
+          total: row.total,
+          status: row.status || 'pending',
+          platform_fee: row.platform_fee,
+          created_at: row.created_at,
+          paid_at: row.paid_at,
+          items: []
+        };
+      }
+      
+      acc[row.order_id].items.push({
+        id: row.item_id,
+        name: row.item_name,
+        price: row.item_price,
+        quantity: row.quantity,
+        restaurant_name: row.restaurant_name,
+        restaurant_id: row.restaurant_id
+      });
+      
+      return acc;
+    }, {});
+
+    const orders = Object.values(groupedOrders);
+
+    res.json({ orders });
+  } catch (err) {
+    console.error("Get customer orders error:", err);
+    res.status(500).json({ error: "Failed to get orders" });
+  }
+});
+
+// POST /api/auth/orders/:id/cancel - Cancel customer order with refund request
+router.post("/orders/:id/cancel", async (req, res) => {
+  try {
+    const orderId = req.params.id;
+    const userId = req.session.userId;
+    const { reason, requestRefund } = req.body;
+
+    if (!userId) {
+      return res.status(401).json({ error: "Must be logged in to cancel order" });
+    }
+
+    // Check if order exists and belongs to user
+    const orderResult = await pool.query(
+      "SELECT o.*, u.name as customer_name, u.email as customer_email FROM orders o JOIN users u ON o.user_id = u.id WHERE o.id = $1 AND o.user_id = $2",
+      [orderId, userId]
+    );
+
+    if (orderResult.rows.length === 0) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    const order = orderResult.rows[0];
+    const currentStatus = order.status;
+
+    // Only allow cancellation if order is not yet completed or delivered
+    if (currentStatus === 'completed' || currentStatus === 'delivered') {
+      return res.status(400).json({ 
+        error: "Cannot cancel order that has already been completed or delivered" 
+      });
+    }
+
+    // Create notifications table if it doesn't exist
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS notifications (
+          id SERIAL PRIMARY KEY,
+          owner_id INTEGER REFERENCES restaurant_owners(id),
+          order_id INTEGER REFERENCES orders(id),
+          type VARCHAR(50) NOT NULL,
+          title VARCHAR(255) NOT NULL,
+          message TEXT NOT NULL,
+          data JSONB,
+          read BOOLEAN DEFAULT FALSE,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+    } catch (err) {
+      console.log("Notifications table creation check - might already exist");
+    }
+
+    // Update order status to cancelled
+    await pool.query(
+      "UPDATE orders SET status = $1 WHERE id = $2",
+      ['cancelled', orderId]
+    );
+
+    // Get all restaurants involved in this order for notifications
+    const restaurantsResult = await pool.query(`
+      SELECT DISTINCT r.id as restaurant_id, r.name as restaurant_name, ro.id as owner_id, ro.name as owner_name
+      FROM order_items oi
+      LEFT JOIN dishes d ON oi.dish_id = d.id
+      LEFT JOIN restaurants r ON d.restaurant_id = r.id
+      LEFT JOIN restaurant_owners ro ON r.owner_id = ro.id
+      WHERE oi.order_id = $1 AND ro.id IS NOT NULL
+    `, [orderId]);
+
+    // Create notifications for each restaurant owner
+    const notificationPromises = restaurantsResult.rows.map(restaurant => {
+      const notificationData = {
+        orderId: parseInt(orderId),
+        customerId: userId,
+        customerName: order.customer_name,
+        customerEmail: order.customer_email,
+        orderTotal: order.total,
+        reason: reason || 'No reason provided',
+        requestRefund: requestRefund || false,
+        restaurantId: restaurant.restaurant_id,
+        restaurantName: restaurant.restaurant_name,
+        cancelledAt: new Date().toISOString()
+      };
+
+      const title = requestRefund 
+        ? `🔄 Refund Request - Order #${orderId}`
+        : `❌ Order Cancelled - #${orderId}`;
+
+      const message = requestRefund
+        ? `Customer ${order.customer_name} cancelled order #${orderId} and requested a refund. Reason: ${reason || 'No reason provided'}. Order total: $${Number(order.total || 0).toFixed(2)}`
+        : `Customer ${order.customer_name} cancelled order #${orderId}. Reason: ${reason || 'No reason provided'}. Order total: $${Number(order.total || 0).toFixed(2)}`;
+
+      return pool.query(
+        `INSERT INTO notifications (owner_id, order_id, type, title, message, data, read) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [restaurant.owner_id, orderId, requestRefund ? 'refund_request' : 'order_cancelled', title, message, JSON.stringify(notificationData), false]
+      );
+    });
+
+    await Promise.all(notificationPromises);
+
+    console.log(`📋 Order ${orderId} cancelled by customer ${userId}${requestRefund ? ' with refund request' : ''}`);
+    console.log(`📧 Notifications sent to ${restaurantsResult.rows.length} restaurant owner(s)`);
+
+    res.json({ 
+      success: true, 
+      message: requestRefund 
+        ? "Order cancelled and refund request sent to restaurant owner" 
+        : "Order cancelled successfully",
+      notificationsSent: restaurantsResult.rows.length
+    });
+  } catch (err) {
+    console.error("Cancel order error:", err);
+    res.status(500).json({ error: "Failed to cancel order" });
   }
 });
 

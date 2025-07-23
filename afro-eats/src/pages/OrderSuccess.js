@@ -177,10 +177,10 @@ function OrderSuccess() {
           Browse More Restaurants
         </button>
         <button
-          onClick={() => navigate('/cart')}
-          className="flex-1 bg-green-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-green-700 transition-colors"
+          onClick={() => navigate('/my-orders')}
+          className="flex-1 bg-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-700 transition-colors"
         >
-          Place Another Order
+          View My Orders
         </button>
       </div>
     </div>

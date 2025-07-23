@@ -336,16 +336,27 @@ router.get("/orders", async (req, res) => {
       return res.status(401).json({ error: "Must be logged in as owner" });
     }
 
+    // First, ensure address and phone columns exist in users table
+    try {
+      await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS address TEXT");
+      await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(20)");
+    } catch (err) {
+      console.log("Column creation check - columns might already exist");
+    }
+
     // Get all orders for restaurants owned by this owner
     const ordersResult = await pool.query(`
       SELECT 
         o.id as order_id,
         o.total,
+        o.status,
         COALESCE(o.platform_fee, 0) as platform_fee,
         o.created_at,
         o.paid_at,
         u.name as customer_name,
         u.email as customer_email,
+        COALESCE(u.address, 'No address provided') as customer_address,
+        COALESCE(u.phone, 'No phone provided') as customer_phone,
         oi.id as item_id,
         oi.name as item_name,
         oi.price as item_price,
@@ -358,7 +369,7 @@ router.get("/orders", async (req, res) => {
       LEFT JOIN restaurants r ON d.restaurant_id = r.id
       JOIN restaurant_owners ro ON r.owner_id = ro.id
       JOIN users u ON o.user_id = u.id
-      WHERE ro.id = $1
+      WHERE ro.id = $1 AND (o.status = 'paid' OR o.status IS NULL)
       ORDER BY o.created_at DESC
     `, [ownerId]);
 
@@ -374,6 +385,8 @@ router.get("/orders", async (req, res) => {
           paid_at: row.paid_at,
           customer_name: row.customer_name,
           customer_email: row.customer_email,
+          customer_address: row.customer_address,
+          customer_phone: row.customer_phone,
           items: []
         };
       }
@@ -457,6 +470,184 @@ router.post("/update-password", async (req, res) => {
   } catch (err) {
     console.error("Password update error:", err);
     res.status(500).json({ error: "Server error during password update" });
+  }
+});
+
+// POST /api/owners/orders/:id/complete - Mark order as completed
+router.post("/orders/:id/complete", async (req, res) => {
+  try {
+    const orderId = req.params.id;
+    const ownerId = req.session.ownerId;
+
+    if (!ownerId) {
+      return res.status(401).json({ error: "Must be logged in as owner" });
+    }
+
+    // Verify the order belongs to this owner's restaurant
+    const verifyResult = await pool.query(`
+      SELECT o.id 
+      FROM orders o
+      JOIN order_items oi ON o.id = oi.order_id
+      LEFT JOIN dishes d ON oi.dish_id = d.id
+      LEFT JOIN restaurants r ON d.restaurant_id = r.id
+      JOIN restaurant_owners ro ON r.owner_id = ro.id
+      WHERE o.id = $1 AND ro.id = $2
+      LIMIT 1
+    `, [orderId, ownerId]);
+
+    if (verifyResult.rows.length === 0) {
+      return res.status(404).json({ error: "Order not found or not accessible" });
+    }
+
+    // Update order status to completed
+    await pool.query(
+      "UPDATE orders SET status = $1 WHERE id = $2",
+      ['completed', orderId]
+    );
+
+    console.log(`✅ Order ${orderId} marked as completed by owner ${ownerId}`);
+
+    res.json({ 
+      success: true, 
+      message: "Order marked as completed successfully" 
+    });
+  } catch (err) {
+    console.error("Complete order error:", err);
+    res.status(500).json({ error: "Failed to complete order" });
+  }
+});
+
+// GET /api/owners/notifications - Get notifications for restaurant owner
+router.get("/notifications", async (req, res) => {
+  try {
+    const ownerId = req.session.ownerId;
+
+    if (!ownerId) {
+      return res.status(401).json({ error: "Must be logged in as owner" });
+    }
+
+    // Get all notifications for this owner
+    const notificationsResult = await pool.query(`
+      SELECT 
+        n.*,
+        o.total as order_total,
+        o.created_at as order_created_at
+      FROM notifications n
+      LEFT JOIN orders o ON n.order_id = o.id
+      WHERE n.owner_id = $1
+      ORDER BY n.created_at DESC
+      LIMIT 50
+    `, [ownerId]);
+
+    res.json({ 
+      notifications: notificationsResult.rows,
+      unreadCount: notificationsResult.rows.filter(n => !n.read).length
+    });
+  } catch (err) {
+    console.error("Get notifications error:", err);
+    res.status(500).json({ error: "Failed to get notifications" });
+  }
+});
+
+// POST /api/owners/notifications/:id/mark-read - Mark notification as read
+router.post("/notifications/:id/mark-read", async (req, res) => {
+  try {
+    const notificationId = req.params.id;
+    const ownerId = req.session.ownerId;
+
+    if (!ownerId) {
+      return res.status(401).json({ error: "Must be logged in as owner" });
+    }
+
+    // Mark notification as read (ensure it belongs to this owner)
+    const result = await pool.query(
+      "UPDATE notifications SET read = TRUE WHERE id = $1 AND owner_id = $2 RETURNING *",
+      [notificationId, ownerId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Notification not found" });
+    }
+
+    res.json({ success: true, message: "Notification marked as read" });
+  } catch (err) {
+    console.error("Mark notification read error:", err);
+    res.status(500).json({ error: "Failed to mark notification as read" });
+  }
+});
+
+// POST /api/owners/notifications/mark-all-read - Mark all notifications as read
+router.post("/notifications/mark-all-read", async (req, res) => {
+  try {
+    const ownerId = req.session.ownerId;
+
+    if (!ownerId) {
+      return res.status(401).json({ error: "Must be logged in as owner" });
+    }
+
+    await pool.query(
+      "UPDATE notifications SET read = TRUE WHERE owner_id = $1 AND read = FALSE",
+      [ownerId]
+    );
+
+    res.json({ success: true, message: "All notifications marked as read" });
+  } catch (err) {
+    console.error("Mark all notifications read error:", err);
+    res.status(500).json({ error: "Failed to mark all notifications as read" });
+  }
+});
+
+// POST /api/owners/refunds/:notificationId/process - Process refund request
+router.post("/refunds/:notificationId/process", async (req, res) => {
+  try {
+    const notificationId = req.params.notificationId;
+    const ownerId = req.session.ownerId;
+    const { action, notes } = req.body; // action: 'approve' or 'deny'
+
+    if (!ownerId) {
+      return res.status(401).json({ error: "Must be logged in as owner" });
+    }
+
+    // Get the notification and verify ownership
+    const notificationResult = await pool.query(
+      "SELECT * FROM notifications WHERE id = $1 AND owner_id = $2 AND type = 'refund_request'",
+      [notificationId, ownerId]
+    );
+
+    if (notificationResult.rows.length === 0) {
+      return res.status(404).json({ error: "Refund request not found" });
+    }
+
+    const notification = notificationResult.rows[0];
+    const notificationData = notification.data;
+
+    // Update notification with refund decision
+    const updatedData = {
+      ...notificationData,
+      refundProcessed: true,
+      refundAction: action,
+      refundNotes: notes || '',
+      processedAt: new Date().toISOString(),
+      processedBy: ownerId
+    };
+
+    await pool.query(
+      "UPDATE notifications SET data = $1, read = TRUE WHERE id = $2",
+      [JSON.stringify(updatedData), notificationId]
+    );
+
+    // Log the refund decision
+    console.log(`💰 Refund ${action} for order #${notification.order_id} by owner ${ownerId}`);
+    console.log(`📝 Notes: ${notes || 'No notes provided'}`);
+
+    res.json({ 
+      success: true, 
+      message: `Refund request ${action}d successfully`,
+      action: action
+    });
+  } catch (err) {
+    console.error("Process refund error:", err);
+    res.status(500).json({ error: "Failed to process refund request" });
   }
 });
 

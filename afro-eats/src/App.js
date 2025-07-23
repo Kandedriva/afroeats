@@ -17,6 +17,8 @@ import OwnerLogin from "./Components/OwnerLogin";
 import OwnerSubscribePage from "./pages/OwnerSubscribePage";
 import OwnerPasswordUpdate from "./pages/OwnerPasswordUpdate";
 import UserPasswordUpdate from "./pages/UserPasswordUpdate";
+import CustomerOrders from "./pages/CustomerOrders";
+import OrderDetails from "./pages/OrderDetails";
 import DemoCheckout from "./pages/DemoCheckout";
 import DemoOrderCheckout from "./pages/DemoOrderCheckout";
 import OrderSuccess from "./pages/OrderSuccess";
@@ -39,6 +41,8 @@ function AppContent() {
         <Route path="/register" element={<Register />} />
         <Route path="/login" element={<Login />} />
         <Route path="/password-update" element={<UserPasswordUpdate />} />
+        <Route path="/my-orders" element={<CustomerOrders />} />
+        <Route path="/order-details/:orderId" element={<OrderDetails />} />
         <Route path="/cart" element={<CartPage />} />
         <Route path="/checkout" element={<Checkout user={user} />} />
         <Route path="/register-owner" element={<RegisterOwner />} />
