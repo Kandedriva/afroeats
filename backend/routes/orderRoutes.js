@@ -79,8 +79,7 @@ router.post("/checkout-session", requireAuth, async (req, res) => {
       });
       await Promise.all(itemPromises);
 
-      // Clear the user's cart after creating the order
-      await pool.query("DELETE FROM carts WHERE user_id = $1", [userId]);
+      // DON'T clear the cart yet - wait until payment is completed in activate-demo
 
       return res.json({ 
         url: `http://localhost:3000/demo-order-checkout?order_id=${orderId}`,
@@ -169,7 +168,10 @@ router.post("/activate-demo", requireAuth, async (req, res) => {
       ['paid', order_id]
     );
 
-    console.log(`✅ Demo order ${order_id} activated successfully`);
+    // NOW clear the cart since payment is completed
+    await pool.query("DELETE FROM carts WHERE user_id = $1", [userId]);
+
+    console.log(`✅ Demo order ${order_id} activated successfully - cart cleared`);
     
     res.json({ 
       success: true, 

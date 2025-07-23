@@ -12,6 +12,8 @@ function OwnerDashboard() {
   const [connecting, setConnecting] = useState(false);
   const [subscriptionStatus, setSubscriptionStatus] = useState(null);
   const [orders, setOrders] = useState([]);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -117,10 +119,27 @@ function OwnerDashboard() {
       }
     };
 
+    const fetchNotifications = async () => {
+      try {
+        const res = await fetch("http://localhost:5001/api/owners/notifications", {
+          credentials: "include",
+        });
+        
+        if (res.ok) {
+          const data = await res.json();
+          setNotifications(data.notifications || []);
+          setUnreadCount(data.unreadCount || 0);
+        }
+      } catch (err) {
+        console.error("Notifications fetch error:", err);
+      }
+    };
+
     handleSubscriptionSuccess();
     fetchDashboard();
     fetchSubscriptionStatus();
     fetchOrders();
+    fetchNotifications();
   }, []);
 
   const handleConnectStripe = async () => {
@@ -164,6 +183,179 @@ function OwnerDashboard() {
     } catch (err) {
       console.error(err);
       alert("Error updating availability");
+    }
+  };
+
+  const completeOrder = async (orderId) => {
+    try {
+      const res = await fetch(`http://localhost:5001/api/owners/orders/${orderId}/complete`, {
+        method: "POST",
+        credentials: "include",
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to complete order");
+      }
+
+      // Remove the completed order from the list
+      setOrders(prev => prev.filter(order => order.id !== orderId));
+      alert("Order marked as completed!");
+    } catch (err) {
+      console.error("Complete order error:", err);
+      alert("Error completing order: " + err.message);
+    }
+  };
+
+  const printOrder = (order) => {
+    const printWindow = window.open('', '_blank');
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Order #${order.id} - ${restaurant?.name || 'Restaurant'}</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            .header { text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px; }
+            .order-info { margin-bottom: 20px; }
+            .customer-info { background: #f5f5f5; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+            .items-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+            .items-table th, .items-table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+            .items-table th { background-color: #f2f2f2; }
+            .total-section { text-align: right; font-weight: bold; font-size: 18px; }
+            .print-footer { margin-top: 30px; text-align: center; font-size: 12px; color: #666; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>${restaurant?.name || 'Restaurant'}</h1>
+            <h2>Order Receipt #${order.id}</h2>
+            <p>Order Date: ${new Date(order.created_at).toLocaleDateString()} at ${new Date(order.created_at).toLocaleTimeString()}</p>
+          </div>
+          
+          <div class="customer-info">
+            <h3>Customer Information</h3>
+            <p><strong>Name:</strong> ${order.customer_name}</p>
+            <p><strong>Email:</strong> ${order.customer_email}</p>
+            <p><strong>Phone:</strong> ${order.customer_phone || 'Not provided'}</p>
+            <p><strong>Address:</strong> ${order.customer_address || 'Not provided'}</p>
+          </div>
+          
+          <div class="order-info">
+            <h3>Order Details</h3>
+            <table class="items-table">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Quantity</th>
+                  <th>Price</th>
+                  <th>Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${order.items.map(item => `
+                  <tr>
+                    <td>${item.name}</td>
+                    <td>${item.quantity}</td>
+                    <td>$${Number(item.price || 0).toFixed(2)}</td>
+                    <td>$${(Number(item.price || 0) * Number(item.quantity || 1)).toFixed(2)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+          
+          <div class="total-section">
+            <p>Platform Fee: $${Number(order.platform_fee || 0).toFixed(2)}</p>
+            <p>Total Amount: $${Number(order.total || 0).toFixed(2)}</p>
+            <p style="color: green;">Restaurant Earnings: $${(Number(order.total || 0) - Number(order.platform_fee || 0)).toFixed(2)}</p>
+          </div>
+          
+          <div class="print-footer">
+            <p>Thank you for using our platform!</p>
+            <p>Printed on: ${new Date().toLocaleString()}</p>
+          </div>
+        </body>
+      </html>
+    `;
+    
+    printWindow.document.write(printContent);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+      printWindow.print();
+      printWindow.close();
+    }, 250);
+  };
+
+  const markNotificationRead = async (notificationId) => {
+    try {
+      const res = await fetch(`http://localhost:5001/api/owners/notifications/${notificationId}/mark-read`, {
+        method: "POST",
+        credentials: "include",
+      });
+
+      if (res.ok) {
+        setNotifications(prev => 
+          prev.map(notification => 
+            notification.id === notificationId 
+              ? { ...notification, read: true }
+              : notification
+          )
+        );
+        setUnreadCount(prev => Math.max(0, prev - 1));
+      }
+    } catch (err) {
+      console.error("Mark notification read error:", err);
+    }
+  };
+
+  const processRefund = async (notificationId, action, notes) => {
+    try {
+      const res = await fetch(`http://localhost:5001/api/owners/refunds/${notificationId}/process`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action: action,
+          notes: notes
+        }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to process refund");
+      }
+
+      const responseData = await res.json();
+      
+      // Update notification in local state
+      setNotifications(prev => 
+        prev.map(notification => {
+          if (notification.id === notificationId) {
+            const updatedData = {
+              ...notification.data,
+              refundProcessed: true,
+              refundAction: action,
+              refundNotes: notes,
+              processedAt: new Date().toISOString()
+            };
+            return {
+              ...notification,
+              read: true,
+              data: updatedData
+            };
+          }
+          return notification;
+        })
+      );
+
+      alert(responseData.message);
+    } catch (err) {
+      console.error("Process refund error:", err);
+      alert("Error processing refund: " + err.message);
     }
   };
 
@@ -254,6 +446,120 @@ function OwnerDashboard() {
         </div>
       )}
 
+      {/* Notifications Section */}
+      {notifications.length > 0 && (
+        <div className="mb-8">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-semibold">
+              Notifications {unreadCount > 0 && (
+                <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full ml-2">
+                  {unreadCount}
+                </span>
+              )}
+            </h3>
+            {unreadCount > 0 && (
+              <button
+                onClick={async () => {
+                  try {
+                    await fetch("http://localhost:5001/api/owners/notifications/mark-all-read", {
+                      method: "POST",
+                      credentials: "include",
+                    });
+                    setNotifications(prev => prev.map(n => ({...n, read: true})));
+                    setUnreadCount(0);
+                  } catch (err) {
+                    console.error("Mark all read error:", err);
+                  }
+                }}
+                className="text-sm text-blue-600 hover:text-blue-800"
+              >
+                Mark All Read
+              </button>
+            )}
+          </div>
+          
+          <div className="space-y-3">
+            {notifications.slice(0, 5).map((notification) => {
+              const data = notification.data || {};
+              const isRefundRequest = notification.type === 'refund_request';
+              const isProcessed = data.refundProcessed;
+              
+              return (
+                <div 
+                  key={notification.id} 
+                  className={`border rounded-lg p-4 ${!notification.read ? 'bg-blue-50 border-blue-200' : 'bg-white'}`}
+                  onClick={() => !notification.read && markNotificationRead(notification.id)}
+                >
+                  <div className="flex justify-between items-start mb-2">
+                    <h4 className={`font-medium ${isRefundRequest ? 'text-orange-700' : 'text-gray-800'}`}>
+                      {notification.title}
+                    </h4>
+                    <span className="text-xs text-gray-500">
+                      {new Date(notification.created_at).toLocaleDateString()}
+                    </span>
+                  </div>
+                  
+                  <p className="text-sm text-gray-600 mb-3">{notification.message}</p>
+                  
+                  {data.reason && (
+                    <div className="bg-gray-50 p-2 rounded text-sm mb-3">
+                      <strong>Reason:</strong> {data.reason}
+                    </div>
+                  )}
+                  
+                  {isRefundRequest && !isProcessed && (
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const notes = prompt("Add notes for refund approval (optional):");
+                          if (notes !== null) {
+                            processRefund(notification.id, 'approve', notes);
+                          }
+                        }}
+                        className="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600"
+                      >
+                        ✅ Approve Refund
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const notes = prompt("Add notes for refund denial (optional):");
+                          if (notes !== null) {
+                            processRefund(notification.id, 'deny', notes);
+                          }
+                        }}
+                        className="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600"
+                      >
+                        ❌ Deny Refund
+                      </button>
+                    </div>
+                  )}
+                  
+                  {isProcessed && (
+                    <div className={`text-sm p-2 rounded ${data.refundAction === 'approve' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                      <strong>Refund {data.refundAction}d</strong>
+                      {data.refundNotes && <div>Notes: {data.refundNotes}</div>}
+                      <div className="text-xs opacity-75">
+                        Processed on {new Date(data.processedAt).toLocaleDateString()}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          
+          {notifications.length > 5 && (
+            <div className="text-center mt-4">
+              <button className="text-blue-600 hover:text-blue-800 text-sm">
+                View All Notifications ({notifications.length})
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-lg font-semibold">Your Dishes</h3>
         <button
@@ -318,13 +624,10 @@ function OwnerDashboard() {
         ) : (
           <div className="space-y-4">
             {orders.slice(0, 10).map((order) => (
-              <div key={order.id} className="border rounded-lg p-4 bg-white">
-                <div className="flex justify-between items-start mb-3">
-                  <div>
-                    <h4 className="font-semibold text-lg">Order #{order.id}</h4>
-                    <p className="text-sm text-gray-600">
-                      Customer: {order.customer_name} ({order.customer_email})
-                    </p>
+              <div key={order.id} className="border rounded-lg p-4 bg-white shadow-sm">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="flex-1">
+                    <h4 className="font-semibold text-lg text-blue-800">Order #{order.id}</h4>
                     <p className="text-sm text-gray-500">
                       {new Date(order.created_at).toLocaleDateString()} at{' '}
                       {new Date(order.created_at).toLocaleTimeString()}
@@ -344,6 +647,25 @@ function OwnerDashboard() {
                     </div>
                   </div>
                 </div>
+
+                {/* Customer Information Section */}
+                <div className="bg-blue-50 p-3 rounded-lg mb-3">
+                  <h5 className="font-medium text-blue-800 mb-2">Customer Information</h5>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <span className="font-medium">Name:</span> {order.customer_name}
+                    </div>
+                    <div>
+                      <span className="font-medium">Email:</span> {order.customer_email}
+                    </div>
+                    <div>
+                      <span className="font-medium">Phone:</span> {order.customer_phone || 'Not provided'}
+                    </div>
+                    <div className="md:col-span-2">
+                      <span className="font-medium">Address:</span> {order.customer_address || 'Not provided'}
+                    </div>
+                  </div>
+                </div>
                 
                 <div className="border-t pt-3">
                   <h5 className="font-medium mb-2">Items ordered:</h5>
@@ -357,14 +679,37 @@ function OwnerDashboard() {
                   </div>
                 </div>
                 
-                <div className="mt-3 pt-3 border-t">
-                  <div className="flex space-x-2">
-                    <span className="inline-flex items-center px-2 py-1 rounded text-xs bg-blue-100 text-blue-800">
-                      💰 Payment Received
-                    </span>
-                    <span className="inline-flex items-center px-2 py-1 rounded text-xs bg-yellow-100 text-yellow-800">
-                      🍳 Ready to Prepare
-                    </span>
+                <div className="mt-4 pt-4 border-t">
+                  <div className="flex justify-between items-center">
+                    <div className="flex space-x-2">
+                      <span className="inline-flex items-center px-2 py-1 rounded text-xs bg-blue-100 text-blue-800">
+                        💰 Payment Received
+                      </span>
+                      <span className="inline-flex items-center px-2 py-1 rounded text-xs bg-yellow-100 text-yellow-800">
+                        🍳 Ready to Prepare
+                      </span>
+                    </div>
+                    
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => printOrder(order)}
+                        className="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600 transition-colors"
+                        title="Print order for delivery"
+                      >
+                        🖨️ Print
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (window.confirm('Mark this order as completed? This will remove it from your orders list.')) {
+                            completeOrder(order.id);
+                          }
+                        }}
+                        className="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600 transition-colors"
+                        title="Mark order as completed"
+                      >
+                        ✅ Complete
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>

@@ -42,8 +42,7 @@ function DemoOrderCheckout() {
         });
 
         if (res.ok) {
-          // Clear the cart and redirect to success page
-          await clearCart();
+          // Backend will clear the cart after payment processing
           navigate(`/order-success?order_id=${orderId}&demo=true`);
         } else {
           throw new Error("Failed to process order");

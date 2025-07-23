@@ -5,12 +5,14 @@ export const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   // Check user session on load
   useEffect(() => {
     const fetchUser = async () => {
       try {
+        setLoading(true);
         const res = await fetch("http://localhost:5001/api/auth/me", {
           credentials: "include",
         });
@@ -26,6 +28,9 @@ export const AuthProvider = ({ children }) => {
         setUser(data);
       } catch (err) {
         console.error("Failed to fetch user:", err.message);
+        setUser(null);
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -51,7 +56,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, setUser, logout }}>
+    <AuthContext.Provider value={{ user, setUser, logout, loading }}>
       {children}
     </AuthContext.Provider>
   );
