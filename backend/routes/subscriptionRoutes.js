@@ -1,4 +1,5 @@
 import express from 'express';
+import { requireOwnerAuth } from '../middleware/ownerAuth.js';
 import { 
   createSubscriptionSession, 
   handleSubscriptionSuccess, 
@@ -9,15 +10,15 @@ import {
 const router = express.Router();
 
 // POST /api/subscription/create-session
-router.post('/create-session', createSubscriptionSession);
+router.post('/create-session', requireOwnerAuth, createSubscriptionSession);
 
 // GET /api/subscription/success
 router.get('/success', handleSubscriptionSuccess);
 
 // GET /api/subscription/status
-router.get('/status', checkSubscriptionStatus);
+router.get('/status', requireOwnerAuth, checkSubscriptionStatus);
 
 // POST /api/subscription/activate-demo (for demo mode)
-router.post('/activate-demo', activateDemoSubscription);
+router.post('/activate-demo', requireOwnerAuth, activateDemoSubscription);
 
 export default router;

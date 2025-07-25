@@ -359,4 +359,191 @@ router.post("/orders/:id/cancel", async (req, res) => {
   }
 });
 
+// DELETE /api/auth/orders/:id - Remove completed order from customer's order history
+router.delete("/orders/:id", async (req, res) => {
+  try {
+    const orderId = req.params.id;
+    const userId = req.session.userId;
+
+    if (!userId) {
+      return res.status(401).json({ error: "Must be logged in to remove order" });
+    }
+
+    // Check if order exists and belongs to user
+    const orderCheck = await pool.query(
+      "SELECT status FROM orders WHERE id = $1 AND user_id = $2",
+      [orderId, userId]
+    );
+
+    if (orderCheck.rows.length === 0) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    const currentStatus = orderCheck.rows[0].status;
+
+    // Only allow removal of completed or delivered orders
+    if (currentStatus !== 'completed' && currentStatus !== 'delivered' && currentStatus !== 'cancelled') {
+      return res.status(400).json({ 
+        error: "Can only remove completed, delivered, or cancelled orders" 
+      });
+    }
+
+    // Remove related records first, then the order
+    // Remove order items
+    await pool.query("DELETE FROM order_items WHERE order_id = $1", [orderId]);
+    
+    // Remove any notifications related to this order (optional cleanup)
+    try {
+      await pool.query("DELETE FROM notifications WHERE order_id = $1", [orderId]);
+    } catch (err) {
+      console.log("No notifications to remove or notifications table doesn't exist");
+    }
+    
+    // Finally, remove the order
+    await pool.query("DELETE FROM orders WHERE id = $1 AND user_id = $2", [orderId, userId]);
+
+    console.log(`🗑️ Order ${orderId} removed from customer ${userId} order history`);
+
+    res.json({ 
+      success: true, 
+      message: "Order removed from your order history" 
+    });
+  } catch (err) {
+    console.error("Remove order error:", err);
+    res.status(500).json({ error: "Failed to remove order" });
+  }
+});
+
+// TEMPORARY: Testing endpoint to update order status for debugging
+router.post("/orders/:id/update-status", async (req, res) => {
+  try {
+    const orderId = req.params.id;
+    const userId = req.session.userId;
+    const { status } = req.body;
+
+    if (!userId) {
+      return res.status(401).json({ error: "Must be logged in" });
+    }
+
+    // Verify order belongs to user
+    const orderCheck = await pool.query(
+      "SELECT id FROM orders WHERE id = $1 AND user_id = $2",
+      [orderId, userId]
+    );
+
+    if (orderCheck.rows.length === 0) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    // Update status
+    await pool.query(
+      "UPDATE orders SET status = $1 WHERE id = $2",
+      [status, orderId]
+    );
+
+    console.log(`🔧 TEST: Order ${orderId} status updated to '${status}' for debugging`);
+
+    res.json({ 
+      success: true, 
+      message: `Order status updated to '${status}'` 
+    });
+  } catch (err) {
+    console.error("Update order status error:", err);
+    res.status(500).json({ error: "Failed to update order status" });
+  }
+});
+
+// GET /api/auth/notifications - Get customer notifications
+router.get('/notifications', async (req, res) => {
+  try {
+    const userId = req.session.userId;
+
+    if (!userId) {
+      return res.status(401).json({ error: "Must be logged in" });
+    }
+
+    // Ensure customer notifications table exists
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS customer_notifications (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER REFERENCES users(id),
+          type VARCHAR(50) NOT NULL,
+          title VARCHAR(255) NOT NULL,
+          message TEXT NOT NULL,
+          data JSONB DEFAULT '{}',
+          read BOOLEAN DEFAULT FALSE,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+    } catch (err) {
+      console.log("Customer notifications table creation check:", err.message);
+    }
+
+    // Get all notifications for this customer
+    const notificationsResult = await pool.query(`
+      SELECT * FROM customer_notifications 
+      WHERE user_id = $1 
+      ORDER BY created_at DESC 
+      LIMIT 50
+    `, [userId]);
+
+    res.json({ 
+      notifications: notificationsResult.rows,
+      unreadCount: notificationsResult.rows.filter(n => !n.read).length
+    });
+  } catch (err) {
+    console.error("Get customer notifications error:", err);
+    res.status(500).json({ error: "Failed to get notifications" });
+  }
+});
+
+// POST /api/auth/notifications/:id/mark-read - Mark customer notification as read
+router.post('/notifications/:id/mark-read', async (req, res) => {
+  try {
+    const notificationId = req.params.id;
+    const userId = req.session.userId;
+
+    if (!userId) {
+      return res.status(401).json({ error: "Must be logged in" });
+    }
+
+    // Mark notification as read (ensure it belongs to this user)
+    const result = await pool.query(
+      "UPDATE customer_notifications SET read = TRUE WHERE id = $1 AND user_id = $2 RETURNING *",
+      [notificationId, userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Notification not found" });
+    }
+
+    res.json({ success: true, message: "Notification marked as read" });
+  } catch (err) {
+    console.error("Mark customer notification read error:", err);
+    res.status(500).json({ error: "Failed to mark notification as read" });
+  }
+});
+
+// POST /api/auth/notifications/mark-all-read - Mark all customer notifications as read
+router.post('/notifications/mark-all-read', async (req, res) => {
+  try {
+    const userId = req.session.userId;
+
+    if (!userId) {
+      return res.status(401).json({ error: "Must be logged in" });
+    }
+
+    await pool.query(
+      "UPDATE customer_notifications SET read = TRUE WHERE user_id = $1 AND read = FALSE",
+      [userId]
+    );
+
+    res.json({ success: true, message: "All notifications marked as read" });
+  } catch (err) {
+    console.error("Mark all customer notifications read error:", err);
+    res.status(500).json({ error: "Failed to mark all notifications as read" });
+  }
+});
+
 export default router;

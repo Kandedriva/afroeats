@@ -621,6 +621,18 @@ router.post("/refunds/:notificationId/process", async (req, res) => {
     const notification = notificationResult.rows[0];
     const notificationData = notification.data;
 
+    // Get order and customer information
+    const orderResult = await pool.query(
+      "SELECT o.*, u.id as customer_id, u.name as customer_name, u.email as customer_email FROM orders o JOIN users u ON o.user_id = u.id WHERE o.id = $1",
+      [notification.order_id]
+    );
+
+    if (orderResult.rows.length === 0) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    const order = orderResult.rows[0];
+
     // Update notification with refund decision
     const updatedData = {
       ...notificationData,
@@ -636,13 +648,60 @@ router.post("/refunds/:notificationId/process", async (req, res) => {
       [JSON.stringify(updatedData), notificationId]
     );
 
+    // Ensure customer notifications table exists
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS customer_notifications (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER REFERENCES users(id),
+          type VARCHAR(50) NOT NULL,
+          title VARCHAR(255) NOT NULL,
+          message TEXT NOT NULL,
+          data JSONB DEFAULT '{}',
+          read BOOLEAN DEFAULT FALSE,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+    } catch (err) {
+      console.log("Customer notifications table creation check:", err.message);
+    }
+
+    // Create notification for customer
+    const customerNotificationTitle = action === 'approve' 
+      ? 'Refund Approved' 
+      : 'Refund Request Denied';
+    
+    const customerNotificationMessage = action === 'approve'
+      ? `Your refund request for order #${order.id} has been approved by the restaurant. The refund will be processed shortly.`
+      : `Your refund request for order #${order.id} has been denied by the restaurant.`;
+
+    const customerNotificationData = {
+      orderId: order.id,
+      orderTotal: order.total,
+      refundAction: action,
+      refundNotes: notes || '',
+      processedAt: new Date().toISOString()
+    };
+
+    await pool.query(
+      "INSERT INTO customer_notifications (user_id, type, title, message, data) VALUES ($1, $2, $3, $4, $5)",
+      [
+        order.customer_id,
+        `refund_${action}`,
+        customerNotificationTitle,
+        customerNotificationMessage,
+        JSON.stringify(customerNotificationData)
+      ]
+    );
+
     // Log the refund decision
     console.log(`💰 Refund ${action} for order #${notification.order_id} by owner ${ownerId}`);
     console.log(`📝 Notes: ${notes || 'No notes provided'}`);
+    console.log(`📧 Customer notification sent to user ${order.customer_id} (${order.customer_email})`);
 
     res.json({ 
       success: true, 
-      message: `Refund request ${action}d successfully`,
+      message: `Refund request ${action}d successfully. Customer has been notified.`,
       action: action
     });
   } catch (err) {

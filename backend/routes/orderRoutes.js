@@ -6,7 +6,7 @@ import { requireAuth } from "../middleware/authMiddleware.js";
 const router = express.Router();
 
 router.post("/", async (req, res) => {
-  const { userId, items } = req.body;
+  const { userId, items, orderDetails } = req.body;
 
   if (!userId || !items || items.length === 0) {
     return res.status(400).json({ error: "Missing user ID or cart items." });
@@ -16,10 +16,17 @@ router.post("/", async (req, res) => {
     // 1. Calculate total
     const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
-    // 2. Insert order
+    // 2. Ensure order_details column exists
+    try {
+      await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS order_details TEXT");
+    } catch (err) {
+      console.log("Column creation check:", err.message);
+    }
+
+    // 3. Insert order
     const result = await pool.query(
-      "INSERT INTO orders (user_id, total) VALUES ($1, $2) RETURNING id",
-      [userId, total]
+      "INSERT INTO orders (user_id, total, order_details) VALUES ($1, $2, $3) RETURNING id",
+      [userId, total, orderDetails]
     );
     const orderId = result.rows[0].id;
 
@@ -43,7 +50,7 @@ router.post("/", async (req, res) => {
 // POST /api/orders/checkout-session - Create Stripe checkout session with multi-party payments
 router.post("/checkout-session", requireAuth, async (req, res) => {
   try {
-    const { items } = req.body;
+    const { items, orderDetails } = req.body;
     const userId = req.session.userId;
 
     if (!userId) {
@@ -54,7 +61,7 @@ router.post("/checkout-session", requireAuth, async (req, res) => {
       return res.status(400).json({ error: "Cart is empty" });
     }
 
-    // Check if Stripe is configured
+    // Check if Stripe is configured - if not, fall back to demo mode
     if (!stripe) {
       // Demo mode - create a demo checkout experience
       
@@ -63,10 +70,17 @@ router.post("/checkout-session", requireAuth, async (req, res) => {
       const platformFee = 1.20;
       const total = subtotal + platformFee;
 
+      // Ensure order_details column exists
+      try {
+        await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS order_details TEXT");
+      } catch (err) {
+        console.log("Column creation check:", err.message);
+      }
+
       // Create order in database
       const orderResult = await pool.query(
-        "INSERT INTO orders (user_id, total) VALUES ($1, $2) RETURNING id",
-        [userId, total]
+        "INSERT INTO orders (user_id, total, order_details) VALUES ($1, $2, $3) RETURNING id",
+        [userId, total, orderDetails]
       );
       const orderId = orderResult.rows[0].id;
 
@@ -88,8 +102,87 @@ router.post("/checkout-session", requireAuth, async (req, res) => {
       });
     }
 
-    // If Stripe is configured, would handle real payments here
-    return res.status(501).json({ error: "Stripe payments not configured" });
+    // Stripe is configured - create real Stripe checkout session
+    console.log("Creating Stripe checkout session");
+    
+    // Calculate totals
+    const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    const platformFee = 1.20;
+    const total = subtotal + platformFee;
+
+    // Ensure necessary columns exist
+    try {
+      await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS order_details TEXT");
+      await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS stripe_session_id VARCHAR(255)");
+      await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP");
+      await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS platform_fee DECIMAL(10,2) DEFAULT 0");
+    } catch (err) {
+      console.log("Column creation check:", err.message);
+    }
+
+    // Create order in database first
+    const orderResult = await pool.query(
+      "INSERT INTO orders (user_id, total, order_details, status, platform_fee) VALUES ($1, $2, $3, $4, $5) RETURNING id",
+      [userId, total, orderDetails, 'pending', platformFee]
+    );
+    const orderId = orderResult.rows[0].id;
+
+    // Insert order items
+    const itemPromises = items.map(item => {
+      return pool.query(
+        "INSERT INTO order_items (order_id, dish_id, name, price, quantity) VALUES ($1, $2, $3, $4, $5)",
+        [orderId, item.id, item.name, item.price, item.quantity]
+      );
+    });
+    await Promise.all(itemPromises);
+
+    // Create line items for Stripe
+    const lineItems = items.map(item => ({
+      price_data: {
+        currency: 'usd',
+        product_data: {
+          name: item.name,
+          description: `From ${item.restaurantName || 'Restaurant'}`,
+        },
+        unit_amount: Math.round(item.price * 100), // Convert to cents
+      },
+      quantity: item.quantity,
+    }));
+
+    // Add platform fee as a line item
+    lineItems.push({
+      price_data: {
+        currency: 'usd',
+        product_data: {
+          name: 'Platform Fee',
+          description: 'Service fee for using Afro Eats',
+        },
+        unit_amount: Math.round(platformFee * 100), // $1.20 in cents
+      },
+      quantity: 1,
+    });
+
+    // Create Stripe checkout session
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      mode: 'payment',
+      line_items: lineItems,
+      success_url: `${process.env.CLIENT_URL}/order-success?session_id={CHECKOUT_SESSION_ID}&order_id=${orderId}`,
+      cancel_url: `${process.env.CLIENT_URL}/cart?canceled=true`,
+      metadata: {
+        orderId: orderId.toString(),
+        userId: userId.toString(),
+      },
+    });
+
+    // Update order with session ID
+    await pool.query(
+      "UPDATE orders SET stripe_session_id = $1 WHERE id = $2",
+      [session.id, orderId]
+    );
+
+    console.log("✅ Stripe checkout session created:", session.id);
+    res.json({ url: session.url });
 
   } catch (err) {
     console.error("Checkout session creation error:", err);
@@ -219,6 +312,52 @@ router.get("/:id", requireAuth, async (req, res) => {
   } catch (err) {
     console.error("Get order details error:", err);
     res.status(500).json({ error: "Failed to get order details" });
+  }
+});
+
+// GET /api/orders/success - Handle successful payment
+router.get("/success", async (req, res) => {
+  try {
+    const { session_id, order_id } = req.query;
+
+    if (!session_id || !order_id) {
+      return res.status(400).json({ error: "Missing session ID or order ID" });
+    }
+
+    if (!stripe) {
+      // Demo mode - just mark order as paid
+      await pool.query(
+        "UPDATE orders SET status = $1, paid_at = NOW() WHERE id = $2",
+        ['paid', order_id]
+      );
+      return res.json({ success: true, message: "Order confirmed (demo mode)" });
+    }
+
+    // Retrieve the session from Stripe
+    const session = await stripe.checkout.sessions.retrieve(session_id);
+    
+    if (session.payment_status === 'paid') {
+      // Update order status
+      await pool.query(
+        "UPDATE orders SET status = $1, paid_at = NOW() WHERE id = $2",
+        ['paid', order_id]
+      );
+      
+      // Clear user's cart after successful payment
+      const orderResult = await pool.query("SELECT user_id FROM orders WHERE id = $1", [order_id]);
+      if (orderResult.rows.length > 0) {
+        const userId = orderResult.rows[0].user_id;
+        await pool.query("DELETE FROM carts WHERE user_id = $1", [userId]);
+      }
+      
+      console.log(`✅ Order ${order_id} paid successfully via Stripe`);
+      res.json({ success: true, message: "Order confirmed and payment processed" });
+    } else {
+      res.status(400).json({ error: "Payment not completed" });
+    }
+  } catch (err) {
+    console.error("Order success handler error:", err);
+    res.status(500).json({ error: "Failed to process order success" });
   }
 });
 

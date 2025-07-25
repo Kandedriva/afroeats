@@ -1,16 +1,18 @@
-import React from "react";
+import React, { useState } from "react";
 import { useCart } from "../context/CartContext";
 import { useNavigate } from "react-router-dom";
+import { toast } from 'react-toastify';
 
 export default function Checkout({ user }) {
   const { cart, clearCart } = useCart();
   const navigate = useNavigate();
+  const [orderDetails, setOrderDetails] = useState("");
 
   const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
   const handlePlaceOrder = async () => {
     if (!user) {
-      alert("Please login to place an order.");
+      toast.warning("Please login to place an order.");
       return;
     }
 
@@ -24,20 +26,21 @@ export default function Checkout({ user }) {
         body: JSON.stringify({
           userId: user.id,
           items: cart,
+          orderDetails: orderDetails.trim() || null,
         }),
       });
 
       const data = await res.json();
       if (res.ok) {
         clearCart();
-        alert("Order placed successfully!");
+        toast.success("Order placed successfully!");
         navigate("/"); // or a confirmation page
       } else {
-        alert("Order failed: " + data.error);
+        toast.error("Order failed: " + data.error);
       }
     } catch (err) {
       console.error("Place Order Error:", err);
-      alert("Something went wrong.");
+      toast.error("Something went wrong.");
     }
   };
 
@@ -56,13 +59,31 @@ export default function Checkout({ user }) {
               </li>
             ))}
           </ul>
+          
+          <div className="mt-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Special Instructions (Optional)
+            </label>
+            <textarea
+              value={orderDetails}
+              onChange={(e) => setOrderDetails(e.target.value)}
+              className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
+              rows="3"
+              placeholder="Add any special instructions for your order (e.g., no onions, extra spicy, delivery notes, etc.)"
+              maxLength={500}
+            />
+            <div className="text-right text-xs text-gray-500 mt-1">
+              {orderDetails.length}/500 characters
+            </div>
+          </div>
+
           <div className="mt-6 flex justify-between font-bold text-lg">
             <span>Total:</span>
             <span>${total.toFixed(2)}</span>
           </div>
           <button
             onClick={handlePlaceOrder}
-            className="mt-6 px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+            className="mt-6 px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700 w-full"
           >
             Place Order
           </button>

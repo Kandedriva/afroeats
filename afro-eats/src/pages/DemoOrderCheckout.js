@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useCart } from "../context/CartContext";
+import { toast } from 'react-toastify';
 
 function DemoOrderCheckout() {
   const [loading, setLoading] = useState(false);
@@ -49,7 +50,7 @@ function DemoOrderCheckout() {
         }
       } catch (err) {
         console.error("Demo order processing error:", err);
-        alert("Failed to process order: " + err.message);
+        toast.error("Failed to process order: " + err.message);
         setLoading(false);
       }
     }, 3000);

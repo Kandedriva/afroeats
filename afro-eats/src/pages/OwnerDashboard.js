@@ -2,9 +2,10 @@ import React, { useEffect, useState, useContext } from "react";
 import { OwnerAuthContext } from "../context/OwnerAuthContext";
 import { Navigate, useNavigate } from "react-router-dom";
 import ToggleSwitch from "../Components/ToggleSwitch";
+import { toast } from 'react-toastify';
 
 function OwnerDashboard() {
-  const { owner, loading: authLoading } = useContext(OwnerAuthContext);
+  const { owner, loading: authLoading, fetchSubscriptionStatus: refreshSubscriptionStatus } = useContext(OwnerAuthContext);
   const [restaurant, setRestaurant] = useState(null);
   const [dishes, setDishes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -14,6 +15,12 @@ function OwnerDashboard() {
   const [orders, setOrders] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [showCompleteConfirm, setShowCompleteConfirm] = useState(null);
+  const [showRefundModal, setShowRefundModal] = useState(false);
+  const [refundAction, setRefundAction] = useState('');
+  const [refundNotes, setRefundNotes] = useState('');
+  const [selectedNotificationId, setSelectedNotificationId] = useState(null);
+  const [processingRefund, setProcessingRefund] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -36,7 +43,7 @@ function OwnerDashboard() {
             // Clean URL and refresh subscription status
             window.history.replaceState({}, document.title, window.location.pathname);
             setTimeout(() => {
-              fetchSubscriptionStatus();
+              refreshSubscriptionStatus();
             }, 500);
           }
         } catch (err) {
@@ -47,7 +54,7 @@ function OwnerDashboard() {
         // Clean URL and refresh subscription status
         window.history.replaceState({}, document.title, window.location.pathname);
         setTimeout(() => {
-          fetchSubscriptionStatus();
+          refreshSubscriptionStatus();
         }, 500);
       } else if (subscriptionError) {
         console.log("Subscription error occurred");
@@ -86,7 +93,7 @@ function OwnerDashboard() {
       }
     };
 
-    const fetchSubscriptionStatus = async () => {
+    const fetchLocalSubscriptionStatus = async () => {
       try {
         const res = await fetch("http://localhost:5001/api/subscription/status", {
           credentials: "include",
@@ -137,7 +144,7 @@ function OwnerDashboard() {
 
     handleSubscriptionSuccess();
     fetchDashboard();
-    fetchSubscriptionStatus();
+    fetchLocalSubscriptionStatus();
     fetchOrders();
     fetchNotifications();
   }, []);
@@ -153,7 +160,7 @@ function OwnerDashboard() {
       window.location.href = data.url;
     } catch (err) {
       console.error("Stripe connect error:", err);
-      alert("Failed to connect to Stripe");
+      toast.error("Failed to connect to Stripe");
     } finally {
       setConnecting(false);
     }
@@ -182,8 +189,12 @@ function OwnerDashboard() {
       );
     } catch (err) {
       console.error(err);
-      alert("Error updating availability");
+      toast.error("Error updating availability");
     }
+  };
+
+  const showCompleteModal = (orderId) => {
+    setShowCompleteConfirm(orderId);
   };
 
   const completeOrder = async (orderId) => {
@@ -200,10 +211,11 @@ function OwnerDashboard() {
 
       // Remove the completed order from the list
       setOrders(prev => prev.filter(order => order.id !== orderId));
-      alert("Order marked as completed!");
+      toast.success("Order marked as completed!");
+      setShowCompleteConfirm(null);
     } catch (err) {
       console.error("Complete order error:", err);
-      alert("Error completing order: " + err.message);
+      toast.error("Error completing order: " + err.message);
     }
   };
 
@@ -310,17 +322,27 @@ function OwnerDashboard() {
     }
   };
 
-  const processRefund = async (notificationId, action, notes) => {
+  const showRefundConfirm = (notificationId, action) => {
+    setSelectedNotificationId(notificationId);
+    setRefundAction(action);
+    setRefundNotes('');
+    setShowRefundModal(true);
+  };
+
+  const processRefund = async () => {
+    if (!selectedNotificationId || !refundAction) return;
+    
     try {
-      const res = await fetch(`http://localhost:5001/api/owners/refunds/${notificationId}/process`, {
+      setProcessingRefund(true);
+      const res = await fetch(`http://localhost:5001/api/owners/refunds/${selectedNotificationId}/process`, {
         method: "POST",
         credentials: "include",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          action: action,
-          notes: notes
+          action: refundAction,
+          notes: refundNotes.trim()
         }),
       });
 
@@ -334,12 +356,12 @@ function OwnerDashboard() {
       // Update notification in local state
       setNotifications(prev => 
         prev.map(notification => {
-          if (notification.id === notificationId) {
+          if (notification.id === selectedNotificationId) {
             const updatedData = {
               ...notification.data,
               refundProcessed: true,
-              refundAction: action,
-              refundNotes: notes,
+              refundAction: refundAction,
+              refundNotes: refundNotes.trim(),
               processedAt: new Date().toISOString()
             };
             return {
@@ -352,10 +374,16 @@ function OwnerDashboard() {
         })
       );
 
-      alert(responseData.message);
+      toast.success(responseData.message);
+      setShowRefundModal(false);
+      setSelectedNotificationId(null);
+      setRefundAction('');
+      setRefundNotes('');
     } catch (err) {
       console.error("Process refund error:", err);
-      alert("Error processing refund: " + err.message);
+      toast.error("Error processing refund: " + err.message);
+    } finally {
+      setProcessingRefund(false);
     }
   };
 
@@ -512,10 +540,7 @@ function OwnerDashboard() {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          const notes = prompt("Add notes for refund approval (optional):");
-                          if (notes !== null) {
-                            processRefund(notification.id, 'approve', notes);
-                          }
+                          showRefundConfirm(notification.id, 'approve');
                         }}
                         className="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600"
                       >
@@ -524,10 +549,7 @@ function OwnerDashboard() {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          const notes = prompt("Add notes for refund denial (optional):");
-                          if (notes !== null) {
-                            processRefund(notification.id, 'deny', notes);
-                          }
+                          showRefundConfirm(notification.id, 'deny');
                         }}
                         className="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600"
                       >
@@ -666,6 +688,14 @@ function OwnerDashboard() {
                     </div>
                   </div>
                 </div>
+
+                {/* Special Instructions */}
+                {order.order_details && (
+                  <div className="bg-yellow-50 p-3 rounded-lg mb-3">
+                    <h5 className="font-medium text-yellow-800 mb-2">🗒️ Special Instructions</h5>
+                    <p className="text-sm text-yellow-700 whitespace-pre-wrap">{order.order_details}</p>
+                  </div>
+                )}
                 
                 <div className="border-t pt-3">
                   <h5 className="font-medium mb-2">Items ordered:</h5>
@@ -699,11 +729,7 @@ function OwnerDashboard() {
                         🖨️ Print
                       </button>
                       <button
-                        onClick={() => {
-                          if (window.confirm('Mark this order as completed? This will remove it from your orders list.')) {
-                            completeOrder(order.id);
-                          }
-                        }}
+                        onClick={() => showCompleteModal(order.id)}
                         className="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600 transition-colors"
                         title="Mark order as completed"
                       >
@@ -728,6 +754,111 @@ function OwnerDashboard() {
           </div>
         )}
       </div>
+
+      {/* Refund Processing Modal */}
+      {showRefundModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className={`text-lg font-semibold mb-4 ${refundAction === 'approve' ? 'text-green-800' : 'text-red-800'}`}>
+              {refundAction === 'approve' ? '✅ Approve Refund Request' : '❌ Deny Refund Request'}
+            </h3>
+            <p className="text-gray-600 mb-4">
+              {refundAction === 'approve' 
+                ? 'Are you sure you want to approve this refund request? The customer will be notified of your decision.'
+                : 'Are you sure you want to deny this refund request? The customer will be notified of your decision.'
+              }
+            </p>
+            
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Notes for customer (optional):
+              </label>
+              <textarea
+                value={refundNotes}
+                onChange={(e) => {
+                  if (e.target.value.length <= 500) {
+                    setRefundNotes(e.target.value);
+                  }
+                }}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                rows="4"
+                placeholder={refundAction === 'approve' 
+                  ? "Add any additional information about the refund process..."
+                  : "Explain why the refund request is being denied..."
+                }
+                autoFocus
+              />
+              <div className="text-xs text-gray-500 mt-1">
+                {refundNotes.length}/500 characters
+              </div>
+            </div>
+
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => {
+                  setShowRefundModal(false);
+                  setSelectedNotificationId(null);
+                  setRefundAction('');
+                  setRefundNotes('');
+                }}
+                className="px-4 py-2 text-gray-600 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors"
+                disabled={processingRefund}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={processRefund}
+                disabled={processingRefund}
+                className={`px-4 py-2 text-white rounded-lg transition-colors ${
+                  refundAction === 'approve'
+                    ? 'bg-green-600 hover:bg-green-700 disabled:bg-green-400'
+                    : 'bg-red-600 hover:bg-red-700 disabled:bg-red-400'
+                }`}
+              >
+                {processingRefund ? (
+                  <span className="flex items-center">
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Processing...
+                  </span>
+                ) : (
+                  refundAction === 'approve' ? '✅ Approve Refund' : '❌ Deny Refund'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Complete Order Confirmation Modal */}
+      {showCompleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold mb-4 text-gray-800">
+              Complete Order
+            </h3>
+            <p className="text-gray-600 mb-6">
+              Mark this order as completed? This will remove it from your orders list and notify the customer that their order is ready.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowCompleteConfirm(null)}
+                className="px-4 py-2 text-gray-600 bg-gray-200 rounded hover:bg-gray-300 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => completeOrder(showCompleteConfirm)}
+                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+              >
+                ✅ Mark Complete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

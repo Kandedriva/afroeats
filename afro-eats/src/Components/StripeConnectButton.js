@@ -1,5 +1,6 @@
 // frontend/components/StripeConnectButton.js
 import React, { useState } from "react";
+import { toast } from 'react-toastify';
 
 function StripeConnectButton() {
   const [loading, setLoading] = useState(false);
@@ -28,7 +29,7 @@ function StripeConnectButton() {
       }
     } catch (error) {
       console.error("Stripe Connect error", error);
-      alert("Failed to connect with Stripe.");
+      toast.error("Failed to connect with Stripe.");
     } finally {
       setLoading(false);
     }

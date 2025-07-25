@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useContext } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
+import { toast } from 'react-toastify';
 
 function OrderDetails() {
   const [order, setOrder] = useState(null);
@@ -11,16 +12,11 @@ function OrderDetails() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Don't redirect if auth is still loading
-    if (authLoading) return;
-    
-    if (!user) {
-      navigate("/login");
-      return;
+    // Component is now protected by ProtectedRoute, so user is guaranteed to exist
+    if (user && !authLoading) {
+      fetchOrderDetails();
     }
-
-    fetchOrderDetails();
-  }, [user, authLoading, orderId, navigate]);
+  }, [user, authLoading, orderId]);
 
   const fetchOrderDetails = async () => {
     try {
@@ -171,6 +167,16 @@ function OrderDetails() {
         </div>
       </div>
 
+      {/* Special Instructions */}
+      {order.order_details && (
+        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+          <h2 className="text-xl font-semibold mb-4">Special Instructions</h2>
+          <div className="bg-gray-50 rounded-lg p-4">
+            <p className="text-gray-700 whitespace-pre-wrap">{order.order_details}</p>
+          </div>
+        </div>
+      )}
+
       {/* Order Summary */}
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">
         <h2 className="text-xl font-semibold mb-4">Order Summary</h2>
@@ -206,7 +212,7 @@ function OrderDetails() {
             Order Again
           </button>
           <button
-            onClick={() => alert("Customer support feature coming soon!")}
+            onClick={() => toast.info("Customer support feature coming soon!")}
             className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors"
           >
             Contact Support
