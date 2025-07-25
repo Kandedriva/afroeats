@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import useOwnerAuth from "../hooks/useOwnerAuth";
 import OwnerNavbar from "./OwnerNavbar";
 import ToggleSwitch from "./ToggleSwitch";
+import { toast } from 'react-toastify';
 
 const OwnerDashboard = () => {
   const [orders, setOrders] = useState([]);
@@ -87,7 +88,7 @@ const OwnerDashboard = () => {
       window.location.href = data.url;
     } catch (err) {
       console.error("Stripe Connect error", err.message);
-      alert("Failed to connect to Stripe.");
+      toast.error("Failed to connect to Stripe.");
     } finally {
       setStripeLoading(false);
     }
@@ -114,7 +115,7 @@ const OwnerDashboard = () => {
       );
     } catch (err) {
       console.error(err);
-      alert("Error updating dish availability");
+      toast.error("Error updating dish availability");
     }
   };
 

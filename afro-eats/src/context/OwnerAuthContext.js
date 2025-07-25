@@ -7,6 +7,26 @@ export function OwnerAuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [subscriptionActive, setSubscriptionActive] = useState(false);
 
+  // Function to fetch subscription status separately
+  const fetchSubscriptionStatus = async () => {
+    try {
+      const subRes = await fetch("http://localhost:5001/api/subscription/status", {
+        credentials: "include",
+      });
+
+      if (subRes.ok) {
+        const subData = await subRes.json();
+        setSubscriptionActive(subData?.active || false);
+      } else {
+        console.log("Subscription status check failed - owner may not be logged in yet");
+        setSubscriptionActive(false);
+      }
+    } catch (err) {
+      console.error("Subscription status fetch error:", err);
+      setSubscriptionActive(false);
+    }
+  };
+
   // Check if owner is already logged in and subscription status
   useEffect(() => {
     const fetchOwner = async () => {
@@ -19,22 +39,8 @@ export function OwnerAuthProvider({ children }) {
           const data = await res.json();
           setOwner(data);
 
-          // Fetch subscription status
-          try {
-            const subRes = await fetch("http://localhost:5001/api/subscription/status", {
-              credentials: "include",
-            });
-
-            if (subRes.ok) {
-              const subData = await subRes.json();
-              setSubscriptionActive(subData?.active || false);
-            } else {
-              setSubscriptionActive(false);
-            }
-          } catch (err) {
-            console.error("Subscription status fetch error:", err);
-            setSubscriptionActive(false);
-          }
+          // Fetch subscription status separately - don't block auth if this fails
+          fetchSubscriptionStatus();
         } else {
           setOwner(null);
           setSubscriptionActive(false);
@@ -75,22 +81,8 @@ export function OwnerAuthProvider({ children }) {
         const data = await res.json();
         setOwner(data);
 
-        // Fetch subscription status
-        try {
-          const subRes = await fetch("http://localhost:5001/api/subscription/status", {
-            credentials: "include",
-          });
-
-          if (subRes.ok) {
-            const subData = await subRes.json();
-            setSubscriptionActive(subData?.active || false);
-          } else {
-            setSubscriptionActive(false);
-          }
-        } catch (err) {
-          console.error("Subscription status fetch error:", err);
-          setSubscriptionActive(false);
-        }
+        // Fetch subscription status separately - don't block refresh if this fails
+        fetchSubscriptionStatus();
       } else {
         setOwner(null);
         setSubscriptionActive(false);
@@ -113,6 +105,7 @@ export function OwnerAuthProvider({ children }) {
         logout,
         subscriptionActive,
         refreshAuth,
+        fetchSubscriptionStatus,
       }}
     >
       {children}

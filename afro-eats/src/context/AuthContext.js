@@ -44,14 +44,22 @@ export const AuthProvider = ({ children }) => {
         credentials: "include",
       });
 
+      // Always clear user state, even if server request fails
+      setUser(null);
+      
       if (res.ok) {
-        setUser(null);
-        navigate("/login");
+        console.log("Logout successful");
       } else {
-        console.error("Logout failed");
+        console.error("Server logout failed, but local state cleared");
       }
+      
+      // Navigate to login page
+      navigate("/login");
     } catch (err) {
       console.error("Logout error", err);
+      // Still clear user state and redirect even if request fails
+      setUser(null);
+      navigate("/login");
     }
   };
 

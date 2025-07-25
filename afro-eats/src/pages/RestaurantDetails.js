@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useCart } from "../context/CartContext";
+import { toast } from 'react-toastify';
 
 export default function RestaurantDetails() {
   const { id } = useParams();
@@ -30,7 +31,7 @@ export default function RestaurantDetails() {
 
   function handleAddToCart(dish) {
     if (!dish.is_available) {
-      alert(`${dish.name} is currently unavailable.`);
+      toast.warning(`${dish.name} is currently unavailable.`);
       return;
     }
 

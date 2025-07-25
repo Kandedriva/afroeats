@@ -1,12 +1,13 @@
 import React from "react";
 import { useCart } from "../context/CartContext";
+import { toast } from 'react-toastify';
 
 function DishCard({ dish }) {
   const { addToCart } = useCart();
 
   const handleAddToCart = () => {
     if (!dish.is_available) {
-      alert("This dish is currently unavailable.");
+      toast.warning("This dish is currently unavailable.");
       return;
     }
 

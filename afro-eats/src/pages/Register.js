@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { toast } from 'react-toastify';
 
 export default function Register() {
   const [form, setForm] = useState({
@@ -26,13 +27,13 @@ export default function Register() {
   
       const data = await res.json();
       if (res.ok) {
-        alert("Registration successful!");
+        toast.success("Registration successful!");
       } else {
-        alert(data.error || "Registration failed.");
+        toast.error(data.error || "Registration failed.");
       }
     } catch (err) {
       console.error("Error:", err);
-      alert("An error occurred.");
+      toast.error("An error occurred.");
     }
   };
   

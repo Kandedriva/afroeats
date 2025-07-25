@@ -23,7 +23,10 @@ import DemoCheckout from "./pages/DemoCheckout";
 import DemoOrderCheckout from "./pages/DemoOrderCheckout";
 import OrderSuccess from "./pages/OrderSuccess";
 import ProtectedOwnerRoute from "./Components/ProtectedOwnerRoute";
-import { OwnerAuthProvider, OwnerAuthContext } from "./context/OwnerAuthContext"; // if you set this up separately
+import ProtectedRoute from "./Components/ProtectedRoute";
+import { OwnerAuthProvider, OwnerAuthContext } from "./context/OwnerAuthContext";
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 function AppContent() {
   const { user } = useContext(AuthContext);
@@ -41,8 +44,22 @@ function AppContent() {
         <Route path="/register" element={<Register />} />
         <Route path="/login" element={<Login />} />
         <Route path="/password-update" element={<UserPasswordUpdate />} />
-        <Route path="/my-orders" element={<CustomerOrders />} />
-        <Route path="/order-details/:orderId" element={<OrderDetails />} />
+        <Route 
+          path="/my-orders" 
+          element={
+            <ProtectedRoute>
+              <CustomerOrders />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/order-details/:orderId" 
+          element={
+            <ProtectedRoute>
+              <OrderDetails />
+            </ProtectedRoute>
+          } 
+        />
         <Route path="/cart" element={<CartPage />} />
         <Route path="/checkout" element={<Checkout user={user} />} />
         <Route path="/register-owner" element={<RegisterOwner />} />
@@ -50,8 +67,22 @@ function AppContent() {
         <Route path="/owner/password-update" element={<OwnerPasswordUpdate />} />
         <Route path="/owner/subscribe" element={<OwnerSubscribePage />} />
         <Route path="/owner/demo-checkout" element={<DemoCheckout />} />
-        <Route path="/demo-order-checkout" element={<DemoOrderCheckout />} />
-        <Route path="/order-success" element={<OrderSuccess />} />
+        <Route 
+          path="/demo-order-checkout" 
+          element={
+            <ProtectedRoute>
+              <DemoOrderCheckout />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/order-success" 
+          element={
+            <ProtectedRoute>
+              <OrderSuccess />
+            </ProtectedRoute>
+          } 
+        />
 
         {/* ✅ Protected Owner Routes */}
         <Route
@@ -82,6 +113,18 @@ function App() {
         <OwnerAuthProvider>
           <CartProvider>
             <AppContent />
+            <ToastContainer
+              position="top-right"
+              autoClose={5000}
+              hideProgressBar={false}
+              newestOnTop={false}
+              closeOnClick
+              rtl={false}
+              pauseOnFocusLoss
+              draggable
+              pauseOnHover
+              theme="light"
+            />
           </CartProvider>
         </OwnerAuthProvider>
       </AuthProvider>

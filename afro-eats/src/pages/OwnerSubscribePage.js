@@ -5,7 +5,7 @@ import { useOwnerAuth } from "../context/OwnerAuthContext";
 function OwnerSubscribePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const { owner, loading: authLoading } = useOwnerAuth();
+  const { owner, loading: authLoading, fetchSubscriptionStatus } = useOwnerAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
