@@ -7,6 +7,7 @@ import Register from "./pages/Register";
 import RegisterOwner from "./pages/RegisterOwner";
 import OwnerDashboard from "./pages/OwnerDashboard";
 import AddDish from "./pages/AddDish";
+import CompletedOrders from "./pages/CompletedOrders";
 import Login from "./pages/Login";
 import { AuthProvider, AuthContext } from "./context/AuthContext";
 import { CartProvider } from "./context/CartContext";
@@ -18,6 +19,7 @@ import OwnerSubscribePage from "./pages/OwnerSubscribePage";
 import OwnerPasswordUpdate from "./pages/OwnerPasswordUpdate";
 import UserPasswordUpdate from "./pages/UserPasswordUpdate";
 import CustomerOrders from "./pages/CustomerOrders";
+import CustomerProfile from "./pages/CustomerProfile";
 import OrderDetails from "./pages/OrderDetails";
 import DemoCheckout from "./pages/DemoCheckout";
 import DemoOrderCheckout from "./pages/DemoOrderCheckout";
@@ -49,6 +51,14 @@ function AppContent() {
           element={
             <ProtectedRoute>
               <CustomerOrders />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/my-profile" 
+          element={
+            <ProtectedRoute>
+              <CustomerProfile />
             </ProtectedRoute>
           } 
         />
@@ -98,6 +108,14 @@ function AppContent() {
           element={
             <ProtectedOwnerRoute>
               <AddDish />
+            </ProtectedOwnerRoute>
+          }
+        />
+        <Route
+          path="/owner/completed-orders"
+          element={
+            <ProtectedOwnerRoute>
+              <CompletedOrders />
             </ProtectedOwnerRoute>
           }
         />

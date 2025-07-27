@@ -26,7 +26,6 @@ function AddDish() {
           setSubscriptionStatus({ active: false });
         }
       } catch (err) {
-        console.error("Subscription check error:", err);
         setSubscriptionStatus({ active: false });
       } finally {
         setLoading(false);

@@ -27,7 +27,6 @@ export const AuthProvider = ({ children }) => {
         const data = await res.json();
         setUser(data);
       } catch (err) {
-        console.error("Failed to fetch user:", err.message);
         setUser(null);
       } finally {
         setLoading(false);
@@ -48,15 +47,12 @@ export const AuthProvider = ({ children }) => {
       setUser(null);
       
       if (res.ok) {
-        console.log("Logout successful");
       } else {
-        console.error("Server logout failed, but local state cleared");
       }
       
       // Navigate to login page
       navigate("/login");
     } catch (err) {
-      console.error("Logout error", err);
       // Still clear user state and redirect even if request fails
       setUser(null);
       navigate("/login");

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useCart } from "../context/CartContext";
 import { useNavigate } from "react-router-dom";
 import { toast } from 'react-toastify';
@@ -7,8 +7,41 @@ export default function Checkout({ user }) {
   const { cart, clearCart } = useCart();
   const navigate = useNavigate();
   const [orderDetails, setOrderDetails] = useState("");
+  const [currentAddress, setCurrentAddress] = useState("");
+  const [currentPhone, setCurrentPhone] = useState("");
+  const [useRegisteredAddress, setUseRegisteredAddress] = useState(false);
+  const [useRegisteredPhone, setUseRegisteredPhone] = useState(false);
+  const [userInfo, setUserInfo] = useState(null);
 
   const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+
+  // Fetch user information on component mount
+  useEffect(() => {
+    const fetchUserInfo = async () => {
+      if (user) {
+        try {
+          const res = await fetch("http://localhost:5001/api/auth/me", {
+            credentials: "include",
+          });
+          if (res.ok) {
+            const userData = await res.json();
+            setUserInfo(userData);
+            // Set defaults based on whether user has registered info
+            if (userData.address) {
+              setUseRegisteredAddress(true);
+            }
+            if (userData.phone) {
+              setUseRegisteredPhone(true);
+            }
+          }
+        } catch (err) {
+          // Handle error silently
+        }
+      }
+    };
+
+    fetchUserInfo();
+  }, [user]);
 
   const handlePlaceOrder = async () => {
     if (!user) {
@@ -16,31 +49,86 @@ export default function Checkout({ user }) {
       return;
     }
 
+    if (cart.length === 0) {
+      toast.warning("Your cart is empty.");
+      return;
+    }
+
+    // Validate address if not using registered address
+    if (!useRegisteredAddress && !currentAddress.trim()) {
+      toast.warning("Please enter your current address or use your registered address.");
+      return;
+    }
+
+    // Validate phone if not using registered phone  
+    if (!useRegisteredPhone && !currentPhone.trim()) {
+      toast.warning("Please enter your current phone number or use your registered phone.");
+      return;
+    }
+
     try {
-      const res = await fetch("http://localhost:5001/api/orders", {
+      // Add restaurant_id to cart items for backend processing
+      const cartWithRestaurantId = cart.map(item => ({
+        ...item,
+        restaurant_id: item.restaurantId
+      }));
+
+      const res = await fetch("http://localhost:5001/api/orders/checkout-session", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        credentials: "include", // to include cookie/session
+        credentials: "include",
         body: JSON.stringify({
-          userId: user.id,
-          items: cart,
+          items: cartWithRestaurantId,
           orderDetails: orderDetails.trim() || null,
+          deliveryAddress: useRegisteredAddress ? null : currentAddress.trim(),
+          deliveryPhone: useRegisteredPhone ? null : currentPhone.trim(),
         }),
       });
 
       const data = await res.json();
       if (res.ok) {
-        clearCart();
-        toast.success("Order placed successfully!");
-        navigate("/"); // or a confirmation page
+        if (data.demo_mode) {
+          // Demo mode - redirect to demo checkout (cart will be cleared after payment)
+          navigate(`/demo-order-checkout?order_id=${data.order_id}`);
+        } else {
+          // Real Stripe checkout - redirect to Stripe (cart will be cleared after payment)
+          window.location.href = data.url;
+        }
       } else {
-        toast.error("Order failed: " + data.error);
+        if (data.fallback_to_demo && data.missing_connect_accounts) {
+          const restaurantNames = data.missing_connect_accounts.map(r => r.name).join(', ');
+          toast.error(`Payment failed: ${restaurantNames} haven't connected their Stripe accounts yet. Using demo mode instead.`);
+          
+          // Fall back to demo mode
+          const demoRes = await fetch("http://localhost:5001/api/orders", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            credentials: "include",
+            body: JSON.stringify({
+              userId: user.id,
+              items: cart,
+              orderDetails: orderDetails.trim() || null,
+              deliveryAddress: useRegisteredAddress ? null : currentAddress.trim(),
+              deliveryPhone: useRegisteredPhone ? null : currentPhone.trim(),
+            }),
+          });
+          
+          if (demoRes.ok) {
+            await demoRes.json();
+            clearCart();
+            toast.success("Order placed successfully in demo mode!");
+            navigate("/");
+          }
+        } else {
+          toast.error("Checkout failed: " + data.error);
+        }
       }
     } catch (err) {
-      console.error("Place Order Error:", err);
-      toast.error("Something went wrong.");
+      toast.error("Something went wrong during checkout.");
     }
   };
 
@@ -59,6 +147,141 @@ export default function Checkout({ user }) {
               </li>
             ))}
           </ul>
+          
+          {/* Delivery Address Section */}
+          <div className="mt-6 border-t pt-6">
+            <h3 className="text-lg font-medium text-gray-800 mb-4">Delivery Address</h3>
+            
+            {userInfo && userInfo.address && (
+              <div className="mb-4">
+                <label className="flex items-center space-x-3">
+                  <input
+                    type="radio"
+                    name="addressOption"
+                    checked={useRegisteredAddress}
+                    onChange={() => setUseRegisteredAddress(true)}
+                    className="h-4 w-4 text-green-600 border-gray-300 focus:ring-green-500"
+                  />
+                  <div>
+                    <span className="text-sm font-medium text-gray-700">Use my registered address</span>
+                    <p className="text-sm text-gray-500 mt-1">{userInfo.address}</p>
+                  </div>
+                </label>
+              </div>
+            )}
+            
+            <div className="mb-4">
+              <label className="flex items-start space-x-3">
+                <input
+                  type="radio"
+                  name="addressOption"
+                  checked={!useRegisteredAddress}
+                  onChange={() => setUseRegisteredAddress(false)}
+                  className="h-4 w-4 text-green-600 border-gray-300 focus:ring-green-500 mt-1"
+                />
+                <div className="flex-1">
+                  <span className="text-sm font-medium text-gray-700">
+                    {userInfo && userInfo.address ? "Use different address for this order" : "Enter delivery address"}
+                  </span>
+                  {!useRegisteredAddress && (
+                    <textarea
+                      value={currentAddress}
+                      onChange={(e) => setCurrentAddress(e.target.value)}
+                      className="w-full mt-2 p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
+                      rows="3"
+                      placeholder="Enter your current delivery address (street, city, state, zip code)"
+                      maxLength={300}
+                    />
+                  )}
+                  {!useRegisteredAddress && (
+                    <div className="text-right text-xs text-gray-500 mt-1">
+                      {currentAddress.length}/300 characters
+                    </div>
+                  )}
+                </div>
+              </label>
+            </div>
+
+            {!userInfo?.address && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <span className="text-yellow-600">⚠️</span>
+                  </div>
+                  <div className="ml-2">
+                    <p className="text-sm text-yellow-700">
+                      No registered address found. Please enter your delivery address above.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Delivery Phone Section */}
+          <div className="mt-6 border-t pt-6">
+            <h3 className="text-lg font-medium text-gray-800 mb-4">Contact Phone</h3>
+            
+            {userInfo && userInfo.phone && (
+              <div className="mb-4">
+                <label className="flex items-center space-x-3">
+                  <input
+                    type="radio"
+                    name="phoneOption"
+                    checked={useRegisteredPhone}
+                    onChange={() => setUseRegisteredPhone(true)}
+                    className="h-4 w-4 text-green-600 border-gray-300 focus:ring-green-500"
+                  />
+                  <div>
+                    <span className="text-sm font-medium text-gray-700">Use my registered phone</span>
+                    <p className="text-sm text-gray-500 mt-1">{userInfo.phone}</p>
+                  </div>
+                </label>
+              </div>
+            )}
+            
+            <div className="mb-4">
+              <label className="flex items-start space-x-3">
+                <input
+                  type="radio"
+                  name="phoneOption"
+                  checked={!useRegisteredPhone}
+                  onChange={() => setUseRegisteredPhone(false)}
+                  className="h-4 w-4 text-green-600 border-gray-300 focus:ring-green-500 mt-1"
+                />
+                <div className="flex-1">
+                  <span className="text-sm font-medium text-gray-700">
+                    {userInfo && userInfo.phone ? "Use different phone for this order" : "Enter contact phone"}
+                  </span>
+                  {!useRegisteredPhone && (
+                    <input
+                      type="tel"
+                      value={currentPhone}
+                      onChange={(e) => setCurrentPhone(e.target.value)}
+                      className="w-full mt-2 p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      placeholder="Enter your phone number for delivery contact"
+                      maxLength={20}
+                    />
+                  )}
+                </div>
+              </label>
+            </div>
+
+            {!userInfo?.phone && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <span className="text-yellow-600">⚠️</span>
+                  </div>
+                  <div className="ml-2">
+                    <p className="text-sm text-yellow-700">
+                      No registered phone found. Please enter your contact phone above.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
           
           <div className="mt-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">

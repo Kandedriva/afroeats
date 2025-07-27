@@ -33,7 +33,7 @@ function Navbar() {
         setNotificationCount(data.unreadCount || 0);
       }
     } catch (err) {
-      console.error("Notification count fetch error:", err);
+      // Silent fail for notification count fetch
     }
   };
 
@@ -58,6 +58,9 @@ function Navbar() {
                     {notificationCount > 9 ? '9+' : notificationCount}
                   </span>
                 )}
+              </Link>
+              <Link to="/my-profile" className="text-gray-700 hover:text-green-600">
+                My Profile
               </Link>
               <span className="text-gray-700">Welcome, {user.name.split(" ")[0]}</span>
               <button

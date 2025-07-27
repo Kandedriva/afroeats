@@ -52,14 +52,12 @@ const RegisterOwner = () => {
       }
 
       const result = await res.json();
-      console.log("Registered:", result);
 
       // Refresh auth context and redirect
       await refreshAuth();
       navigate("/owner/dashboard");
 
     } catch (err) {
-      console.error("Registration error:", err);
       setError("Server error");
     }
   };

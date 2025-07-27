@@ -12,7 +12,6 @@ function DishCard({ dish }) {
     }
 
     addToCart(dish);
-    console.log("Added to cart:", dish.name);
   };
 
   return (

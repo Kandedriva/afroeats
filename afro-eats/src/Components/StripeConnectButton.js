@@ -28,7 +28,6 @@ function StripeConnectButton() {
         throw new Error("No redirect URL received");
       }
     } catch (error) {
-      console.error("Stripe Connect error", error);
       toast.error("Failed to connect with Stripe.");
     } finally {
       setLoading(false);

@@ -33,7 +33,6 @@ function OrderDetails() {
       const orderData = await res.json();
       setOrder(orderData);
     } catch (err) {
-      console.error("Fetch order details error:", err);
       setError(err.message);
     } finally {
       setOrderLoading(false);
@@ -59,6 +58,40 @@ function OrderDetails() {
       case 'cancelled': return 'Cancelled';
       case 'delivered': return 'Delivered';
       default: return status || 'Unknown';
+    }
+  };
+
+  const handleCallSupport = () => {
+    // Get unique restaurants from order items
+    const restaurants = order.items?.reduce((acc, item) => {
+      if (item.restaurant_phone && !acc.find(r => r.phone === item.restaurant_phone)) {
+        acc.push({
+          name: item.restaurant_name,
+          phone: item.restaurant_phone
+        });
+      }
+      return acc;
+    }, []) || [];
+    
+    if (restaurants.length === 1) {
+      // Single restaurant - direct call
+      window.location.href = `tel:${restaurants[0].phone}`;
+    } else if (restaurants.length > 1) {
+      // Multiple restaurants - show selection
+      const restaurantList = restaurants.map((r, index) => 
+        `${index + 1}. ${r.name}: ${r.phone}`
+      ).join('\n');
+      
+      const selection = prompt(
+        `This order contains items from multiple restaurants. Choose which one to call:\n\n${restaurantList}\n\nEnter the number (1-${restaurants.length}):`
+      );
+      
+      const selectedIndex = parseInt(selection) - 1;
+      if (selectedIndex >= 0 && selectedIndex < restaurants.length) {
+        window.location.href = `tel:${restaurants[selectedIndex].phone}`;
+      }
+    } else {
+      toast.error("Restaurant phone number not available");
     }
   };
 
@@ -204,6 +237,33 @@ function OrderDetails() {
       {/* Actions */}
       <div className="bg-gray-50 rounded-lg p-6">
         <h2 className="text-lg font-semibold mb-4">Need Help?</h2>
+        
+        {/* Restaurant Contact Info */}
+        {order.items && order.items.length > 0 && (
+          <div className="mb-4 p-3 bg-white rounded-lg border">
+            <p className="text-sm text-gray-600 mb-2">Restaurant Contact{order.items.reduce((acc, item) => {
+              if (item.restaurant_name && !acc.find(r => r.name === item.restaurant_name)) {
+                acc.push({ name: item.restaurant_name, phone: item.restaurant_phone });
+              }
+              return acc;
+            }, []).length > 1 ? 's' : ''}:</p>
+            
+            {order.items.reduce((acc, item) => {
+              if (item.restaurant_name && !acc.find(r => r.name === item.restaurant_name)) {
+                acc.push({ name: item.restaurant_name, phone: item.restaurant_phone });
+              }
+              return acc;
+            }, []).map((restaurant, index) => (
+              <div key={index} className={index > 0 ? 'mt-2 pt-2 border-t border-gray-100' : ''}>
+                <p className="font-medium text-gray-800">{restaurant.name}</p>
+                {restaurant.phone && (
+                  <p className="text-sm text-blue-600">📞 {restaurant.phone}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        
         <div className="flex space-x-4">
           <button
             onClick={() => navigate("/")}
@@ -212,10 +272,15 @@ function OrderDetails() {
             Order Again
           </button>
           <button
-            onClick={() => toast.info("Customer support feature coming soon!")}
-            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors"
+            onClick={handleCallSupport}
+            className={`px-4 py-2 rounded transition-colors ${
+              order.items?.some(item => item.restaurant_phone)
+                ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                : 'bg-gray-400 text-gray-200 cursor-not-allowed'
+            }`}
+            disabled={!order.items?.some(item => item.restaurant_phone)}
           >
-            Contact Support
+            📞 Call Restaurant
           </button>
         </div>
       </div>

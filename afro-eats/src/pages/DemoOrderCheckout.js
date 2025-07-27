@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { useCart } from "../context/CartContext";
 import { toast } from 'react-toastify';
+import { useCart } from "../context/CartContext";
 
 function DemoOrderCheckout() {
   const [loading, setLoading] = useState(false);
@@ -43,13 +43,15 @@ function DemoOrderCheckout() {
         });
 
         if (res.ok) {
-          // Backend will clear the cart after payment processing
+          // Backend clears the cart after payment processing
+          // Clear cart immediately in frontend for instant UI update
+          await clearCart();
+          // Navigate to success page where cart will be refreshed
           navigate(`/order-success?order_id=${orderId}&demo=true`);
         } else {
           throw new Error("Failed to process order");
         }
       } catch (err) {
-        console.error("Demo order processing error:", err);
         toast.error("Failed to process order: " + err.message);
         setLoading(false);
       }

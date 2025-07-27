@@ -20,7 +20,6 @@ export default function useOwnerAuth() {
           navigate("/owner/dashboard");
         }
       } catch (err) {
-        console.error("Auth check error:", err);
         navigate("/owner/login");
       } finally {
         setChecking(false);

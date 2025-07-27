@@ -20,12 +20,26 @@ const OwnerNavbar = () => {
             setRestaurant(restaurantData);
           }
         } catch (err) {
-          console.error("Restaurant fetch failed", err);
+          // Restaurant fetch failed
         }
       }
     };
 
     fetchRestaurant();
+
+    // Listen for logo update events
+    const handleLogoUpdate = (event) => {
+      if (event.detail && event.detail.restaurant) {
+        setRestaurant(event.detail.restaurant);
+      }
+    };
+
+    window.addEventListener('logoUpdated', handleLogoUpdate);
+
+    // Cleanup event listener
+    return () => {
+      window.removeEventListener('logoUpdated', handleLogoUpdate);
+    };
   }, [owner]);
 
   const handleLogout = async () => {
@@ -44,9 +58,12 @@ const OwnerNavbar = () => {
           <div className="flex items-center space-x-3">
             {restaurant.image_url && (
               <img
-                src={`http://localhost:5001/${restaurant.image_url}`}
+                src={`http://localhost:5001/${restaurant.image_url.replace(/\\/g, "/")}`}
                 alt={restaurant.name}
-                className="w-8 h-8 rounded-full object-cover"
+                className="w-8 h-8 rounded-full object-cover border-2 border-gray-300"
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                }}
               />
             )}
             <Link to="/owner/dashboard" className="text-xl font-bold">
@@ -56,9 +73,14 @@ const OwnerNavbar = () => {
         )}
         
         {owner && (
-          <Link to="/owner/add-dish" className="hover:underline bg-green-600 px-3 py-1 rounded">
-            + Add Dish
-          </Link>
+          <>
+            <Link to="/owner/add-dish" className="hover:underline bg-green-600 px-3 py-1 rounded">
+              + Add Dish
+            </Link>
+            <Link to="/owner/completed-orders" className="hover:underline bg-blue-600 px-3 py-1 rounded">
+              📋 Completed Orders
+            </Link>
+          </>
         )}
       </div>
 

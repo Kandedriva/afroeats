@@ -37,7 +37,6 @@ function DemoCheckout() {
           throw new Error("Failed to activate subscription");
         }
       } catch (err) {
-        console.error("Demo subscription error:", err);
         navigate("/owner/dashboard?subscription_error=true");
       }
     }, 3000);
