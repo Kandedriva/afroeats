@@ -64,7 +64,6 @@ function UserPasswordUpdate() {
         setError(data.error || "Password update failed");
       }
     } catch (err) {
-      console.error("Password update error:", err);
       setError("An error occurred. Please try again.");
     } finally {
       setLoading(false);

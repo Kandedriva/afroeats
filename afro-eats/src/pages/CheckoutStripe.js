@@ -40,8 +40,7 @@ function FormInner() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     const result = await stripe.confirmPayment({ elements, confirmParams: { return_url: process.env.REACT_APP_CLIENT_URL + "/order-success" } });
-    if (result.error) console.error(result.error);
-    else clearCart();
+    if (!result.error) clearCart();
   };
 
   return (

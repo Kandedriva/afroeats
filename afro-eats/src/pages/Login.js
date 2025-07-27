@@ -44,7 +44,6 @@ export default function Login() {
       // ✅ Redirect to restaurant list on success
       navigate("/");
     } catch (err) {
-      console.error("Login error:", err);
       setError(err.message);
     }
   };

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useContext } from "react";
 import { OwnerAuthContext } from "../context/OwnerAuthContext";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Navigate, useNavigate, Link } from "react-router-dom";
 import ToggleSwitch from "../Components/ToggleSwitch";
 import { toast } from 'react-toastify';
 
@@ -21,16 +21,21 @@ function OwnerDashboard() {
   const [refundNotes, setRefundNotes] = useState('');
   const [selectedNotificationId, setSelectedNotificationId] = useState(null);
   const [processingRefund, setProcessingRefund] = useState(false);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [showLogoModal, setShowLogoModal] = useState(false);
+  const [logoTimestamp, setLogoTimestamp] = useState(Date.now());
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Handle subscription success callback
+    // Handle subscription success callback and Stripe Connect returns
     const handleSubscriptionSuccess = async () => {
       const urlParams = new URLSearchParams(window.location.search);
       const sessionId = urlParams.get('session_id');
       const devSubscription = urlParams.get('dev_subscription');
       const subscriptionSuccess = urlParams.get('subscription_success');
       const subscriptionError = urlParams.get('subscription_error');
+      const stripeReturn = urlParams.get('stripe_return');
+      const stripeRefresh = urlParams.get('stripe_refresh');
       
       if (sessionId) {
         try {
@@ -39,7 +44,7 @@ function OwnerDashboard() {
           });
           
           if (res.ok) {
-            console.log("Subscription activated successfully");
+            // Subscription activated successfully
             // Clean URL and refresh subscription status
             window.history.replaceState({}, document.title, window.location.pathname);
             setTimeout(() => {
@@ -47,19 +52,30 @@ function OwnerDashboard() {
             }, 500);
           }
         } catch (err) {
-          console.error("Subscription success handler error:", err);
+          // Subscription success handler error
         }
       } else if (devSubscription || subscriptionSuccess) {
-        console.log("Demo subscription activated");
+        // Demo subscription activated
         // Clean URL and refresh subscription status
         window.history.replaceState({}, document.title, window.location.pathname);
         setTimeout(() => {
           refreshSubscriptionStatus();
         }, 500);
       } else if (subscriptionError) {
-        console.log("Subscription error occurred");
+        // Subscription error occurred
         // Clean URL
         window.history.replaceState({}, document.title, window.location.pathname);
+      } else if (stripeReturn || stripeRefresh) {
+        // Returned from Stripe Connect onboarding
+        // Clean URL and refresh Stripe Connect status
+        window.history.replaceState({}, document.title, window.location.pathname);
+        setTimeout(() => {
+          fetchStripeConnectStatus();
+        }, 1000); // Give Stripe a moment to process
+        
+        if (stripeReturn) {
+          toast.success("Stripe Connect setup completed! You can now receive payments.");
+        }
       }
     };
 
@@ -87,7 +103,7 @@ function OwnerDashboard() {
           setRestaurant(restaurantData);
         }
       } catch (err) {
-        console.error("Dashboard error:", err.message);
+        // Dashboard error
       } finally {
         setLoading(false);
       }
@@ -106,7 +122,7 @@ function OwnerDashboard() {
           setSubscriptionStatus({ active: false });
         }
       } catch (err) {
-        console.error("Subscription status fetch error:", err);
+        // Subscription status fetch error
         setSubscriptionStatus({ active: false });
       }
     };
@@ -122,7 +138,7 @@ function OwnerDashboard() {
           setOrders(data.orders || []);
         }
       } catch (err) {
-        console.error("Orders fetch error:", err);
+        // Orders fetch error
       }
     };
 
@@ -138,29 +154,76 @@ function OwnerDashboard() {
           setUnreadCount(data.unreadCount || 0);
         }
       } catch (err) {
-        console.error("Notifications fetch error:", err);
+        // Notifications fetch error
       }
     };
 
     handleSubscriptionSuccess();
     fetchDashboard();
     fetchLocalSubscriptionStatus();
+    fetchStripeConnectStatus();
     fetchOrders();
     fetchNotifications();
   }, []);
 
+  const fetchStripeConnectStatus = async () => {
+    try {
+      const res = await fetch("http://localhost:5001/api/stripe/connect-status", {
+        credentials: "include",
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        setStripeStatus({
+          connected: data.connected,
+          payoutsEnabled: data.payouts_enabled,
+          chargesEnabled: data.charges_enabled,
+          detailsSubmitted: data.details_submitted,
+          developmentMode: data.development_mode || false
+        });
+      } else {
+        setStripeStatus({
+          connected: false,
+          payoutsEnabled: false,
+          chargesEnabled: false,
+          detailsSubmitted: false,
+          developmentMode: false
+        });
+      }
+    } catch (err) {
+      // Stripe Connect status error
+      setStripeStatus({
+        connected: false,
+        payoutsEnabled: false,
+        chargesEnabled: false,
+        detailsSubmitted: false,
+        developmentMode: false
+      });
+    }
+  };
+
   const handleConnectStripe = async () => {
     try {
       setConnecting(true);
-      const res = await fetch("http://localhost:5001/api/owners/stripe/create-stripe-account", {
+      const res = await fetch("http://localhost:5001/api/stripe/create-stripe-account", {
         method: "POST",
         credentials: "include",
       });
+      
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "Failed to create Stripe account");
+      }
+      
       const data = await res.json();
-      window.location.href = data.url;
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error("No redirect URL received");
+      }
     } catch (err) {
-      console.error("Stripe connect error:", err);
-      toast.error("Failed to connect to Stripe");
+      // Stripe connect error
+      toast.error("Failed to connect to Stripe: " + err.message);
     } finally {
       setConnecting(false);
     }
@@ -188,7 +251,7 @@ function OwnerDashboard() {
         )
       );
     } catch (err) {
-      console.error(err);
+      // Toggle availability error
       toast.error("Error updating availability");
     }
   };
@@ -209,15 +272,20 @@ function OwnerDashboard() {
         throw new Error(errorData.error || "Failed to complete order");
       }
 
-      // Remove the completed order from the list
-      setOrders(prev => prev.filter(order => order.id !== orderId));
+      // Update the order status to completed instead of removing it
+      setOrders(prev => prev.map(order => 
+        order.id === orderId 
+          ? { ...order, status: 'completed' }
+          : order
+      ));
       toast.success("Order marked as completed!");
       setShowCompleteConfirm(null);
     } catch (err) {
-      console.error("Complete order error:", err);
+      // Complete order error
       toast.error("Error completing order: " + err.message);
     }
   };
+
 
   const printOrder = (order) => {
     const printWindow = window.open('', '_blank');
@@ -249,8 +317,8 @@ function OwnerDashboard() {
             <h3>Customer Information</h3>
             <p><strong>Name:</strong> ${order.customer_name}</p>
             <p><strong>Email:</strong> ${order.customer_email}</p>
-            <p><strong>Phone:</strong> ${order.customer_phone || 'Not provided'}</p>
-            <p><strong>Address:</strong> ${order.customer_address || 'Not provided'}</p>
+            <p><strong>Delivery Phone:</strong> ${order.delivery_phone || order.customer_phone || 'Not provided'}</p>
+            <p><strong>Delivery Address:</strong> ${order.delivery_address || order.customer_address || 'Not provided'}</p>
           </div>
           
           <div class="order-info">
@@ -318,7 +386,7 @@ function OwnerDashboard() {
         setUnreadCount(prev => Math.max(0, prev - 1));
       }
     } catch (err) {
-      console.error("Mark notification read error:", err);
+      // Mark notification read error
     }
   };
 
@@ -380,10 +448,85 @@ function OwnerDashboard() {
       setRefundAction('');
       setRefundNotes('');
     } catch (err) {
-      console.error("Process refund error:", err);
+      // Process refund error
       toast.error("Error processing refund: " + err.message);
     } finally {
       setProcessingRefund(false);
+    }
+  };
+
+  const handleLogoUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error("Please upload a valid image file (JPEG, PNG, GIF, WebP)");
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Logo file size must be less than 5MB");
+      return;
+    }
+
+    try {
+      setLogoUploading(true);
+      const formData = new FormData();
+      formData.append('logo', file);
+
+      const res = await fetch("http://localhost:5001/api/owners/restaurant/logo", {
+        method: "PUT",
+        credentials: "include",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to upload logo");
+      }
+
+      const data = await res.json();
+      
+      // Refetch complete restaurant data to ensure consistency
+      const restaurantRes = await fetch("http://localhost:5001/api/owners/restaurant", {
+        credentials: "include",
+      });
+      
+      if (restaurantRes.ok) {
+        const restaurantData = await restaurantRes.json();
+        setRestaurant(restaurantData);
+        
+        // Update logo timestamp to force refresh
+        setLogoTimestamp(Date.now());
+        
+        // Dispatch custom event to notify navbar about logo change
+        window.dispatchEvent(new CustomEvent('logoUpdated', { 
+          detail: { restaurant: restaurantData } 
+        }));
+      }
+
+      toast.success("Logo updated successfully!");
+      closeLogoModal();
+    } catch (err) {
+      toast.error("Error uploading logo: " + err.message);
+    } finally {
+      setLogoUploading(false);
+    }
+  };
+
+  const handleLogoClick = () => {
+    setShowLogoModal(true);
+  };
+
+  const closeLogoModal = () => {
+    setShowLogoModal(false);
+    // Reset file input
+    const fileInput = document.getElementById('logo-upload');
+    if (fileInput) {
+      fileInput.value = '';
     }
   };
 
@@ -440,37 +583,106 @@ function OwnerDashboard() {
         <div className="mb-6 p-4 border rounded bg-white">
           <h2 className="text-xl font-semibold">{restaurant.name}</h2>
           <p className="text-gray-600">📍 {restaurant.address}</p>
-          {restaurant.image_url && (
-            <img
-              src={`http://localhost:5001/${restaurant.image_url.replace(/\\/g, "/")}`}
-              alt="Logo"
-              className="w-32 h-32 object-cover mt-4 rounded"
-            />
-          )}
+          
+          {/* Logo Section */}
+          <div className="mt-4">
+            <h3 className="text-lg font-medium text-gray-800 mb-3">Restaurant Logo</h3>
+            {restaurant.image_url ? (
+              <div className="relative inline-block">
+                <img
+                  src={`http://localhost:5001${restaurant.image_url.replace(/\\/g, "/")}?t=${logoTimestamp}`}
+                  alt="Restaurant Logo"
+                  className="w-32 h-32 object-cover rounded-lg shadow-md cursor-pointer hover:shadow-lg transition-shadow border-2 border-gray-200 hover:border-blue-300"
+                  onClick={handleLogoClick}
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                    e.target.nextSibling.style.display = 'block';
+                  }}
+                />
+                <div 
+                  className="w-32 h-32 border-2 border-dashed border-red-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-red-400 hover:bg-red-50 transition-colors"
+                  onClick={handleLogoClick}
+                  style={{display: 'none'}}
+                >
+                  <svg className="w-8 h-8 text-red-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span className="text-sm text-red-500 text-center">Logo Error<br/>Click to re-upload</span>
+                </div>
+                <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-20 rounded-lg transition-all cursor-pointer flex items-center justify-center" onClick={handleLogoClick}>
+                  <span className="text-white opacity-0 hover:opacity-100 transition-opacity text-sm font-medium">
+                    Click to change
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div 
+                className="w-32 h-32 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors"
+                onClick={handleLogoClick}
+              >
+                <svg className="w-8 h-8 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+                <span className="text-sm text-gray-500 text-center">Upload Logo</span>
+              </div>
+            )}
+          </div>
 
           {/* ✅ Stripe Connect Section */}
-          {stripeStatus ? (
-            stripeStatus.payoutsEnabled ? (
-              <p className="text-green-600 mt-4">
-                ✅ Your Stripe account is active and ready to receive payments.
-              </p>
+          <div className="mt-6 p-4 border rounded-lg bg-gray-50">
+            <h4 className="text-lg font-medium text-gray-900 mb-3">Payment Processing</h4>
+            {stripeStatus ? (
+              stripeStatus.developmentMode ? (
+                <div className="text-blue-600">
+                  <p className="mb-2">🔧 Development Mode</p>
+                  <p className="text-sm text-gray-600">Stripe is not configured. Payment processing is in demo mode.</p>
+                </div>
+              ) : stripeStatus.payoutsEnabled && stripeStatus.chargesEnabled ? (
+                <div className="text-green-600">
+                  <p className="mb-2">✅ Stripe Connect Active</p>
+                  <p className="text-sm text-gray-600">Your Stripe account is fully set up and ready to receive payments.</p>
+                </div>
+              ) : stripeStatus.connected && stripeStatus.detailsSubmitted ? (
+                <div className="text-yellow-600">
+                  <p className="mb-2">⏳ Stripe Setup In Progress</p>
+                  <p className="text-sm text-gray-600 mb-3">Your account is under review. You'll be able to receive payments once approved.</p>
+                  <button
+                    onClick={handleConnectStripe}
+                    className="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700 text-sm"
+                    disabled={connecting}
+                  >
+                    {connecting ? "Redirecting..." : "Check Status / Update Info"}
+                  </button>
+                </div>
+              ) : stripeStatus.connected ? (
+                <div className="text-orange-600">
+                  <p className="mb-2">⚠️ Complete Stripe Setup</p>
+                  <p className="text-sm text-gray-600 mb-3">Please complete your Stripe account setup to start receiving payments.</p>
+                  <button
+                    onClick={handleConnectStripe}
+                    className="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700"
+                    disabled={connecting}
+                  >
+                    {connecting ? "Redirecting..." : "Complete Setup"}
+                  </button>
+                </div>
+              ) : (
+                <div className="text-red-600">
+                  <p className="mb-2">❌ Connect Stripe Account</p>
+                  <p className="text-sm text-gray-600 mb-3">Connect your Stripe account to receive payments from customers.</p>
+                  <button
+                    onClick={handleConnectStripe}
+                    className="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700"
+                    disabled={connecting}
+                  >
+                    {connecting ? "Redirecting..." : "Connect with Stripe"}
+                  </button>
+                </div>
+              )
             ) : (
-              <div className="mt-4">
-                <p className="text-yellow-600 mb-2">
-                  ⚠️ You need to finish setting up Stripe to receive payments.
-                </p>
-                <button
-                  onClick={handleConnectStripe}
-                  className="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700"
-                  disabled={connecting}
-                >
-                  {connecting ? "Redirecting..." : "Connect with Stripe"}
-                </button>
-              </div>
-            )
-          ) : (
-            <p className="text-sm text-gray-500 mt-4">Checking Stripe account...</p>
-          )}
+              <p className="text-sm text-gray-500">Checking Stripe account status...</p>
+            )}
+          </div>
         </div>
       )}
 
@@ -496,7 +708,7 @@ function OwnerDashboard() {
                     setNotifications(prev => prev.map(n => ({...n, read: true})));
                     setUnreadCount(0);
                   } catch (err) {
-                    console.error("Mark all read error:", err);
+                    // Mark all read error
                   }
                 }}
                 className="text-sm text-blue-600 hover:text-blue-800"
@@ -644,8 +856,20 @@ function OwnerDashboard() {
             <p className="text-sm text-gray-400 mt-1">Orders will appear here when customers place them.</p>
           </div>
         ) : (
-          <div className="space-y-4">
-            {orders.slice(0, 10).map((order) => (
+          <div className="space-y-6">
+            {/* Active Orders Section */}
+            <div>
+              <h4 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                📋 Active Orders ({orders.filter(order => order.status !== 'completed').length})
+              </h4>
+              {orders.filter(order => order.status !== 'completed').length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <p>No active orders</p>
+                  <p className="text-sm text-gray-400 mt-1">All orders have been completed</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {orders.filter(order => order.status !== 'completed').slice(0, 10).map((order) => (
               <div key={order.id} className="border rounded-lg p-4 bg-white shadow-sm">
                 <div className="flex justify-between items-start mb-4">
                   <div className="flex-1">
@@ -681,10 +905,10 @@ function OwnerDashboard() {
                       <span className="font-medium">Email:</span> {order.customer_email}
                     </div>
                     <div>
-                      <span className="font-medium">Phone:</span> {order.customer_phone || 'Not provided'}
+                      <span className="font-medium">Delivery Phone:</span> {order.delivery_phone || order.customer_phone || 'Not provided'}
                     </div>
                     <div className="md:col-span-2">
-                      <span className="font-medium">Address:</span> {order.customer_address || 'Not provided'}
+                      <span className="font-medium">Delivery Address:</span> {order.delivery_address || order.customer_address || 'Not provided'}
                     </div>
                   </div>
                 </div>
@@ -739,16 +963,30 @@ function OwnerDashboard() {
                   </div>
                 </div>
               </div>
-            ))}
-            
-            {orders.length > 10 && (
-              <div className="text-center">
-                <button
-                  className="text-blue-600 hover:text-blue-800 font-medium"
-                  onClick={() => {/* TODO: Show all orders */}}
-                >
-                  View All Orders ({orders.length})
-                </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Quick access to completed orders */}
+            {orders.filter(order => order.status === 'completed').length > 0 && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h4 className="text-lg font-medium text-blue-800">
+                      ✅ You have {orders.filter(order => order.status === 'completed').length} completed order{orders.filter(order => order.status === 'completed').length !== 1 ? 's' : ''}
+                    </h4>
+                    <p className="text-sm text-blue-600 mt-1">
+                      View and manage your completed order history
+                    </p>
+                  </div>
+                  <Link 
+                    to="/owner/completed-orders"
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                  >
+                    View All →
+                  </Link>
+                </div>
               </div>
             )}
           </div>
@@ -854,6 +1092,79 @@ function OwnerDashboard() {
                 className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
               >
                 ✅ Mark Complete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Logo Upload Modal */}
+      {showLogoModal && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !logoUploading) {
+              closeLogoModal();
+            }
+          }}
+        >
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold mb-4 text-gray-800">
+              {restaurant?.image_url ? 'Change Restaurant Logo' : 'Upload Restaurant Logo'}
+            </h3>
+            
+            <div className="mb-4">
+              <p className="text-gray-600 text-sm mb-4">
+                Choose a high-quality image to represent your restaurant. Recommended size: 400x400 pixels or larger.
+              </p>
+              
+              {/* Show current logo when changing */}
+              {restaurant?.image_url && (
+                <div className="mb-4">
+                  <p className="text-sm font-medium text-gray-700 mb-2">Current Logo:</p>
+                  <img
+                    src={`http://localhost:5001${restaurant.image_url.replace(/\\/g, "/")}`}
+                    alt="Current Logo"
+                    className="w-20 h-20 object-cover rounded-lg border-2 border-gray-200"
+                  />
+                </div>
+              )}
+              
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-400 transition-colors">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleLogoUpload}
+                  className="hidden"
+                  id="logo-upload"
+                  disabled={logoUploading}
+                />
+                <label htmlFor="logo-upload" className="cursor-pointer block">
+                  {logoUploading ? (
+                    <div className="flex flex-col items-center">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-2"></div>
+                      <span className="text-blue-600">Uploading...</span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center">
+                      <svg className="w-12 h-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                      </svg>
+                      <span className="text-blue-600 font-medium">Click to select image</span>
+                      <span className="text-gray-500 text-sm mt-1">PNG, JPG, GIF, WebP (Max 5MB)</span>
+                    </div>
+                  )}
+                </label>
+              </div>
+            </div>
+
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={closeLogoModal}
+                className="px-4 py-2 text-gray-600 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors"
+                disabled={logoUploading}
+              >
+                Cancel
               </button>
             </div>
           </div>

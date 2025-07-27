@@ -13,7 +13,7 @@ export default function RestaurantList() {
         const data = await res.json();
         setRestaurants(data);
       } catch (error) {
-        console.error("Error fetching restaurants:", error);
+        // Handle error silently
       } finally {
         setLoading(false);
       }

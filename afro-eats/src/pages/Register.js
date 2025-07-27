@@ -32,7 +32,6 @@ export default function Register() {
         toast.error(data.error || "Registration failed.");
       }
     } catch (err) {
-      console.error("Error:", err);
       toast.error("An error occurred.");
     }
   };

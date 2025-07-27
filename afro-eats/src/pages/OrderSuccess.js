@@ -7,7 +7,7 @@ function OrderSuccess() {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { fetchCart } = useCart();
+  const { forceRefreshCart, clearCart } = useCart();
   const orderId = searchParams.get('order_id');
   const sessionId = searchParams.get('session_id');
   const isDemo = searchParams.get('demo');
@@ -15,7 +15,6 @@ function OrderSuccess() {
   useEffect(() => {
     const handleOrderSuccess = async () => {
       if (!orderId) {
-        console.log("No order ID provided, redirecting to home");
         navigate('/');
         return;
       }
@@ -23,7 +22,6 @@ function OrderSuccess() {
       try {
         if (sessionId && !isDemo) {
           // Handle real Stripe payment success
-          console.log("Processing Stripe payment confirmation...");
           const res = await fetch(`http://localhost:5001/api/orders/success?session_id=${sessionId}&order_id=${orderId}`, {
             credentials: "include",
           });
@@ -35,23 +33,21 @@ function OrderSuccess() {
         }
 
         // Get order details
-        console.log("Fetching order details for order:", orderId);
         const orderRes = await fetch(`http://localhost:5001/api/orders/${orderId}`, {
           credentials: "include",
         });
 
         if (orderRes.ok) {
           const orderData = await orderRes.json();
-          console.log("Order details retrieved:", orderData);
           setOrderDetails(orderData);
-        } else {
-          console.warn("Could not fetch order details");
         }
 
-        // Refresh cart to reflect cleared state
-        await fetchCart();
+        // Clear cart immediately and then refresh to ensure consistency
+        await clearCart();
+        // Add a small delay to ensure backend processing is complete
+        await new Promise(resolve => setTimeout(resolve, 500));
+        await forceRefreshCart();
       } catch (err) {
-        console.error("Order success handler error:", err);
         // Don't block the success page if we can't fetch details
         // The order was still successful
       } finally {
@@ -60,7 +56,7 @@ function OrderSuccess() {
     };
 
     handleOrderSuccess();
-  }, [orderId, sessionId, isDemo, navigate, fetchCart]);
+  }, [orderId, sessionId, isDemo, navigate, forceRefreshCart, clearCart]);
 
   if (loading) {
     return (
@@ -171,7 +167,11 @@ function OrderSuccess() {
       {/* Action Buttons */}
       <div className="flex space-x-4">
         <button
-          onClick={() => navigate('/')}
+          onClick={async () => {
+            await clearCart(); // Ensure cart is cleared
+            await forceRefreshCart(); // Ensure cart is refreshed
+            navigate('/');
+          }}
           className="flex-1 bg-gray-200 text-gray-800 py-3 px-4 rounded-lg font-medium hover:bg-gray-300 transition-colors"
         >
           Browse More Restaurants

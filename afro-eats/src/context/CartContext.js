@@ -38,7 +38,6 @@ export const CartProvider = ({ children }) => {
       setCart(formatted);
     } catch (err) {
       if (!err.message.includes("401")) {
-        console.error("Error fetching cart:", err.message);
       }
     } finally {
       setLoading(false);
@@ -86,7 +85,6 @@ export const CartProvider = ({ children }) => {
         ]);
       }
     } catch (err) {
-      console.error("Error adding to cart:", err);
     }
   };
 
@@ -110,7 +108,6 @@ export const CartProvider = ({ children }) => {
         )
       );
     } catch (err) {
-      console.error("Error updating quantity:", err);
     }
   };
 
@@ -128,12 +125,13 @@ export const CartProvider = ({ children }) => {
 
       setCart((prev) => prev.filter((item) => item.id !== id));
     } catch (err) {
-      console.error("Error removing from cart:", err);
     }
   };
 
   const clearCart = async () => {
     try {
+      setCart([]);
+      
       const res = await fetch("http://localhost:5001/api/cart", {
         method: "DELETE",
         credentials: "include",
@@ -141,13 +139,18 @@ export const CartProvider = ({ children }) => {
 
       if (!res.ok) {
         const errorData = await res.json();
+        // Re-fetch cart if backend clear failed
+        await fetchCart();
         throw new Error(errorData.error || "Failed to clear cart");
       }
 
-      setCart([]);
     } catch (err) {
-      console.error("Error clearing cart:", err);
     }
+  };
+
+  const forceRefreshCart = async () => {
+    setLoading(true);
+    await fetchCart();
   };
 
   const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
@@ -163,6 +166,7 @@ export const CartProvider = ({ children }) => {
         clearCart,
         total,
         fetchCart,
+        forceRefreshCart,
         setCart,
       }}
     >

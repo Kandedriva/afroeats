@@ -23,8 +23,6 @@ function OwnerSubscribePage() {
       }
 
       try {
-        console.log("Creating subscription session for owner:", owner.id);
-        
         const res = await fetch("http://localhost:5001/api/subscription/create-session", {
           method: "POST",
           credentials: "include",
@@ -33,11 +31,8 @@ function OwnerSubscribePage() {
           },
         });
 
-        console.log("Subscription API response status:", res.status);
-
         if (!res.ok) {
           const errorData = await res.json();
-          console.log("Subscription API error:", errorData);
           if (res.status === 401) {
             throw new Error("Session expired. Please log in again.");
           }
@@ -45,16 +40,13 @@ function OwnerSubscribePage() {
         }
 
         const data = await res.json();
-        console.log("Subscription API response data:", data);
         
         if (data.url) {
-          console.log("Redirecting to:", data.url);
           window.location.href = data.url;
         } else {
           throw new Error("No checkout URL received");
         }
       } catch (err) {
-        console.error("Subscription error:", err);
         setError(err.message);
         setLoading(false);
       }

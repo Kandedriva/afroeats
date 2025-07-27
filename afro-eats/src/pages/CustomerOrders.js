@@ -39,7 +39,6 @@ function CustomerOrders() {
       const data = await res.json();
       setOrders(data.orders || []);
     } catch (err) {
-      console.error("Fetch orders error:", err);
       setError(err.message);
     } finally {
       setOrdersLoading(false);
@@ -58,7 +57,7 @@ function CustomerOrders() {
         setUnreadCount(data.unreadCount || 0);
       }
     } catch (err) {
-      console.error("Notifications fetch error:", err);
+      // Handle notifications fetch error silently
     }
   };
 
@@ -80,7 +79,7 @@ function CustomerOrders() {
         setUnreadCount(prev => Math.max(0, prev - 1));
       }
     } catch (err) {
-      console.error("Mark notification read error:", err);
+      // Handle mark notification read error silently
     }
   };
 
@@ -123,7 +122,6 @@ function CustomerOrders() {
       toast.success(responseData.message);
       setShowCancelConfirm(null);
     } catch (err) {
-      console.error("Cancel order error:", err);
       toast.error("Error cancelling order: " + err.message);
     }
   };
@@ -155,7 +153,6 @@ function CustomerOrders() {
   };
 
   const canRemoveOrder = (status) => {
-    console.log('Checking if order can be removed, status:', status); // Debug log
     return status === 'completed' || status === 'delivered' || status === 'cancelled';
   };
 
@@ -183,7 +180,6 @@ function CustomerOrders() {
       toast.success(responseData.message);
       setShowRemoveConfirm(null);
     } catch (err) {
-      console.error("Remove order error:", err);
       toast.error("Error removing order: " + err.message);
     }
   };
@@ -218,7 +214,6 @@ function CustomerOrders() {
 
       toast.success(responseData.message);
     } catch (err) {
-      console.error("Update order status error:", err);
       toast.error("Error updating status: " + err.message);
     }
   };
@@ -276,7 +271,7 @@ function CustomerOrders() {
                     setNotifications(prev => prev.map(n => ({...n, read: true})));
                     setUnreadCount(0);
                   } catch (err) {
-                    console.error("Mark all read error:", err);
+                    // Handle mark all read error silently
                   }
                 }}
                 className="text-sm text-blue-600 hover:text-blue-800"

@@ -34,7 +34,7 @@ const OwnerDashboard = () => {
         const data = await res.json();
         setSubscriptionActive(data.subscription_active);
       } catch (err) {
-        console.error("Subscription status check error:", err);
+        // Handle subscription status check error silently
       }
     };
 
@@ -47,7 +47,7 @@ const OwnerDashboard = () => {
         const data = await res.json();
         setStripeStatus(data.details_submitted);
       } catch (err) {
-        console.error("Stripe status error:", err.message);
+        // Handle Stripe status error silently
       }
     };
 
@@ -61,7 +61,7 @@ const OwnerDashboard = () => {
         setDishes(Array.isArray(data.dishes) ? data.dishes : []);
         setOrders(Array.isArray(data.orders) ? data.orders : []);
       } catch (err) {
-        console.error("Dashboard error:", err.message);
+        // Handle dashboard error silently
       } finally {
         setLoading(false);
       }
@@ -87,7 +87,6 @@ const OwnerDashboard = () => {
       const data = await res.json();
       window.location.href = data.url;
     } catch (err) {
-      console.error("Stripe Connect error", err.message);
       toast.error("Failed to connect to Stripe.");
     } finally {
       setStripeLoading(false);
@@ -114,7 +113,6 @@ const OwnerDashboard = () => {
         )
       );
     } catch (err) {
-      console.error(err);
       toast.error("Error updating dish availability");
     }
   };

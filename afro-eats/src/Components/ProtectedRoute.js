@@ -7,9 +7,7 @@ function ProtectedRoute({ children }) {
   const location = useLocation();
 
   useEffect(() => {
-    if (!loading && !user) {
-      console.log(`Protected route ${location.pathname} accessed without authentication, redirecting to login`);
-    }
+    // Track route access for debugging purposes
   }, [user, loading, location.pathname]);
 
   // Show loading while checking authentication

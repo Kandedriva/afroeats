@@ -52,7 +52,6 @@ export default function CartPage() {
       const { url } = await res.json();
       window.location.href = url; // Redirect to Stripe checkout
     } catch (err) {
-      console.error("Checkout error:", err);
       toast.error("Failed to proceed to checkout: " + err.message);
     }
   };

@@ -18,11 +18,11 @@ export function OwnerAuthProvider({ children }) {
         const subData = await subRes.json();
         setSubscriptionActive(subData?.active || false);
       } else {
-        console.log("Subscription status check failed - owner may not be logged in yet");
+        // Subscription status check failed - owner may not be logged in yet
         setSubscriptionActive(false);
       }
     } catch (err) {
-      console.error("Subscription status fetch error:", err);
+      // Subscription status fetch error
       setSubscriptionActive(false);
     }
   };
@@ -46,7 +46,7 @@ export function OwnerAuthProvider({ children }) {
           setSubscriptionActive(false);
         }
       } catch (err) {
-        console.error("Error checking owner session", err);
+        // Error checking owner session
         setOwner(null);
         setSubscriptionActive(false);
       } finally {
@@ -66,7 +66,7 @@ export function OwnerAuthProvider({ children }) {
       setOwner(null);
       setSubscriptionActive(false);
     } catch (err) {
-      console.error("Logout failed", err);
+      // Logout failed
     }
   };
 
@@ -88,7 +88,7 @@ export function OwnerAuthProvider({ children }) {
         setSubscriptionActive(false);
       }
     } catch (err) {
-      console.error("Error refreshing owner session", err);
+      // Error refreshing owner session
       setOwner(null);
       setSubscriptionActive(false);
     } finally {
