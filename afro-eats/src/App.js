@@ -8,10 +8,13 @@ import RegisterOwner from "./pages/RegisterOwner";
 import OwnerDashboard from "./pages/OwnerDashboard";
 import AddDish from "./pages/AddDish";
 import CompletedOrders from "./pages/CompletedOrders";
+import OwnerNotifications from "./pages/OwnerNotifications";
+import OwnerOrders from "./pages/OwnerOrders";
 import Login from "./pages/Login";
 import { AuthProvider, AuthContext } from "./context/AuthContext";
 import { CartProvider } from "./context/CartContext";
 import CartPage from "./pages/CartPage";
+import DeliveryOptions from "./pages/DeliveryOptions";
 import Checkout from "./pages/Checkout";
 import { useContext } from "react";
 import OwnerLogin from "./Components/OwnerLogin";
@@ -20,9 +23,8 @@ import OwnerPasswordUpdate from "./pages/OwnerPasswordUpdate";
 import UserPasswordUpdate from "./pages/UserPasswordUpdate";
 import CustomerOrders from "./pages/CustomerOrders";
 import CustomerProfile from "./pages/CustomerProfile";
+import CustomerNotifications from "./pages/CustomerNotifications";
 import OrderDetails from "./pages/OrderDetails";
-import DemoCheckout from "./pages/DemoCheckout";
-import DemoOrderCheckout from "./pages/DemoOrderCheckout";
 import OrderSuccess from "./pages/OrderSuccess";
 import ProtectedOwnerRoute from "./Components/ProtectedOwnerRoute";
 import ProtectedRoute from "./Components/ProtectedRoute";
@@ -63,6 +65,14 @@ function AppContent() {
           } 
         />
         <Route 
+          path="/my-notifications" 
+          element={
+            <ProtectedRoute>
+              <CustomerNotifications />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
           path="/order-details/:orderId" 
           element={
             <ProtectedRoute>
@@ -71,20 +81,19 @@ function AppContent() {
           } 
         />
         <Route path="/cart" element={<CartPage />} />
+        <Route 
+          path="/delivery-options" 
+          element={
+            <ProtectedRoute>
+              <DeliveryOptions />
+            </ProtectedRoute>
+          } 
+        />
         <Route path="/checkout" element={<Checkout user={user} />} />
         <Route path="/register-owner" element={<RegisterOwner />} />
         <Route path="/owner/login" element={<OwnerLogin />} />
         <Route path="/owner/password-update" element={<OwnerPasswordUpdate />} />
         <Route path="/owner/subscribe" element={<OwnerSubscribePage />} />
-        <Route path="/owner/demo-checkout" element={<DemoCheckout />} />
-        <Route 
-          path="/demo-order-checkout" 
-          element={
-            <ProtectedRoute>
-              <DemoOrderCheckout />
-            </ProtectedRoute>
-          } 
-        />
         <Route 
           path="/order-success" 
           element={
@@ -116,6 +125,22 @@ function AppContent() {
           element={
             <ProtectedOwnerRoute>
               <CompletedOrders />
+            </ProtectedOwnerRoute>
+          }
+        />
+        <Route
+          path="/owner/notifications"
+          element={
+            <ProtectedOwnerRoute>
+              <OwnerNotifications />
+            </ProtectedOwnerRoute>
+          }
+        />
+        <Route
+          path="/owner/orders"
+          element={
+            <ProtectedOwnerRoute>
+              <OwnerOrders />
             </ProtectedOwnerRoute>
           }
         />

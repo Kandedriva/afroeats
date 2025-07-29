@@ -6,8 +6,7 @@ export const createSubscriptionSession = async (req, res) => {
   try {
     const ownerId = req.session.ownerId;
     
-    console.log("Creating subscription session for owner:", ownerId);
-    console.log("Session data:", { ownerId: req.session.ownerId, session: !!req.session });
+    // Creating subscription session for authenticated owner
     
     if (!ownerId) {
       return res.status(401).json({ error: "Must be logged in as owner" });
@@ -15,8 +14,6 @@ export const createSubscriptionSession = async (req, res) => {
 
     // Check if Stripe is properly configured
     if (!stripe || !process.env.STRIPE_SECRET_KEY) {
-      console.log("Stripe not configured - creating demo subscription page");
-      
       // For development - create a demo checkout experience
       return res.json({ 
         url: "http://localhost:3000/owner/demo-checkout",
@@ -28,12 +25,10 @@ export const createSubscriptionSession = async (req, res) => {
     // If no price ID is set, create a basic subscription product
     let priceId = process.env.STRIPE_SUBSCRIPTION_PRICE_ID;
     if (!priceId) {
-      console.log("No STRIPE_SUBSCRIPTION_PRICE_ID found, creating default subscription product...");
-      
       try {
         // Create a product for restaurant subscriptions
         const product = await stripe.products.create({
-          name: 'Afro Eats Restaurant Subscription',
+          name: 'A Food Zone Restaurant Subscription',
           description: 'Monthly subscription for restaurant owners to list their restaurants and receive orders',
         });
 
@@ -46,10 +41,7 @@ export const createSubscriptionSession = async (req, res) => {
         });
 
         priceId = price.id;
-        console.log(`✅ Created default subscription: ${priceId}`);
-        console.log(`💡 Add this to your .env file: STRIPE_SUBSCRIPTION_PRICE_ID=${priceId}`);
       } catch (err) {
-        console.error("Failed to create default subscription product:", err);
         return res.status(500).json({ error: "Failed to set up subscription" });
       }
     }
@@ -62,7 +54,6 @@ export const createSubscriptionSession = async (req, res) => {
         [ownerId]
       );
     } catch (err) {
-      console.error("Database error getting owner:", err);
       return res.status(500).json({ error: "Database error" });
     }
 
@@ -74,7 +65,6 @@ export const createSubscriptionSession = async (req, res) => {
 
     // Validate the price ID format
     if (!priceId.startsWith('price_')) {
-      console.error("Invalid STRIPE_SUBSCRIPTION_PRICE_ID - must start with 'price_', got:", priceId);
       return res.status(500).json({ 
         error: "Stripe configuration error - invalid price ID format",
         hint: "Price ID should start with 'price_', not 'prod_'"
@@ -85,7 +75,7 @@ export const createSubscriptionSession = async (req, res) => {
     try {
       await pool.query("ALTER TABLE restaurant_owners ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR(255)");
     } catch (err) {
-      console.log("Column creation check:", err.message);
+      // Handle column creation check silently
     }
 
     // Create Stripe customer if not exists or if existing ID is invalid for current mode
@@ -99,9 +89,6 @@ export const createSubscriptionSession = async (req, res) => {
     );
     
     if (!customerId || !isValidCustomerId) {
-      if (customerId && !isValidCustomerId) {
-        console.log(`Clearing invalid customer ID ${customerId} for ${isTestMode ? 'test' : 'live'} mode`);
-      }
       
       const customer = await stripe.customers.create({
         email: owner.email,
@@ -113,7 +100,6 @@ export const createSubscriptionSession = async (req, res) => {
       });
 
       customerId = customer.id;
-      console.log(`Created new ${isTestMode ? 'test' : 'live'} mode customer: ${customerId}`);
       
       // Update owner with customer ID
       await pool.query(
@@ -142,8 +128,6 @@ export const createSubscriptionSession = async (req, res) => {
 
     res.json({ url: session.url });
   } catch (err) {
-    console.error("Stripe subscription session error:", err);
-    
     // If it's a price ID error, provide helpful message
     if (err.code === 'resource_missing' && err.param === 'line_items[0][price]') {
       return res.status(400).json({ 
@@ -183,7 +167,6 @@ export const handleSubscriptionSuccess = async (req, res) => {
           [ownerId]
         );
       } catch (err) {
-        console.error("Error updating subscription status:", err);
         // Continue anyway - subscription was successful
       }
       
@@ -192,7 +175,6 @@ export const handleSubscriptionSuccess = async (req, res) => {
       res.status(400).json({ error: "Payment not completed" });
     }
   } catch (err) {
-    console.error("Subscription success handler error:", err);
     res.status(500).json({ error: "Failed to process subscription success" });
   }
 };
@@ -207,7 +189,7 @@ export const activateDemoSubscription = async (req, res) => {
       return res.status(401).json({ error: "Must be logged in as owner" });
     }
 
-    console.log("Activating demo subscription for owner:", ownerId);
+    // Activating demo subscription for authenticated owner
 
     // Ensure is_subscribed column exists and update subscription status
     try {
@@ -222,9 +204,7 @@ export const activateDemoSubscription = async (req, res) => {
         [ownerId]
       );
       
-      console.log("Demo subscription activated successfully for owner:", ownerId);
     } catch (err) {
-      console.error("Error updating subscription status:", err);
       // Continue anyway since this is demo mode
     }
 
@@ -234,7 +214,6 @@ export const activateDemoSubscription = async (req, res) => {
       demo_mode: true 
     });
   } catch (err) {
-    console.error("Demo subscription activation error:", err);
     res.status(500).json({ error: "Failed to activate demo subscription" });
   }
 };
@@ -243,8 +222,7 @@ export const checkSubscriptionStatus = async (req, res) => {
   try {
     const ownerId = req.session.ownerId;
     
-    console.log("Checking subscription status for owner:", ownerId);
-    console.log("Session data:", { ownerId: req.session.ownerId, session: !!req.session });
+    // Checking subscription status for authenticated owner
     
     if (!ownerId) {
       return res.status(401).json({ error: "Must be logged in as owner" });
@@ -263,7 +241,6 @@ export const checkSubscriptionStatus = async (req, res) => {
       );
     } catch (err) {
       // If we still can't get subscription data, fall back to basic query
-      console.log("Error accessing subscription data, falling back to basic owner query");
       ownerResult = await pool.query(
         "SELECT id, email FROM restaurant_owners WHERE id = $1",
         [ownerId]
@@ -301,7 +278,6 @@ export const checkSubscriptionStatus = async (req, res) => {
     );
     
     if (!isValidCustomerId) {
-      console.log(`Invalid customer ID ${owner.stripe_customer_id} for ${isTestMode ? 'test' : 'live'} mode, clearing it`);
       // Clear invalid customer ID
       await pool.query(
         "UPDATE restaurant_owners SET stripe_customer_id = NULL WHERE id = $1",
@@ -330,7 +306,6 @@ export const checkSubscriptionStatus = async (req, res) => {
 
       res.json({ active: hasActiveSubscription });
     } catch (stripeError) {
-      console.error("Stripe subscription check error:", stripeError.message);
       if (stripeError.code === 'resource_missing') {
         // Customer doesn't exist in Stripe, clear the invalid ID
         await pool.query(
@@ -342,7 +317,6 @@ export const checkSubscriptionStatus = async (req, res) => {
       throw stripeError; // Re-throw other errors
     }
   } catch (err) {
-    console.error("Subscription status check error:", err);
     res.status(500).json({ error: "Failed to check subscription status" });
   }
 };

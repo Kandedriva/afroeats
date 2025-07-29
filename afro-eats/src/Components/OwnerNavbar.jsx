@@ -5,6 +5,8 @@ import { useOwnerAuth } from "../context/OwnerAuthContext";
 const OwnerNavbar = () => {
   const { owner, logout } = useOwnerAuth();
   const [restaurant, setRestaurant] = useState(null);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [activeOrderCount, setActiveOrderCount] = useState(0);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -25,7 +27,50 @@ const OwnerNavbar = () => {
       }
     };
 
+    const fetchNotificationCount = async () => {
+      if (owner) {
+        try {
+          const res = await fetch("http://localhost:5001/api/owners/notifications", {
+            credentials: "include",
+          });
+          
+          if (res.ok) {
+            const data = await res.json();
+            setUnreadCount(data.unreadCount || 0);
+          }
+        } catch (err) {
+          // Notifications fetch failed
+        }
+      }
+    };
+
+    const fetchActiveOrderCount = async () => {
+      if (owner) {
+        try {
+          const res = await fetch("http://localhost:5001/api/owners/orders", {
+            credentials: "include",
+          });
+          
+          if (res.ok) {
+            const data = await res.json();
+            const activeOrders = (data.orders || []).filter(order => order.status !== 'completed');
+            setActiveOrderCount(activeOrders.length);
+          }
+        } catch (err) {
+          // Orders fetch failed
+        }
+      }
+    };
+
     fetchRestaurant();
+    fetchNotificationCount();
+    fetchActiveOrderCount();
+
+    // Poll for updates every 30 seconds
+    const updateInterval = setInterval(() => {
+      fetchNotificationCount();
+      fetchActiveOrderCount();
+    }, 30000);
 
     // Listen for logo update events
     const handleLogoUpdate = (event) => {
@@ -36,9 +81,10 @@ const OwnerNavbar = () => {
 
     window.addEventListener('logoUpdated', handleLogoUpdate);
 
-    // Cleanup event listener
+    // Cleanup event listener and interval
     return () => {
       window.removeEventListener('logoUpdated', handleLogoUpdate);
+      clearInterval(updateInterval);
     };
   }, [owner]);
 
@@ -76,6 +122,22 @@ const OwnerNavbar = () => {
           <>
             <Link to="/owner/add-dish" className="hover:underline bg-green-600 px-3 py-1 rounded">
               + Add Dish
+            </Link>
+            <Link to="/owner/orders" className="hover:underline bg-purple-600 px-3 py-1 rounded relative">
+              📋 Orders
+              {activeOrderCount > 0 && (
+                <span className="absolute -top-2 -right-2 bg-orange-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                  {activeOrderCount > 9 ? '9+' : activeOrderCount}
+                </span>
+              )}
+            </Link>
+            <Link to="/owner/notifications" className="hover:underline bg-orange-600 px-3 py-1 rounded relative">
+              🔔 Notifications
+              {unreadCount > 0 && (
+                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
             </Link>
             <Link to="/owner/completed-orders" className="hover:underline bg-blue-600 px-3 py-1 rounded">
               📋 Completed Orders

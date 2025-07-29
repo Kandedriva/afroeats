@@ -45,7 +45,6 @@
 
 //     res.json({ url: accountLink.url });
 //   } catch (err) {
-//     console.error("Stripe onboarding error:", err.message);
 //     res.status(500).json({ error: "Stripe onboarding failed" });
 //   }
 // });
@@ -72,7 +71,6 @@
 //       charges_enabled: account.charges_enabled,
 //     });
 //   } catch (err) {
-//     console.error("Stripe status check error:", err.message);
 //     res.status(500).json({ error: "Could not check Stripe status" });
 //   }
 // });
@@ -102,7 +100,6 @@
 
 //     res.json({ clientSecret: paymentIntent.client_secret });
 //   } catch (err) {
-//     console.error("Create PaymentIntent error:", err.message);
 //     res.status(500).json({ error: "Failed to create PaymentIntent" });
 //   }
 // });

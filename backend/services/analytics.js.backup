@@ -1,0 +1,274 @@
+import { cache } from '../redis.js';
+import pool from '../db.js';
+
+export class AnalyticsService {
+  
+  // Track visitor activity
+  static async trackVisitor(req) {
+    try {
+      const ip = req.ip || req.connection.remoteAddress;
+      const userAgent = req.get('User-Agent') || 'Unknown';
+      const dateKey = new Date().toISOString().split('T')[0];
+      const hourKey = new Date().getHours();
+      
+      // Track unique daily visitors
+      await cache.sadd(`analytics:unique_visitors:${dateKey}`, ip);
+      
+      // Track hourly visitors
+      await cache.sadd(`analytics:hourly_visitors:${dateKey}:${hourKey}`, ip);
+      
+      // Track page views
+      await cache.incr(`analytics:page_views:${dateKey}`);
+      await cache.incr(`analytics:page_views:${dateKey}:${req.originalUrl}`);
+      
+      // Track user agents (for device analytics)
+      const deviceType = this.getDeviceType(userAgent);
+      await cache.incr(`analytics:devices:${dateKey}:${deviceType}`);
+      
+      // Track geographical data (simple country detection)
+      const country = await this.getCountryFromIP(ip);
+      if (country) {
+        await cache.incr(`analytics:countries:${dateKey}:${country}`);
+      }
+      
+    } catch (error) {
+      console.error('Analytics tracking error:', error);
+    }
+  }
+  
+  // Track user registration
+  static async trackUserRegistration(userType = 'customer') {
+    try {
+      const dateKey = new Date().toISOString().split('T')[0];
+      await cache.incr(`analytics:registrations:${dateKey}`);
+      await cache.incr(`analytics:registrations:${dateKey}:${userType}`);
+    } catch (error) {
+      console.error('Registration tracking error:', error);
+    }
+  }
+  
+  // Track order creation
+  static async trackOrder(orderData) {
+    try {
+      const dateKey = new Date().toISOString().split('T')[0];
+      await cache.incr(`analytics:orders:${dateKey}`);
+      await cache.incr(`analytics:revenue:${dateKey}`, Math.round(orderData.total * 100)); // Store in cents
+      await cache.incr(`analytics:platform_fees:${dateKey}`, Math.round((orderData.platform_fee || 0) * 100));
+    } catch (error) {
+      console.error('Order tracking error:', error);
+    }
+  }
+  
+  // Track restaurant activity
+  static async trackRestaurantActivity(restaurantId, action) {
+    try {
+      const dateKey = new Date().toISOString().split('T')[0);
+      await cache.incr(`analytics:restaurant_activity:${dateKey}`);
+      await cache.incr(`analytics:restaurant_activity:${dateKey}:${action}`);
+      await cache.sadd(`analytics:active_restaurants:${dateKey}`, restaurantId.toString());
+    } catch (error) {
+      console.error('Restaurant activity tracking error:', error);
+    }
+  }
+  
+  // Get comprehensive analytics data
+  static async getAnalytics(startDate, endDate) {
+    try {
+      const analytics = {
+        summary: {},
+        daily: {},
+        devices: {},
+        countries: {},
+        popular_pages: {},
+        active_hours: {}
+      };
+      
+      const dates = this.getDateRange(startDate, endDate);
+      
+      for (const date of dates) {
+        // Daily metrics
+        analytics.daily[date] = {
+          unique_visitors: await cache.scard(`analytics:unique_visitors:${date}`),
+          page_views: await cache.get(`analytics:page_views:${date}`) || 0,
+          registrations: await cache.get(`analytics:registrations:${date}`) || 0,
+          customer_registrations: await cache.get(`analytics:registrations:${date}:customer`) || 0,
+          owner_registrations: await cache.get(`analytics:registrations:${date}:owner`) || 0,
+          orders: await cache.get(`analytics:orders:${date}`) || 0,
+          revenue: (await cache.get(`analytics:revenue:${date}`) || 0) / 100, // Convert back to dollars
+          platform_fees: (await cache.get(`analytics:platform_fees:${date}`) || 0) / 100,
+          active_restaurants: await cache.scard(`analytics:active_restaurants:${date}`)
+        };
+        
+        // Hourly breakdown for today
+        if (date === new Date().toISOString().split('T')[0]) {
+          analytics.active_hours[date] = {};
+          for (let hour = 0; hour < 24; hour++) {
+            analytics.active_hours[date][hour] = await cache.scard(`analytics:hourly_visitors:${date}:${hour}`);
+          }
+        }
+        
+        // Device types
+        const devices = ['mobile', 'desktop', 'tablet', 'bot'];
+        for (const device of devices) {
+          const count = await cache.get(`analytics:devices:${date}:${device}`) || 0;
+          analytics.devices[device] = (analytics.devices[device] || 0) + parseInt(count);
+        }
+      }
+      
+      // Calculate summary
+      analytics.summary = {
+        total_unique_visitors: Object.values(analytics.daily).reduce((sum, day) => sum + day.unique_visitors, 0),
+        total_page_views: Object.values(analytics.daily).reduce((sum, day) => sum + day.page_views, 0),
+        total_registrations: Object.values(analytics.daily).reduce((sum, day) => sum + day.registrations, 0),
+        total_orders: Object.values(analytics.daily).reduce((sum, day) => sum + day.orders, 0),
+        total_revenue: Object.values(analytics.daily).reduce((sum, day) => sum + day.revenue, 0),
+        total_platform_fees: Object.values(analytics.daily).reduce((sum, day) => sum + day.platform_fees, 0),
+        average_daily_visitors: Math.round(Object.values(analytics.daily).reduce((sum, day) => sum + day.unique_visitors, 0) / dates.length),
+        conversion_rate: this.calculateConversionRate(analytics.daily)
+      };
+      
+      return analytics;
+    } catch (error) {
+      console.error('Get analytics error:', error);
+      return null;
+    }
+  }
+  
+  // Get real-time metrics
+  static async getRealTimeMetrics() {
+    try {
+      const now = new Date();
+      const dateKey = now.toISOString().split('T')[0];
+      const hourKey = now.getHours();
+      const last5Minutes = Math.floor(now.getMinutes() / 5) * 5;
+      
+      return {
+        current_online: await cache.scard(`analytics:online_users:${Date.now()}`), // Updated by websocket
+        visitors_today: await cache.scard(`analytics:unique_visitors:${dateKey}`),
+        visitors_this_hour: await cache.scard(`analytics:hourly_visitors:${dateKey}:${hourKey}`),
+        page_views_today: await cache.get(`analytics:page_views:${dateKey}`) || 0,
+        orders_today: await cache.get(`analytics:orders:${dateKey}`) || 0,
+        revenue_today: (await cache.get(`analytics:revenue:${dateKey}`) || 0) / 100,
+        active_restaurants_today: await cache.scard(`analytics:active_restaurants:${dateKey}`),
+        registrations_today: await cache.get(`analytics:registrations:${dateKey}`) || 0
+      };
+    } catch (error) {
+      console.error('Real-time metrics error:', error);
+      return {};
+    }
+  }
+  
+  // Get user growth metrics
+  static async getUserGrowth(days = 30) {
+    try {
+      const userGrowth = await pool.query(`
+        SELECT 
+          DATE(created_at) as date,
+          COUNT(*) as new_users,
+          COUNT(*) FILTER (WHERE created_at >= CURRENT_DATE - INTERVAL '1 day') OVER (ORDER BY DATE(created_at)) as cumulative_users
+        FROM users 
+        WHERE created_at >= CURRENT_DATE - INTERVAL '${days} days'
+        GROUP BY DATE(created_at)
+        ORDER BY date
+      `);
+      
+      const restaurantGrowth = await pool.query(`
+        SELECT 
+          DATE(r.created_at) as date,
+          COUNT(*) as new_restaurants,
+          COUNT(*) FILTER (WHERE r.created_at >= CURRENT_DATE - INTERVAL '1 day') OVER (ORDER BY DATE(r.created_at)) as cumulative_restaurants
+        FROM restaurants r
+        WHERE r.created_at >= CURRENT_DATE - INTERVAL '${days} days'
+        GROUP BY DATE(r.created_at)
+        ORDER BY date
+      `);
+      
+      return {
+        users: userGrowth.rows,
+        restaurants: restaurantGrowth.rows
+      };
+    } catch (error) {
+      console.error('User growth metrics error:', error);
+      return {};
+    }
+  }
+  
+  // Get top performing restaurants
+  static async getTopRestaurants(limit = 10) {
+    try {
+      const topRestaurants = await pool.query(`
+        SELECT 
+          r.id,
+          r.name,
+          COUNT(DISTINCT o.id) as total_orders,
+          COUNT(DISTINCT o.user_id) as unique_customers,
+          COALESCE(SUM(oi.price * oi.quantity), 0) as total_revenue,
+          AVG(oi.price * oi.quantity) as avg_order_value,
+          COUNT(CASE WHEN o.created_at >= CURRENT_DATE - INTERVAL '7 days' THEN 1 END) as orders_last_7_days
+        FROM restaurants r
+        LEFT JOIN order_items oi ON r.id = COALESCE(oi.restaurant_id, (SELECT restaurant_id FROM dishes WHERE id = oi.dish_id))
+        LEFT JOIN orders o ON oi.order_id = o.id AND o.status IN ('paid', 'completed')
+        GROUP BY r.id, r.name
+        ORDER BY total_revenue DESC
+        LIMIT $1
+      `, [limit]);
+      
+      return topRestaurants.rows;
+    } catch (error) {
+      console.error('Top restaurants error:', error);
+      return [];
+    }
+  }
+  
+  // Helper methods
+  static getDeviceType(userAgent) {
+    if (/bot|crawler|spider/i.test(userAgent)) return 'bot';
+    if (/mobile|iphone|ipod|android|blackberry|opera|mini|windows\sce|palm|smartphone|iemobile/i.test(userAgent)) return 'mobile';
+    if (/tablet|ipad|playbook|silk|kindle/i.test(userAgent)) return 'tablet';
+    return 'desktop';
+  }
+  
+  static async getCountryFromIP(ip) {
+    // Simple country detection - in production, use a service like MaxMind
+    if (ip === '127.0.0.1' || ip === '::1') return 'localhost';
+    // You would integrate with a GeoIP service here
+    return 'unknown';
+  }
+  
+  static getDateRange(startDate, endDate) {
+    const dates = [];
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    
+    while (start <= end) {
+      dates.push(start.toISOString().split('T')[0]);
+      start.setDate(start.getDate() + 1);
+    }
+    
+    return dates;
+  }
+  
+  static calculateConversionRate(dailyData) {
+    const totalVisitors = Object.values(dailyData).reduce((sum, day) => sum + day.unique_visitors, 0);
+    const totalOrders = Object.values(dailyData).reduce((sum, day) => sum + day.orders, 0);
+    return totalVisitors > 0 ? ((totalOrders / totalVisitors) * 100).toFixed(2) : 0;
+  }
+}
+
+// Middleware to track visitor activity
+export const trackVisitorMiddleware = async (req, res, next) => {
+  // Don't track API calls or assets
+  if (req.originalUrl.startsWith('/api') || 
+      req.originalUrl.includes('.') || 
+      req.method !== 'GET') {
+    return next();
+  }
+  
+  try {
+    await AnalyticsService.trackVisitor(req);
+  } catch (error) {
+    console.error('Visitor tracking middleware error:', error);
+  }
+  
+  next();
+};

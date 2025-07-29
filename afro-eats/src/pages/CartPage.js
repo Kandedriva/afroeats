@@ -8,7 +8,7 @@ export default function CartPage() {
   const { cart, loading, updateQuantity, removeFromCart, clearCart, total } = useCart();
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [orderDetails, setOrderDetails] = useState("");
+  const [restaurantInstructions, setRestaurantInstructions] = useState({});
 
   if (loading) {
     return <p className="text-center mt-10">Loading cart...</p>;
@@ -28,32 +28,17 @@ export default function CartPage() {
     return groups;
   }, {});
 
-  const handleCheckout = async () => {
+  const handleCheckout = () => {
     if (!user) {
       toast.warning("Please log in to checkout");
       navigate("/login");
       return;
     }
 
-    try {
-      // Create Stripe checkout session
-      const res = await fetch("http://localhost:5001/api/orders/checkout-session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ items: cart, orderDetails: orderDetails.trim() || null }),
-      });
-
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.error || "Failed to create checkout session");
-      }
-
-      const { url } = await res.json();
-      window.location.href = url; // Redirect to Stripe checkout
-    } catch (err) {
-      toast.error("Failed to proceed to checkout: " + err.message);
-    }
+    // Navigate to delivery options page with restaurant-specific instructions
+    navigate("/delivery-options", {
+      state: { restaurantInstructions }
+    });
   };
 
   return (
@@ -61,7 +46,7 @@ export default function CartPage() {
       <h2 className="text-2xl font-bold mb-6">Your Cart</h2>
 
       {Object.entries(grouped).map(([restaurant, items]) => (
-        <div key={restaurant} className="mb-8">
+        <div key={restaurant} className="mb-8 bg-white p-6 rounded-lg shadow-sm border">
           <h3 className="text-xl font-semibold text-green-700 mb-4">
             🏪 {restaurant}
           </h3>
@@ -101,25 +86,30 @@ export default function CartPage() {
               </div>
             </div>
           ))}
+
+          {/* Special Instructions for this restaurant */}
+          <div className="mt-4 pt-4 border-t">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Special Instructions for {restaurant} (Optional)
+            </label>
+            <textarea
+              value={restaurantInstructions[restaurant] || ""}
+              onChange={(e) => setRestaurantInstructions(prev => ({
+                ...prev,
+                [restaurant]: e.target.value
+              }))}
+              className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
+              rows="2"
+              placeholder={`Add any special instructions for ${restaurant} (e.g., no onions, extra spicy, cooking preferences, etc.)`}
+              maxLength={300}
+            />
+            <div className="text-right text-xs text-gray-500 mt-1">
+              {(restaurantInstructions[restaurant] || "").length}/300 characters
+            </div>
+          </div>
         </div>
       ))}
 
-      <div className="mt-6">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Special Instructions (Optional)
-        </label>
-        <textarea
-          value={orderDetails}
-          onChange={(e) => setOrderDetails(e.target.value)}
-          className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
-          rows="3"
-          placeholder="Add any special instructions for your order (e.g., no onions, extra spicy, delivery notes, etc.)"
-          maxLength={500}
-        />
-        <div className="text-right text-xs text-gray-500 mt-1">
-          {orderDetails.length}/500 characters
-        </div>
-      </div>
 
       <div className="text-right mt-6">
         <p className="text-lg font-semibold">

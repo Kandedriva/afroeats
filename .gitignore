@@ -134,27 +134,23 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
-# Sensitive environment files
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
 
-# Temporary and development files
+# Development and temporary files
 *.txt
 *.log
 *cookies*
 *session*
 *temp*
 
-# API keys and secrets
+# Sensitive files that may contain API keys, secrets, or credentials
+backend/.env
+afro-eats/.env
 *.key
 *.pem
 *secret*
 *password*
 
-# Development documentation
+# Development documentation (may contain sensitive setup information)
 *STRIPE*
 *AUTHENTICATION*
 *DEVELOPMENT*
@@ -162,8 +158,22 @@ dist
 *GUIDE*
 *.md
 
-# Upload directories
-uploads/
+# Upload directories with user content
+backend/uploads/
+afro-eats/build/
 
-# Stripe test files
-setup_stripe_test_product.js
+# IDE and Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db

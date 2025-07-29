@@ -41,7 +41,7 @@ function Navbar() {
     <nav className="bg-white shadow">
       <div className="max-w-6xl mx-auto px-4 py-3 flex justify-between items-center">
         <Link to="/" className="text-xl font-bold text-green-600">
-          Afro Eats
+          A Food Zone
         </Link>
 
         <div className="space-x-4 flex items-center">
@@ -51,8 +51,11 @@ function Navbar() {
 
           {user ? (
             <>
-              <Link to="/my-orders" className="text-gray-700 hover:text-green-600 relative">
+              <Link to="/my-orders" className="text-gray-700 hover:text-green-600">
                 My Orders
+              </Link>
+              <Link to="/my-notifications" className="text-gray-700 hover:text-green-600 relative">
+                Notifications
                 {notificationCount > 0 && (
                   <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
                     {notificationCount > 9 ? '9+' : notificationCount}

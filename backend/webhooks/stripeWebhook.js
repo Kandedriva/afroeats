@@ -10,7 +10,7 @@ export const handleStripeWebhook = async (req, res) => {
   try {
     event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
   } catch (err) {
-    console.log(`Webhook signature verification failed.`, err.message);
+    // Webhook signature verification failed
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
@@ -27,14 +27,14 @@ export const handleStripeWebhook = async (req, res) => {
             "UPDATE restaurant_owners SET is_subscribed = true WHERE id = $1",
             [ownerId]
           );
-          console.log(`Subscription activated for owner ${ownerId}`);
+          // Subscription activated for owner
         } catch (err) {
-          console.error('Database update error:', err);
+          // Database update error
         }
       } else if (session.mode === 'payment' && session.metadata.orderId) {
-        // Handle order payment completion
+        // Handle order payment completion with Connect transfers
         const orderId = session.metadata.orderId;
-        const restaurantGroups = JSON.parse(session.metadata.restaurantGroups || '{}');
+        const userId = session.metadata.userId;
         
         try {
           // Update order status
@@ -43,38 +43,66 @@ export const handleStripeWebhook = async (req, res) => {
             ['paid', session.id, orderId]
           );
           
-          // Create transfers to restaurant owners
-          for (const [restaurantId, group] of Object.entries(restaurantGroups)) {
-            const restaurantAccountResult = await pool.query(
-              "SELECT ro.stripe_account_id FROM restaurants r JOIN restaurant_owners ro ON r.owner_id = ro.id WHERE r.id = $1",
-              [restaurantId]
-            );
-            
-            if (restaurantAccountResult.rows.length > 0) {
-              const stripeAccountId = restaurantAccountResult.rows[0].stripe_account_id;
-              
-              if (stripeAccountId) {
-                // Transfer payment minus platform fee to restaurant owner
-                const transferAmount = Math.round(group.total * 100); // Convert to cents
+          // Clear the customer's cart after successful payment
+          if (userId) {
+            await pool.query("DELETE FROM carts WHERE user_id = $1", [userId]);
+            // Cart cleared for user after successful payment
+          }
+          
+          // Get restaurant payments that need to be processed
+          const restaurantPaymentsResult = await pool.query(
+            "SELECT * FROM restaurant_payments WHERE order_id = $1 AND status IN ('pending', 'no_connect_account')",
+            [orderId]
+          );
+          
+          // Create transfers to each restaurant (only for those with Stripe Connect)
+          for (const payment of restaurantPaymentsResult.rows) {
+            if (payment.stripe_account_id) {
+              try {
+                // Transfer payment to restaurant owner's connected account
+                const transferAmount = Math.round(payment.amount * 100); // Convert to cents
                 
-                await stripe.transfers.create({
+                const transfer = await stripe.transfers.create({
                   amount: transferAmount,
                   currency: 'usd',
-                  destination: stripeAccountId,
+                  destination: payment.stripe_account_id,
                   metadata: {
                     orderId: orderId,
-                    restaurantId: restaurantId,
+                    restaurantId: payment.restaurant_id.toString(),
+                    paymentId: payment.id.toString(),
                   },
                 });
                 
-                console.log(`Transferred $${group.total} to restaurant ${restaurantId}`);
+                // Update payment record
+                await pool.query(
+                  "UPDATE restaurant_payments SET status = $1, stripe_transfer_id = $2, processed_at = NOW() WHERE id = $3",
+                  ['completed', transfer.id, payment.id]
+                );
+                
+                // Transferred payment to restaurant
+              } catch (transferError) {
+                // Transfer failed for restaurant
+                
+                // Mark as failed
+                await pool.query(
+                  "UPDATE restaurant_payments SET status = $1, processed_at = NOW() WHERE id = $2",
+                  ['failed', payment.id]
+                );
               }
+            } else {
+              // Test Mode: Restaurant has no Stripe Connect, payment will be held on platform
+              
+              // In test mode, mark as "awaiting_connect" instead of skipped
+              await pool.query(
+                "UPDATE restaurant_payments SET status = $1, processed_at = NOW() WHERE id = $2",
+                ['awaiting_connect', payment.id]
+              );
             }
           }
           
-          console.log(`Order ${orderId} payment processed and funds distributed`);
+          // Order payment processed and funds distributed
         } catch (err) {
-          console.error('Order payment processing error:', err);
+          // Order payment processing error
         }
       }
       break;
@@ -95,15 +123,15 @@ export const handleStripeWebhook = async (req, res) => {
             "UPDATE restaurant_owners SET is_subscribed = false WHERE id = $1",
             [ownerId]
           );
-          console.log(`Subscription cancelled for owner ${ownerId}`);
+          // Subscription cancelled for owner
         }
       } catch (err) {
-        console.error('Database update error:', err);
+        // Database update error
       }
       break;
       
     default:
-      console.log(`Unhandled event type ${event.type}`);
+      // Unhandled event type
   }
 
   res.json({ received: true });
