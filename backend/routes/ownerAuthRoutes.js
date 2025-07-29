@@ -26,7 +26,7 @@ router.post("/owners/login", async (req, res) => {
       return res.status(400).json({ error: "Invalid credentials" });
     }
 
-    // Allow login without subscription - subscription will be checked when adding dishes
+    // Login successful
 
     // Save owner info to session
     req.session.ownerId = owner.id;

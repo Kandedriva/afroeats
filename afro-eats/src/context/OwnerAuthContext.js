@@ -5,29 +5,8 @@ export const OwnerAuthContext = createContext();
 export function OwnerAuthProvider({ children }) {
   const [owner, setOwner] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [subscriptionActive, setSubscriptionActive] = useState(false);
 
-  // Function to fetch subscription status separately
-  const fetchSubscriptionStatus = async () => {
-    try {
-      const subRes = await fetch("http://localhost:5001/api/subscription/status", {
-        credentials: "include",
-      });
-
-      if (subRes.ok) {
-        const subData = await subRes.json();
-        setSubscriptionActive(subData?.active || false);
-      } else {
-        // Subscription status check failed - owner may not be logged in yet
-        setSubscriptionActive(false);
-      }
-    } catch (err) {
-      // Subscription status fetch error
-      setSubscriptionActive(false);
-    }
-  };
-
-  // Check if owner is already logged in and subscription status
+  // Check if owner is already logged in
   useEffect(() => {
     const fetchOwner = async () => {
       try {
@@ -39,16 +18,12 @@ export function OwnerAuthProvider({ children }) {
           const data = await res.json();
           setOwner(data);
 
-          // Fetch subscription status separately - don't block auth if this fails
-          fetchSubscriptionStatus();
         } else {
           setOwner(null);
-          setSubscriptionActive(false);
-        }
+          }
       } catch (err) {
         // Error checking owner session
         setOwner(null);
-        setSubscriptionActive(false);
       } finally {
         setLoading(false);
       }
@@ -64,7 +39,6 @@ export function OwnerAuthProvider({ children }) {
         credentials: "include",
       });
       setOwner(null);
-      setSubscriptionActive(false);
     } catch (err) {
       // Logout failed
     }
@@ -81,16 +55,12 @@ export function OwnerAuthProvider({ children }) {
         const data = await res.json();
         setOwner(data);
 
-        // Fetch subscription status separately - don't block refresh if this fails
-        fetchSubscriptionStatus();
       } else {
         setOwner(null);
-        setSubscriptionActive(false);
       }
     } catch (err) {
       // Error refreshing owner session
       setOwner(null);
-      setSubscriptionActive(false);
     } finally {
       setLoading(false);
     }
@@ -103,9 +73,7 @@ export function OwnerAuthProvider({ children }) {
         setOwner,
         loading,
         logout,
-        subscriptionActive,
         refreshAuth,
-        fetchSubscriptionStatus,
       }}
     >
       {children}
