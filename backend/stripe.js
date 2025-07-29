@@ -10,12 +10,12 @@ if (process.env.STRIPE_SECRET_KEY) {
     stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
       apiVersion: "2022-11-15",
     });
-    console.log("✅ Stripe initialized with real API key");
+    // Stripe initialized with real API key
   } catch (error) {
-    console.error("❌ Failed to initialize Stripe:", error.message);
+    // Failed to initialize Stripe
   }
 } else {
-  console.log("🔧 Stripe running in development mode - no real API key provided");
+  // Stripe running in development mode - no real API key provided
 }
 
 export default stripe;

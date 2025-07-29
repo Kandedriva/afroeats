@@ -40,7 +40,6 @@ router.post("/owners/login", async (req, res) => {
       },
     });
   } catch (err) {
-    console.error("Owner login error:", err);
     res.status(500).json({ error: "Server error during login" });
   }
 });

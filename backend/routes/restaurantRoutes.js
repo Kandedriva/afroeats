@@ -9,7 +9,6 @@ router.get("/restaurants", async (req, res) => {
     const result = await pool.query("SELECT * FROM restaurants");
     res.json(result.rows);
   } catch (err) {
-    console.error("Error fetching restaurants:", err);
     res.status(500).json({ error: "Server error fetching restaurants" });
   }
 });
@@ -34,7 +33,6 @@ router.get("/restaurants/:id", async (req, res) => {
       dishes: dishesRes.rows,
     });
   } catch (err) {
-    console.error("Error fetching restaurant details:", err);
     res.status(500).json({ error: "Server error fetching restaurant details" });
   }
 });

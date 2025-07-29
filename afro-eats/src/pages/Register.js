@@ -1,7 +1,9 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from 'react-toastify';
 
 export default function Register() {
+  const navigate = useNavigate();
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -22,12 +24,17 @@ export default function Register() {
       const res = await fetch("http://localhost:5001/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include", // Include cookies for session
         body: JSON.stringify(form),
       });
   
       const data = await res.json();
       if (res.ok) {
-        toast.success("Registration successful!");
+        toast.success("Registration successful! Welcome to A Food Zone!");
+        // Redirect to customer dashboard after successful registration
+        setTimeout(() => {
+          navigate("/");
+        }, 1000);
       } else {
         toast.error(data.error || "Registration failed.");
       }

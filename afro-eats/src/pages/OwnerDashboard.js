@@ -16,11 +16,7 @@ function OwnerDashboard() {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [showCompleteConfirm, setShowCompleteConfirm] = useState(null);
-  const [showRefundModal, setShowRefundModal] = useState(false);
-  const [refundAction, setRefundAction] = useState('');
-  const [refundNotes, setRefundNotes] = useState('');
-  const [selectedNotificationId, setSelectedNotificationId] = useState(null);
-  const [processingRefund, setProcessingRefund] = useState(false);
+  const [showRemoveConfirm, setShowRemoveConfirm] = useState(null);
   const [logoUploading, setLogoUploading] = useState(false);
   const [showLogoModal, setShowLogoModal] = useState(false);
   const [logoTimestamp, setLogoTimestamp] = useState(Date.now());
@@ -272,10 +268,10 @@ function OwnerDashboard() {
         throw new Error(errorData.error || "Failed to complete order");
       }
 
-      // Update the order status to completed instead of removing it
+      // Update the order status to completed and add completion timestamp
       setOrders(prev => prev.map(order => 
         order.id === orderId 
-          ? { ...order, status: 'completed' }
+          ? { ...order, status: 'completed', completed_at: new Date().toISOString() }
           : order
       ));
       toast.success("Order marked as completed!");
@@ -283,6 +279,34 @@ function OwnerDashboard() {
     } catch (err) {
       // Complete order error
       toast.error("Error completing order: " + err.message);
+    }
+  };
+
+  const confirmRemoveOrder = (orderId) => {
+    setShowRemoveConfirm(orderId);
+  };
+
+  const removeOrder = async (orderId) => {
+    try {
+      const res = await fetch(`http://localhost:5001/api/owners/orders/${orderId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to remove order");
+      }
+
+      const responseData = await res.json();
+
+      // Remove the order from local state
+      setOrders(prev => prev.filter(order => order.id !== orderId));
+
+      toast.success(responseData.message);
+      setShowRemoveConfirm(null);
+    } catch (err) {
+      toast.error("Error removing order: " + err.message);
     }
   };
 
@@ -390,70 +414,23 @@ function OwnerDashboard() {
     }
   };
 
-  const showRefundConfirm = (notificationId, action) => {
-    setSelectedNotificationId(notificationId);
-    setRefundAction(action);
-    setRefundNotes('');
-    setShowRefundModal(true);
+  // Helper functions for order filtering
+  const getActiveOrders = () => {
+    return orders.filter(order => 
+      order.status !== 'completed' && 
+      order.status !== 'cancelled' && 
+      order.status !== 'removed'
+    );
   };
 
-  const processRefund = async () => {
-    if (!selectedNotificationId || !refundAction) return;
-    
-    try {
-      setProcessingRefund(true);
-      const res = await fetch(`http://localhost:5001/api/owners/refunds/${selectedNotificationId}/process`, {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          action: refundAction,
-          notes: refundNotes.trim()
-        }),
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || "Failed to process refund");
-      }
-
-      const responseData = await res.json();
-      
-      // Update notification in local state
-      setNotifications(prev => 
-        prev.map(notification => {
-          if (notification.id === selectedNotificationId) {
-            const updatedData = {
-              ...notification.data,
-              refundProcessed: true,
-              refundAction: refundAction,
-              refundNotes: refundNotes.trim(),
-              processedAt: new Date().toISOString()
-            };
-            return {
-              ...notification,
-              read: true,
-              data: updatedData
-            };
-          }
-          return notification;
-        })
-      );
-
-      toast.success(responseData.message);
-      setShowRefundModal(false);
-      setSelectedNotificationId(null);
-      setRefundAction('');
-      setRefundNotes('');
-    } catch (err) {
-      // Process refund error
-      toast.error("Error processing refund: " + err.message);
-    } finally {
-      setProcessingRefund(false);
-    }
+  const getCompletedOrders = () => {
+    return orders.filter(order => order.status === 'completed');
   };
+
+  const getTotalEarnings = () => {
+    return orders.reduce((sum, order) => sum + (Number(order.total || 0) - Number(order.platform_fee || 0)), 0);
+  };
+
 
   const handleLogoUpload = async (event) => {
     const file = event.target.files[0];
@@ -686,17 +663,34 @@ function OwnerDashboard() {
         </div>
       )}
 
-      {/* Notifications Section */}
-      {notifications.length > 0 && (
-        <div className="mb-8">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-semibold">
-              Notifications {unreadCount > 0 && (
-                <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full ml-2">
-                  {unreadCount}
-                </span>
-              )}
+      {/* Notifications Summary Section */}
+      <div className="mb-8 bg-white border rounded-lg p-4">
+        <div className="flex justify-between items-center">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-800 mb-2">
+              📋 Notifications & Alerts
             </h3>
+            <div className="flex items-center space-x-6 text-sm">
+              <div className="flex items-center space-x-2">
+                <span className="text-gray-600">Total:</span>
+                <span className="font-semibold text-blue-600">{notifications.length}</span>
+              </div>
+              {unreadCount > 0 && (
+                <div className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                  <span className="text-gray-600">Unread:</span>
+                  <span className="font-semibold text-red-600">{unreadCount}</span>
+                </div>
+              )}
+              <div className="flex items-center space-x-2">
+                <span className="text-gray-600">Pending Refunds:</span>
+                <span className="font-semibold text-orange-600">
+                  {notifications.filter(n => n.type === 'refund_request' && !n.data?.refundProcessed).length}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div className="flex space-x-3">
             {unreadCount > 0 && (
               <button
                 onClick={async () => {
@@ -707,92 +701,52 @@ function OwnerDashboard() {
                     });
                     setNotifications(prev => prev.map(n => ({...n, read: true})));
                     setUnreadCount(0);
+                    toast.success("All notifications marked as read");
                   } catch (err) {
-                    // Mark all read error
+                    toast.error("Failed to mark all notifications as read");
                   }
                 }}
-                className="text-sm text-blue-600 hover:text-blue-800"
+                className="text-sm bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 transition-colors"
               >
                 Mark All Read
               </button>
             )}
+            <Link 
+              to="/owner/notifications"
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+            >
+              View All Notifications →
+            </Link>
           </div>
-          
-          <div className="space-y-3">
-            {notifications.slice(0, 5).map((notification) => {
-              const data = notification.data || {};
-              const isRefundRequest = notification.type === 'refund_request';
-              const isProcessed = data.refundProcessed;
-              
-              return (
-                <div 
-                  key={notification.id} 
-                  className={`border rounded-lg p-4 ${!notification.read ? 'bg-blue-50 border-blue-200' : 'bg-white'}`}
-                  onClick={() => !notification.read && markNotificationRead(notification.id)}
-                >
-                  <div className="flex justify-between items-start mb-2">
-                    <h4 className={`font-medium ${isRefundRequest ? 'text-orange-700' : 'text-gray-800'}`}>
-                      {notification.title}
-                    </h4>
-                    <span className="text-xs text-gray-500">
-                      {new Date(notification.created_at).toLocaleDateString()}
-                    </span>
-                  </div>
-                  
-                  <p className="text-sm text-gray-600 mb-3">{notification.message}</p>
-                  
-                  {data.reason && (
-                    <div className="bg-gray-50 p-2 rounded text-sm mb-3">
-                      <strong>Reason:</strong> {data.reason}
-                    </div>
-                  )}
-                  
-                  {isRefundRequest && !isProcessed && (
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          showRefundConfirm(notification.id, 'approve');
-                        }}
-                        className="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600"
-                      >
-                        ✅ Approve Refund
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          showRefundConfirm(notification.id, 'deny');
-                        }}
-                        className="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600"
-                      >
-                        ❌ Deny Refund
-                      </button>
-                    </div>
-                  )}
-                  
-                  {isProcessed && (
-                    <div className={`text-sm p-2 rounded ${data.refundAction === 'approve' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                      <strong>Refund {data.refundAction}d</strong>
-                      {data.refundNotes && <div>Notes: {data.refundNotes}</div>}
-                      <div className="text-xs opacity-75">
-                        Processed on {new Date(data.processedAt).toLocaleDateString()}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          
-          {notifications.length > 5 && (
-            <div className="text-center mt-4">
-              <button className="text-blue-600 hover:text-blue-800 text-sm">
-                View All Notifications ({notifications.length})
-              </button>
-            </div>
-          )}
         </div>
-      )}
+        
+        {/* Show only urgent notifications (unread refund requests) */}
+        {notifications.filter(n => n.type === 'refund_request' && !n.read && !n.data?.refundProcessed).length > 0 && (
+          <div className="mt-4 pt-4 border-t">
+            <h4 className="text-sm font-medium text-red-700 mb-3">🚨 Urgent: Refund Requests Requiring Action</h4>
+            <div className="space-y-2">
+              {notifications.filter(n => n.type === 'refund_request' && !n.read && !n.data?.refundProcessed).slice(0, 2).map((notification) => (
+                <div key={notification.id} className="bg-red-50 border border-red-200 rounded-lg p-3">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <p className="text-sm font-medium text-red-800">{notification.title}</p>
+                      <p className="text-xs text-red-600 mt-1">
+                        Amount: ${Number(notification.data?.restaurantTotal || 0).toFixed(2)}
+                      </p>
+                    </div>
+                    <Link 
+                      to="/owner/notifications"
+                      className="text-xs bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700 transition-colors"
+                    >
+                      Review →
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
 
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-lg font-semibold">Your Dishes</h3>
@@ -846,229 +800,142 @@ function OwnerDashboard() {
         )}
       </div>
 
-      {/* Orders Section */}
-      <div className="mt-12">
-        <h3 className="text-lg font-semibold mb-4">Recent Orders</h3>
-        
-        {orders.length === 0 ? (
-          <div className="text-center py-8 bg-gray-50 rounded-lg">
-            <p className="text-gray-500">No orders yet.</p>
-            <p className="text-sm text-gray-400 mt-1">Orders will appear here when customers place them.</p>
+      {/* Orders Summary Section */}
+      <div className="mb-8 bg-white border rounded-lg p-4">
+        <div className="flex justify-between items-center">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-800 mb-2">
+              📋 Order Management
+            </h3>
+            <div className="flex items-center space-x-6 text-sm">
+              <div className="flex items-center space-x-2">
+                <span className="text-gray-600">Total Orders:</span>
+                <span className="font-semibold text-blue-600">{orders.length}</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <span className="text-gray-600">Active:</span>
+                <span className="font-semibold text-orange-600">{getActiveOrders().length}</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <span className="text-gray-600">Completed:</span>
+                <span className="font-semibold text-green-600">{getCompletedOrders().length}</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <span className="text-gray-600">Total Earnings:</span>
+                <span className="font-semibold text-purple-600">
+                  ${getTotalEarnings().toFixed(2)}
+                </span>
+              </div>
+            </div>
           </div>
-        ) : (
-          <div className="space-y-6">
-            {/* Active Orders Section */}
-            <div>
-              <h4 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                📋 Active Orders ({orders.filter(order => order.status !== 'completed').length})
-              </h4>
-              {orders.filter(order => order.status !== 'completed').length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  <p>No active orders</p>
-                  <p className="text-sm text-gray-400 mt-1">All orders have been completed</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {orders.filter(order => order.status !== 'completed').slice(0, 10).map((order) => (
-              <div key={order.id} className="border rounded-lg p-4 bg-white shadow-sm">
-                <div className="flex justify-between items-start mb-4">
-                  <div className="flex-1">
-                    <h4 className="font-semibold text-lg text-blue-800">Order #{order.id}</h4>
-                    <p className="text-sm text-gray-500">
-                      {new Date(order.created_at).toLocaleDateString()} at{' '}
-                      {new Date(order.created_at).toLocaleTimeString()}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                      {order.status || 'Received'}
-                    </span>
-                    <div className="mt-1">
-                      <span className="text-lg font-bold text-green-600">
-                        ${(Number(order.total || 0) - Number(order.platform_fee || 0)).toFixed(2)}
-                      </span>
-                      <p className="text-xs text-gray-500">
-                        (Total: ${Number(order.total || 0).toFixed(2)} - Platform fee: ${Number(order.platform_fee || 0).toFixed(2)})
+          <Link 
+            to="/owner/orders"
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+          >
+            Manage All Orders →
+          </Link>
+        </div>
+        
+        {/* Show urgent active orders */}
+        {getActiveOrders().length > 0 && (
+          <div className="mt-4 pt-4 border-t">
+            <h4 className="text-sm font-medium text-orange-700 mb-3">🚨 Urgent: Active Orders Requiring Attention</h4>
+            <div className="space-y-2">
+              {getActiveOrders().slice(0, 3).map((order) => (
+                <div key={order.id} className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <p className="text-sm font-medium text-orange-800">Order #{order.id} - {order.customer_name}</p>
+                      <p className="text-xs text-orange-600 mt-1">
+                        {order.items.length} item{order.items.length !== 1 ? 's' : ''} • ${(Number(order.total || 0) - Number(order.platform_fee || 0)).toFixed(2)} earnings
+                      </p>
+                      <p className="text-xs text-orange-500">
+                        Ordered {new Date(order.created_at).toLocaleDateString()} at {new Date(order.created_at).toLocaleTimeString()}
                       </p>
                     </div>
-                  </div>
-                </div>
-
-                {/* Customer Information Section */}
-                <div className="bg-blue-50 p-3 rounded-lg mb-3">
-                  <h5 className="font-medium text-blue-800 mb-2">Customer Information</h5>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-                    <div>
-                      <span className="font-medium">Name:</span> {order.customer_name}
-                    </div>
-                    <div>
-                      <span className="font-medium">Email:</span> {order.customer_email}
-                    </div>
-                    <div>
-                      <span className="font-medium">Delivery Phone:</span> {order.delivery_phone || order.customer_phone || 'Not provided'}
-                    </div>
-                    <div className="md:col-span-2">
-                      <span className="font-medium">Delivery Address:</span> {order.delivery_address || order.customer_address || 'Not provided'}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Special Instructions */}
-                {order.order_details && (
-                  <div className="bg-yellow-50 p-3 rounded-lg mb-3">
-                    <h5 className="font-medium text-yellow-800 mb-2">🗒️ Special Instructions</h5>
-                    <p className="text-sm text-yellow-700 whitespace-pre-wrap">{order.order_details}</p>
-                  </div>
-                )}
-                
-                <div className="border-t pt-3">
-                  <h5 className="font-medium mb-2">Items ordered:</h5>
-                  <div className="space-y-1">
-                    {order.items.map((item) => (
-                      <div key={item.id} className="flex justify-between text-sm">
-                        <span>{item.name} x {item.quantity}</span>
-                        <span>${(Number(item.price || 0) * Number(item.quantity || 1)).toFixed(2)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                
-                <div className="mt-4 pt-4 border-t">
-                  <div className="flex justify-between items-center">
-                    <div className="flex space-x-2">
-                      <span className="inline-flex items-center px-2 py-1 rounded text-xs bg-blue-100 text-blue-800">
-                        💰 Payment Received
-                      </span>
-                      <span className="inline-flex items-center px-2 py-1 rounded text-xs bg-yellow-100 text-yellow-800">
-                        🍳 Ready to Prepare
-                      </span>
-                    </div>
-                    
                     <div className="flex space-x-2">
                       <button
                         onClick={() => printOrder(order)}
-                        className="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600 transition-colors"
-                        title="Print order for delivery"
+                        className="text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700 transition-colors"
+                      >
+                        🖨️ Print
+                      </button>
+                      {order.status !== 'completed' && (
+                        <button
+                          onClick={() => showCompleteModal(order.id)}
+                          className="text-xs bg-green-600 text-white px-2 py-1 rounded hover:bg-green-700 transition-colors"
+                        >
+                          ✅ Complete
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {getActiveOrders().length > 3 && (
+                <div className="text-center">
+                  <Link 
+                    to="/owner/orders"
+                    className="text-sm text-orange-600 hover:text-orange-800"
+                  >
+                    View {getActiveOrders().length - 3} more active orders →
+                  </Link>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Show completed orders */}
+        {getCompletedOrders().length > 0 && (
+          <div className="mt-4 pt-4 border-t">
+            <h4 className="text-sm font-medium text-green-700 mb-3">✅ Recently Completed Orders</h4>
+            <div className="space-y-2">
+              {getCompletedOrders().slice(0, 3).map((order) => (
+                <div key={order.id} className="bg-green-50 border border-green-200 rounded-lg p-3">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <p className="text-sm font-medium text-green-800">Order #{order.id} - {order.customer_name}</p>
+                      <p className="text-xs text-green-600 mt-1">
+                        {order.items.length} item{order.items.length !== 1 ? 's' : ''} • ${(Number(order.total || 0) - Number(order.platform_fee || 0)).toFixed(2)} earnings
+                      </p>
+                      <p className="text-xs text-green-500">
+                        Completed {order.completed_at ? new Date(order.completed_at).toLocaleDateString() + ' at ' + new Date(order.completed_at).toLocaleTimeString() : 'recently'}
+                      </p>
+                    </div>
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => printOrder(order)}
+                        className="text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700 transition-colors"
                       >
                         🖨️ Print
                       </button>
                       <button
-                        onClick={() => showCompleteModal(order.id)}
-                        className="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600 transition-colors"
-                        title="Mark order as completed"
+                        onClick={() => confirmRemoveOrder(order.id)}
+                        className="text-xs bg-gray-600 text-white px-2 py-1 rounded hover:bg-gray-700 transition-colors"
+                        title="Remove completed order from your view"
                       >
-                        ✅ Complete
+                        🗑️ Remove
                       </button>
                     </div>
                   </div>
                 </div>
-              </div>
-                  ))}
+              ))}
+              {getCompletedOrders().length > 3 && (
+                <div className="text-center">
+                  <Link 
+                    to="/owner/orders"
+                    className="text-sm text-green-600 hover:text-green-800"
+                  >
+                    View {getCompletedOrders().length - 3} more completed orders →
+                  </Link>
                 </div>
               )}
             </div>
-
-            {/* Quick access to completed orders */}
-            {orders.filter(order => order.status === 'completed').length > 0 && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <h4 className="text-lg font-medium text-blue-800">
-                      ✅ You have {orders.filter(order => order.status === 'completed').length} completed order{orders.filter(order => order.status === 'completed').length !== 1 ? 's' : ''}
-                    </h4>
-                    <p className="text-sm text-blue-600 mt-1">
-                      View and manage your completed order history
-                    </p>
-                  </div>
-                  <Link 
-                    to="/owner/completed-orders"
-                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors font-medium"
-                  >
-                    View All →
-                  </Link>
-                </div>
-              </div>
-            )}
           </div>
         )}
       </div>
 
-      {/* Refund Processing Modal */}
-      {showRefundModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className={`text-lg font-semibold mb-4 ${refundAction === 'approve' ? 'text-green-800' : 'text-red-800'}`}>
-              {refundAction === 'approve' ? '✅ Approve Refund Request' : '❌ Deny Refund Request'}
-            </h3>
-            <p className="text-gray-600 mb-4">
-              {refundAction === 'approve' 
-                ? 'Are you sure you want to approve this refund request? The customer will be notified of your decision.'
-                : 'Are you sure you want to deny this refund request? The customer will be notified of your decision.'
-              }
-            </p>
-            
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Notes for customer (optional):
-              </label>
-              <textarea
-                value={refundNotes}
-                onChange={(e) => {
-                  if (e.target.value.length <= 500) {
-                    setRefundNotes(e.target.value);
-                  }
-                }}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                rows="4"
-                placeholder={refundAction === 'approve' 
-                  ? "Add any additional information about the refund process..."
-                  : "Explain why the refund request is being denied..."
-                }
-                autoFocus
-              />
-              <div className="text-xs text-gray-500 mt-1">
-                {refundNotes.length}/500 characters
-              </div>
-            </div>
-
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => {
-                  setShowRefundModal(false);
-                  setSelectedNotificationId(null);
-                  setRefundAction('');
-                  setRefundNotes('');
-                }}
-                className="px-4 py-2 text-gray-600 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors"
-                disabled={processingRefund}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={processRefund}
-                disabled={processingRefund}
-                className={`px-4 py-2 text-white rounded-lg transition-colors ${
-                  refundAction === 'approve'
-                    ? 'bg-green-600 hover:bg-green-700 disabled:bg-green-400'
-                    : 'bg-red-600 hover:bg-red-700 disabled:bg-red-400'
-                }`}
-              >
-                {processingRefund ? (
-                  <span className="flex items-center">
-                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Processing...
-                  </span>
-                ) : (
-                  refundAction === 'approve' ? '✅ Approve Refund' : '❌ Deny Refund'
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Complete Order Confirmation Modal */}
       {showCompleteConfirm && (
@@ -1078,7 +945,7 @@ function OwnerDashboard() {
               Complete Order
             </h3>
             <p className="text-gray-600 mb-6">
-              Mark this order as completed? This will remove it from your orders list and notify the customer that their order is ready.
+              Mark this order as completed? This will update the order status and notify the customer that their order is ready.
             </p>
             <div className="flex gap-3 justify-end">
               <button
@@ -1092,6 +959,34 @@ function OwnerDashboard() {
                 className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
               >
                 ✅ Mark Complete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Remove Order Confirmation Modal */}
+      {showRemoveConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold mb-4 text-gray-800">
+              Remove Order #{showRemoveConfirm}
+            </h3>
+            <p className="text-gray-600 mb-6">
+              Are you sure you want to remove this completed order from your view? This will hide it from your orders list but won't affect the customer's record.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowRemoveConfirm(null)}
+                className="px-4 py-2 text-gray-600 bg-gray-200 rounded hover:bg-gray-300 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => removeOrder(showRemoveConfirm)}
+                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+              >
+                🗑️ Remove Order
               </button>
             </div>
           </div>

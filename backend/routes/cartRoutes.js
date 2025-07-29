@@ -26,7 +26,6 @@ router.get("/", requireAuth, async (req, res) => {
     );
     res.json(result.rows);
   } catch (err) {
-    console.error("Fetch cart error:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
@@ -58,7 +57,6 @@ router.post("/", requireAuth, async (req, res) => {
       res.json(inserted.rows[0]);
     }
   } catch (err) {
-    console.error("Add to carts error:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
@@ -74,7 +72,6 @@ router.delete("/:dishId", requireAuth, async (req, res) => {
     );
     res.json({ success: true });
   } catch (err) {
-    console.error("Delete cart item error:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
@@ -85,7 +82,6 @@ router.delete("/", requireAuth, async (req, res) => {
     await pool.query("DELETE FROM carts WHERE user_id = $1", [req.session.userId]);
     res.json({ success: true });
   } catch (err) {
-    console.error("Clear cart error:", err);
     res.status(500).json({ error: "Server error" });
   }
 });

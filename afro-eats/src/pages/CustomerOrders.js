@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
 import { toast } from 'react-toastify';
 
@@ -249,17 +249,34 @@ function CustomerOrders() {
         </div>
       )}
 
-      {/* Notifications Section */}
-      {notifications.length > 0 && (
-        <div className="mb-8">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-semibold">
-              Notifications {unreadCount > 0 && (
-                <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full ml-2">
-                  {unreadCount}
-                </span>
-              )}
+      {/* Notifications Summary Section */}
+      <div className="mb-8 bg-white border rounded-lg p-4">
+        <div className="flex justify-between items-center">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-800 mb-2">
+              📢 Notifications & Updates
             </h3>
+            <div className="flex items-center space-x-6 text-sm">
+              <div className="flex items-center space-x-2">
+                <span className="text-gray-600">Total:</span>
+                <span className="font-semibold text-blue-600">{notifications.length}</span>
+              </div>
+              {unreadCount > 0 && (
+                <div className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                  <span className="text-gray-600">Unread:</span>
+                  <span className="font-semibold text-red-600">{unreadCount}</span>
+                </div>
+              )}
+              <div className="flex items-center space-x-2">
+                <span className="text-gray-600">Refund Updates:</span>
+                <span className="font-semibold text-purple-600">
+                  {notifications.filter(n => n.type.startsWith('refund_')).length}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div className="flex space-x-3">
             {unreadCount > 0 && (
               <button
                 onClick={async () => {
@@ -270,69 +287,57 @@ function CustomerOrders() {
                     });
                     setNotifications(prev => prev.map(n => ({...n, read: true})));
                     setUnreadCount(0);
+                    toast.success("All notifications marked as read");
                   } catch (err) {
-                    // Handle mark all read error silently
+                    toast.error("Failed to mark all notifications as read");
                   }
                 }}
-                className="text-sm text-blue-600 hover:text-blue-800"
+                className="text-sm bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 transition-colors"
               >
                 Mark All Read
               </button>
             )}
+            <Link 
+              to="/my-notifications"
+              className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
+            >
+              View All Notifications →
+            </Link>
           </div>
-          
-          <div className="space-y-3">
-            {notifications.slice(0, 5).map((notification) => {
-              const data = notification.data || {};
-              const isRefundNotification = notification.type.startsWith('refund_');
-              
-              return (
-                <div 
-                  key={notification.id} 
-                  className={`border rounded-lg p-4 ${!notification.read ? 'bg-blue-50 border-blue-200' : 'bg-white'}`}
-                  onClick={() => !notification.read && markNotificationRead(notification.id)}
-                >
-                  <div className="flex justify-between items-start mb-2">
-                    <h4 className={`font-medium ${isRefundNotification ? 
-                      (notification.type === 'refund_approve' ? 'text-green-700' : 'text-red-700') 
-                      : 'text-gray-800'}`}>
-                      {notification.title}
-                    </h4>
-                    <span className="text-xs text-gray-500">
-                      {new Date(notification.created_at).toLocaleDateString()}
-                    </span>
-                  </div>
-                  
-                  <p className="text-sm text-gray-600 mb-3">{notification.message}</p>
-                  
-                  {data.refundNotes && (
-                    <div className="bg-gray-50 p-2 rounded text-sm mb-3">
-                      <strong>Restaurant Notes:</strong> {data.refundNotes}
-                    </div>
-                  )}
-                  
-                  {isRefundNotification && (
-                    <div className={`text-sm p-2 rounded ${notification.type === 'refund_approve' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                      <strong>Order #${data.orderId}</strong> - ${Number(data.orderTotal || 0).toFixed(2)}
-                      <div className="text-xs opacity-75">
-                        Processed on {new Date(data.processedAt).toLocaleDateString()}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          
-          {notifications.length > 5 && (
-            <div className="text-center mt-4">
-              <button className="text-blue-600 hover:text-blue-800 text-sm">
-                View All Notifications ({notifications.length})
-              </button>
-            </div>
-          )}
         </div>
-      )}
+        
+        {/* Show only urgent unread notifications */}
+        {notifications.filter(n => !n.read && n.type.startsWith('refund_')).length > 0 && (
+          <div className="mt-4 pt-4 border-t">
+            <h4 className="text-sm font-medium text-purple-700 mb-3">🚨 New: Refund Updates Requiring Your Attention</h4>
+            <div className="space-y-2">
+              {notifications.filter(n => !n.read && n.type.startsWith('refund_')).slice(0, 2).map((notification) => {
+                const data = notification.data || {};
+                return (
+                  <div key={notification.id} className={`${notification.type === 'refund_approve' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'} border rounded-lg p-3`}>
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <p className={`text-sm font-medium ${notification.type === 'refund_approve' ? 'text-green-800' : 'text-red-800'}`}>
+                          {notification.title}
+                        </p>
+                        <p className={`text-xs ${notification.type === 'refund_approve' ? 'text-green-600' : 'text-red-600'} mt-1`}>
+                          {data.restaurantName} • ${Number(data.restaurantTotal || 0).toFixed(2)}
+                        </p>
+                      </div>
+                      <Link 
+                        to="/my-notifications"
+                        className={`text-xs text-white px-2 py-1 rounded transition-colors ${notification.type === 'refund_approve' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}`}
+                      >
+                        View →
+                      </Link>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
 
       {orders.length === 0 ? (
         <div className="text-center py-12 bg-gray-50 rounded-lg">

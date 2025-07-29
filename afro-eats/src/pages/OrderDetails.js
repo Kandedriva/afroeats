@@ -7,6 +7,8 @@ function OrderDetails() {
   const [order, setOrder] = useState(null);
   const [orderLoading, setOrderLoading] = useState(true);
   const [error, setError] = useState("");
+  const [showRestaurantModal, setShowRestaurantModal] = useState(false);
+  const [availableRestaurants, setAvailableRestaurants] = useState([]);
   const { user, loading: authLoading } = useContext(AuthContext);
   const { orderId } = useParams();
   const navigate = useNavigate();
@@ -62,12 +64,13 @@ function OrderDetails() {
   };
 
   const handleCallSupport = () => {
-    // Get unique restaurants from order items
+    // Get unique restaurants from order items with their items
     const restaurants = order.items?.reduce((acc, item) => {
       if (item.restaurant_phone && !acc.find(r => r.phone === item.restaurant_phone)) {
         acc.push({
           name: item.restaurant_name,
-          phone: item.restaurant_phone
+          phone: item.restaurant_phone,
+          items: order.items.filter(orderItem => orderItem.restaurant_name === item.restaurant_name)
         });
       }
       return acc;
@@ -77,22 +80,22 @@ function OrderDetails() {
       // Single restaurant - direct call
       window.location.href = `tel:${restaurants[0].phone}`;
     } else if (restaurants.length > 1) {
-      // Multiple restaurants - show selection
-      const restaurantList = restaurants.map((r, index) => 
-        `${index + 1}. ${r.name}: ${r.phone}`
-      ).join('\n');
-      
-      const selection = prompt(
-        `This order contains items from multiple restaurants. Choose which one to call:\n\n${restaurantList}\n\nEnter the number (1-${restaurants.length}):`
-      );
-      
-      const selectedIndex = parseInt(selection) - 1;
-      if (selectedIndex >= 0 && selectedIndex < restaurants.length) {
-        window.location.href = `tel:${restaurants[selectedIndex].phone}`;
-      }
+      // Multiple restaurants - show custom modal
+      setAvailableRestaurants(restaurants);
+      setShowRestaurantModal(true);
     } else {
       toast.error("Restaurant phone number not available");
     }
+  };
+
+  const callRestaurant = (phoneNumber) => {
+    setShowRestaurantModal(false);
+    window.location.href = `tel:${phoneNumber}`;
+  };
+
+  const closeRestaurantModal = () => {
+    setShowRestaurantModal(false);
+    setAvailableRestaurants([]);
   };
 
   if (authLoading || orderLoading) {
@@ -284,6 +287,82 @@ function OrderDetails() {
           </button>
         </div>
       </div>
+
+      {/* Restaurant Selection Modal */}
+      {showRestaurantModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-2xl">
+            <div className="text-center mb-6">
+              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100 mb-4">
+                <span className="text-2xl">📞</span>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-800 mb-2">
+                Choose Restaurant to Call
+              </h3>
+              <p className="text-sm text-gray-600">
+                Your order contains items from multiple restaurants. Please select which restaurant you'd like to contact for support.
+              </p>
+            </div>
+            
+            <div className="space-y-4 mb-6">
+              {availableRestaurants.map((restaurant, index) => (
+                <div
+                  key={index}
+                  onClick={() => callRestaurant(restaurant.phone)}
+                  className="border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 cursor-pointer transition-all duration-200 group"
+                >
+                  <div className="flex items-center justify-between p-4">
+                    <div className="flex items-center space-x-3">
+                      <div className="flex-shrink-0">
+                        <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center group-hover:bg-blue-200 transition-colors">
+                          <span className="text-blue-600 font-semibold text-sm">
+                            {restaurant.name.charAt(0).toUpperCase()}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-medium text-gray-800 group-hover:text-blue-800">
+                          {restaurant.name}
+                        </p>
+                        <p className="text-sm text-gray-500 group-hover:text-blue-600">
+                          📞 {restaurant.phone}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex-shrink-0">
+                      <svg className="w-5 h-5 text-gray-400 group-hover:text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </div>
+                  </div>
+                  
+                  {/* Show items from this restaurant */}
+                  <div className="px-4 pb-4 border-t border-gray-100 bg-gray-50 group-hover:bg-blue-25">
+                    <p className="text-xs text-gray-600 mb-2 mt-2 font-medium">Your items from this restaurant:</p>
+                    <div className="space-y-1">
+                      {restaurant.items?.map((item, itemIndex) => (
+                        <div key={itemIndex} className="flex justify-between text-xs">
+                          <span className="text-gray-700">{item.name} x{item.quantity}</span>
+                          <span className="text-gray-600">${(Number(item.price || 0) * Number(item.quantity || 1)).toFixed(2)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex justify-end">
+              <button
+                onClick={closeRestaurantModal}
+                className="px-4 py-2 text-gray-600 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

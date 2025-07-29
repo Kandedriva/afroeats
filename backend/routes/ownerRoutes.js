@@ -4,6 +4,12 @@ import bcrypt from "bcrypt";
 import pool from "../db.js";
 import path from "path";
 import fs from "fs";
+import { requireOwnerAuth } from "../middleware/ownerAuth.js";
+import { 
+  checkAccountLockout, 
+  handleFailedLogin, 
+  handleSuccessfulLogin 
+} from "../middleware/accountLockout.js";
 
 const router = express.Router();
 
@@ -46,7 +52,7 @@ router.post("/register", uploadLogo.single("logo"), async (req, res) => {
         [name, email, hashedPassword, hashedSecretWord, false]
       );
     } catch (err) {
-      console.log("Trying registration without some columns:", err.message);
+      // Trying registration without some columns
       try {
         // Try with just secret_word (no is_subscribed)
         ownerResult = await pool.query(
@@ -56,7 +62,7 @@ router.post("/register", uploadLogo.single("logo"), async (req, res) => {
         );
       } catch (err2) {
         // If secret_word column doesn't exist either, fallback to basic registration
-        console.log("Trying registration with basic columns only");
+        // Trying registration with basic columns only
         ownerResult = await pool.query(
           `INSERT INTO restaurant_owners (name, email, password)
            VALUES ($1, $2, $3) RETURNING id, name, email`,
@@ -82,13 +88,13 @@ router.post("/register", uploadLogo.single("logo"), async (req, res) => {
       restaurant: restaurantResult.rows[0],
     });
   } catch (err) {
-    console.error("Owner registration error:", err);
+    // Owner registration error
     res.status(500).json({ error: "Server error during registration" });
   }
 });
 
 // ========= OWNER LOGING ==========
-router.post("/login", async (req, res) => {
+router.post("/login", checkAccountLockout, async (req, res) => {
   const { email, password } = req.body;
 
   try {
@@ -96,7 +102,12 @@ router.post("/login", async (req, res) => {
     const ownerRes = await pool.query("SELECT * FROM restaurant_owners WHERE email = $1", [email]);
 
     if (ownerRes.rows.length === 0) {
-      return res.status(400).json({ error: "Invalid email or password" });
+      await handleFailedLogin(req, res, () => {});
+      const attemptInfo = req.loginAttempts ? ` (${req.loginAttempts.remaining} attempts remaining)` : '';
+      return res.status(400).json({ 
+        error: "Invalid email or password" + attemptInfo,
+        attemptsRemaining: req.loginAttempts?.remaining
+      });
     }
 
     const owner = ownerRes.rows[0];
@@ -104,8 +115,16 @@ router.post("/login", async (req, res) => {
     // Compare password
     const match = await bcrypt.compare(password, owner.password);
     if (!match) {
-      return res.status(400).json({ error: "Invalid email or password" });
+      await handleFailedLogin(req, res, () => {});
+      const attemptInfo = req.loginAttempts ? ` (${req.loginAttempts.remaining} attempts remaining)` : '';
+      return res.status(400).json({ 
+        error: "Invalid email or password" + attemptInfo,
+        attemptsRemaining: req.loginAttempts?.remaining
+      });
     }
+
+    // Clear failed attempts on successful login
+    await handleSuccessfulLogin(req, res, () => {});
 
     // Set session
     req.session.ownerId = owner.id;
@@ -113,7 +132,7 @@ router.post("/login", async (req, res) => {
 
     res.json({ message: "Login successful", owner: { id: owner.id, name: owner.name, email: owner.email } });
   } catch (err) {
-    console.error("Owner login error:", err);
+    console.error('Owner login error:', err);
     res.status(500).json({ error: "Server error during login" });
   }
 });
@@ -123,7 +142,7 @@ router.post("/login", async (req, res) => {
 router.post("/logout", (req, res) => {
   req.session.destroy((err) => {
     if (err) {
-      console.error("Logout error:", err);
+      // Logout error
       return res.status(500).json({ error: "Failed to log out" });
     }
 
@@ -149,15 +168,12 @@ const dishStorage = multer.diskStorage({
 const uploadDish = multer({ storage: dishStorage });
 
 // ========= ADD DISH ==========
-router.post("/dishes", uploadDish.single("image"), async (req, res) => {
+router.post("/dishes", requireOwnerAuth, uploadDish.single("image"), async (req, res) => {
   const { name, description = "", price, available } = req.body;
   const imagePath = req.file ? `/uploads/dish_images/${req.file.filename}` : null;
 
   try {
-    const ownerId = req.session.ownerId;
-    if (!ownerId) {
-      return res.status(401).json({ error: "Unauthorized. Please log in as an owner." });
-    }
+    const ownerId = req.owner.id;
 
     const restaurant = await pool.query("SELECT id FROM restaurants WHERE owner_id = $1", [ownerId]);
     if (restaurant.rows.length === 0) {
@@ -174,15 +190,14 @@ router.post("/dishes", uploadDish.single("image"), async (req, res) => {
 
     res.status(201).json({ dish: newDish.rows[0] });
   } catch (err) {
-    console.error("Add dish error:", err);
+    // Add dish error
     res.status(500).json({ error: "Server error while adding dish" });
   }
 });
 
 // ========= OWNER DASHBOARD ==========
-router.get("/dashboard", async (req, res) => {
-  const ownerId = req.session.ownerId;
-  if (!ownerId) return res.status(401).json({ error: "Not authorized" });
+router.get("/dashboard", requireOwnerAuth, async (req, res) => {
+  const ownerId = req.owner.id;
 
   try {
     const restaurantRes = await pool.query(
@@ -237,18 +252,16 @@ router.get("/dashboard", async (req, res) => {
       })),
     });
   } catch (err) {
-    console.error("Dashboard error:", err);
+    // Dashboard error
     res.status(500).json({ error: "Server error while fetching dashboard data" });
   }
 });
 
 // ========= TOGGLE DISH AVAILABILITY ==========
-router.patch("/dishes/:id/availability", async (req, res) => {
-  const ownerId = req.session.ownerId;
+router.patch("/dishes/:id/availability", requireOwnerAuth, async (req, res) => {
+  const ownerId = req.owner.id;
   const dishId = req.params.id;
   const { isAvailable } = req.body;
-
-  if (!ownerId) return res.status(401).json({ error: "Unauthorized" });
 
   try {
     const ownershipCheck = await pool.query(
@@ -269,7 +282,7 @@ router.patch("/dishes/:id/availability", async (req, res) => {
 
     res.sendStatus(204);
   } catch (err) {
-    console.error("Availability toggle error:", err);
+    // Availability toggle error
     res.status(500).json({ error: "Server error while updating availability" });
   }
 });
@@ -301,9 +314,8 @@ router.get("/me", (req, res) => {
 });
 
 // Get restaurant info for owner
-router.get("/restaurant", async (req, res) => {
-  const ownerId = req.session.ownerId;
-  if (!ownerId) return res.status(401).json({ error: "Not authorized" });
+router.get("/restaurant", requireOwnerAuth, async (req, res) => {
+  const ownerId = req.owner.id;
 
   try {
     const restaurantRes = await pool.query(
@@ -322,37 +334,71 @@ router.get("/restaurant", async (req, res) => {
       image_url: restaurant.image_url ? restaurant.image_url.replace(/\\/g, "/") : null
     });
   } catch (err) {
-    console.error("Restaurant fetch error:", err);
+    // Restaurant fetch error
     res.status(500).json({ error: "Server error while fetching restaurant data" });
   }
 });
 
 // GET /api/owners/orders - Get orders for restaurant owner
-router.get("/orders", async (req, res) => {
+router.get("/orders", requireOwnerAuth, async (req, res) => {
   try {
-    const ownerId = req.session.ownerId;
-    
-    if (!ownerId) {
-      return res.status(401).json({ error: "Must be logged in as owner" });
-    }
+    const ownerId = req.owner.id;
 
     // First, ensure address and phone columns exist in users table
     try {
       await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS address TEXT");
       await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(20)");
     } catch (err) {
-      console.log("Column creation check - columns might already exist");
+      // Column creation check - columns might already exist
     }
 
-    // Get all orders for restaurants owned by this owner
+    // Ensure restaurant_instructions column exists
+    try {
+      await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS restaurant_instructions JSONB");
+    } catch (err) {
+      // Column creation check - column might already exist
+    }
+
+    // Ensure restaurant_order_status table exists
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS restaurant_order_status (
+          id SERIAL PRIMARY KEY,
+          order_id INTEGER REFERENCES orders(id),
+          restaurant_id INTEGER REFERENCES restaurants(id),
+          status VARCHAR(50) DEFAULT 'active',
+          cancelled_at TIMESTAMP,
+          cancelled_reason TEXT,
+          completed_at TIMESTAMP,
+          removed_at TIMESTAMP,
+          created_at TIMESTAMP DEFAULT NOW(),
+          UNIQUE(order_id, restaurant_id)
+        )
+      `);
+      
+      // Add removed_at column if it doesn't exist (for existing tables)
+      await pool.query(`
+        ALTER TABLE restaurant_order_status 
+        ADD COLUMN IF NOT EXISTS removed_at TIMESTAMP
+      `);
+    } catch (err) {
+      // Handle table creation/modification silently
+    }
+
+    // Get all orders that contain items from this owner's restaurants with restaurant-specific status
     const ordersResult = await pool.query(`
       SELECT 
         o.id as order_id,
-        o.total,
-        o.status,
-        COALESCE(o.platform_fee, 0) as platform_fee,
+        o.total as original_total,
+        o.status as order_status,
+        COALESCE(o.platform_fee, 0) as original_platform_fee,
         o.created_at,
         o.paid_at,
+        COALESCE(o.order_details, '') as order_details,
+        COALESCE(o.restaurant_instructions, '{}') as restaurant_instructions,
+        COALESCE(o.delivery_address, u.address, 'No address provided') as delivery_address,
+        COALESCE(o.delivery_phone, u.phone, 'No phone provided') as delivery_phone,
+        COALESCE(o.delivery_type, 'delivery') as delivery_type,
         u.name as customer_name,
         u.email as customer_email,
         COALESCE(u.address, 'No address provided') as customer_address,
@@ -362,36 +408,66 @@ router.get("/orders", async (req, res) => {
         oi.price as item_price,
         oi.quantity,
         r.name as restaurant_name,
-        r.id as restaurant_id
+        r.id as restaurant_id,
+        COALESCE(ros.status, 'active') as restaurant_status,
+        ros.cancelled_at as restaurant_cancelled_at,
+        ros.completed_at as restaurant_completed_at
       FROM orders o
       JOIN order_items oi ON o.id = oi.order_id
       LEFT JOIN dishes d ON oi.dish_id = d.id
-      LEFT JOIN restaurants r ON d.restaurant_id = r.id
-      JOIN restaurant_owners ro ON r.owner_id = ro.id
+      LEFT JOIN restaurants r ON COALESCE(oi.restaurant_id, d.restaurant_id) = r.id
+      LEFT JOIN restaurant_order_status ros ON (o.id = ros.order_id AND r.id = ros.restaurant_id)
       JOIN users u ON o.user_id = u.id
-      WHERE ro.id = $1 AND (o.status = 'paid' OR o.status IS NULL)
+      WHERE r.owner_id = $1 
+        AND (o.status = 'paid' OR o.status = 'pending' OR o.status = 'completed' OR o.status IS NULL)
+        AND COALESCE(ros.status, 'active') NOT IN ('cancelled', 'removed')
       ORDER BY o.created_at DESC
     `, [ownerId]);
 
-    // Group orders by order_id
+    // Group orders by order_id and calculate restaurant-specific totals
     const groupedOrders = ordersResult.rows.reduce((acc, row) => {
       if (!acc[row.order_id]) {
+        // Parse restaurant instructions and extract instructions for this restaurant
+        let restaurantSpecificInstructions = '';
+        try {
+          const restaurantInstructions = typeof row.restaurant_instructions === 'string' 
+            ? JSON.parse(row.restaurant_instructions) 
+            : row.restaurant_instructions || {};
+          
+          // Find instructions for this specific restaurant
+          restaurantSpecificInstructions = restaurantInstructions[row.restaurant_name] || '';
+        } catch (err) {
+          console.warn("Failed to parse restaurant instructions:", err);
+          restaurantSpecificInstructions = '';
+        }
+
         acc[row.order_id] = {
           id: row.order_id,
-          total: row.total,
-          status: row.status,
-          platform_fee: row.platform_fee,
+          status: row.restaurant_status || 'active', // Use restaurant-specific status
+          order_status: row.order_status, // Keep original order status for reference
           created_at: row.created_at,
           paid_at: row.paid_at,
+          completed_at: row.restaurant_completed_at,
+          cancelled_at: row.restaurant_cancelled_at,
+          order_details: restaurantSpecificInstructions, // Use restaurant-specific instructions
+          delivery_address: row.delivery_address,
+          delivery_phone: row.delivery_phone,
+          delivery_type: row.delivery_type,
           customer_name: row.customer_name,
           customer_email: row.customer_email,
           customer_address: row.customer_address,
           customer_phone: row.customer_phone,
-          items: []
+          items: [],
+          restaurant_subtotal: 0,
+          original_total: row.original_total,
+          original_platform_fee: row.original_platform_fee,
+          restaurant_name: row.restaurant_name, // Store restaurant name for reference
+          restaurant_id: row.restaurant_id
         };
       }
       
-      // Only include items from this owner's restaurants
+      // Add item (only items from this owner's restaurants)
+      const itemTotal = row.item_price * row.quantity;
       acc[row.order_id].items.push({
         id: row.item_id,
         name: row.item_name,
@@ -401,14 +477,25 @@ router.get("/orders", async (req, res) => {
         restaurant_id: row.restaurant_id
       });
       
+      // Calculate restaurant-specific subtotal
+      acc[row.order_id].restaurant_subtotal += itemTotal;
+      
       return acc;
     }, {});
+
+    // Calculate restaurant-specific totals and platform fees
+    Object.values(groupedOrders).forEach(order => {
+      // Calculate proportional platform fee based on this restaurant's portion of the order
+      const proportion = order.restaurant_subtotal / (order.original_total - order.original_platform_fee);
+      order.platform_fee = order.original_platform_fee * proportion;
+      order.total = order.restaurant_subtotal + order.platform_fee;
+    });
 
     const orders = Object.values(groupedOrders);
 
     res.json({ orders });
   } catch (err) {
-    console.error("Get owner orders error:", err);
+    // Get owner orders error
     res.status(500).json({ error: "Failed to get orders" });
   }
 });
@@ -423,8 +510,16 @@ router.post("/update-password", async (req, res) => {
       return res.status(400).json({ error: "Email, secret word, and new password are required" });
     }
 
-    if (new_password.length < 6) {
-      return res.status(400).json({ error: "New password must be at least 6 characters long" });
+    if (new_password.length < 12) {
+      return res.status(400).json({ error: "New password must be at least 12 characters long" });
+    }
+
+    // Enhanced password strength validation
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])/;
+    if (!passwordRegex.test(new_password)) {
+      return res.status(400).json({ 
+        error: "Password must contain at least one uppercase letter, lowercase letter, number, and special character (@$!%*?&)" 
+      });
     }
 
     // Find owner by email
@@ -460,7 +555,7 @@ router.post("/update-password", async (req, res) => {
       [hashedNewPassword, owner.id]
     );
 
-    console.log(`🔐 Password updated for owner: ${owner.email}`);
+    // Password updated for owner
 
     res.json({ 
       success: true, 
@@ -468,30 +563,37 @@ router.post("/update-password", async (req, res) => {
     });
 
   } catch (err) {
-    console.error("Password update error:", err);
+    // Password update error
     res.status(500).json({ error: "Server error during password update" });
   }
 });
 
-// POST /api/owners/orders/:id/complete - Mark order as completed
-router.post("/orders/:id/complete", async (req, res) => {
+// POST /api/owners/orders/:id/complete - Mark restaurant's portion of order as completed
+router.post("/orders/:id/complete", requireOwnerAuth, async (req, res) => {
   try {
     const orderId = req.params.id;
-    const ownerId = req.session.ownerId;
+    const ownerId = req.owner.id;
 
-    if (!ownerId) {
-      return res.status(401).json({ error: "Must be logged in as owner" });
+    // Get the restaurant ID for this owner
+    const restaurantResult = await pool.query(
+      "SELECT id FROM restaurants WHERE owner_id = $1",
+      [ownerId]
+    );
+
+    if (restaurantResult.rows.length === 0) {
+      return res.status(404).json({ error: "Restaurant not found for this owner" });
     }
 
-    // Verify the order belongs to this owner's restaurant
+    const restaurantId = restaurantResult.rows[0].id;
+
+    // Verify the order contains items from this owner's restaurant
     const verifyResult = await pool.query(`
-      SELECT o.id 
+      SELECT DISTINCT o.id
       FROM orders o
       JOIN order_items oi ON o.id = oi.order_id
       LEFT JOIN dishes d ON oi.dish_id = d.id
-      LEFT JOIN restaurants r ON d.restaurant_id = r.id
-      JOIN restaurant_owners ro ON r.owner_id = ro.id
-      WHERE o.id = $1 AND ro.id = $2
+      LEFT JOIN restaurants r ON COALESCE(oi.restaurant_id, d.restaurant_id) = r.id
+      WHERE o.id = $1 AND r.owner_id = $2
       LIMIT 1
     `, [orderId, ownerId]);
 
@@ -499,32 +601,163 @@ router.post("/orders/:id/complete", async (req, res) => {
       return res.status(404).json({ error: "Order not found or not accessible" });
     }
 
-    // Update order status to completed
-    await pool.query(
-      "UPDATE orders SET status = $1 WHERE id = $2",
-      ['completed', orderId]
-    );
+    // Ensure restaurant_order_status table exists
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS restaurant_order_status (
+          id SERIAL PRIMARY KEY,
+          order_id INTEGER REFERENCES orders(id),
+          restaurant_id INTEGER REFERENCES restaurants(id),
+          status VARCHAR(50) DEFAULT 'active',
+          cancelled_at TIMESTAMP,
+          cancelled_reason TEXT,
+          completed_at TIMESTAMP,
+          removed_at TIMESTAMP,
+          created_at TIMESTAMP DEFAULT NOW(),
+          UNIQUE(order_id, restaurant_id)
+        )
+      `);
+      
+      // Add removed_at column if it doesn't exist (for existing tables)
+      await pool.query(`
+        ALTER TABLE restaurant_order_status 
+        ADD COLUMN IF NOT EXISTS removed_at TIMESTAMP
+      `);
+    } catch (err) {
+      // Handle table creation/modification silently
+    }
 
-    console.log(`✅ Order ${orderId} marked as completed by owner ${ownerId}`);
+    // Mark this restaurant's portion as completed
+    await pool.query(`
+      INSERT INTO restaurant_order_status (order_id, restaurant_id, status, completed_at)
+      VALUES ($1, $2, 'completed', NOW())
+      ON CONFLICT (order_id, restaurant_id) 
+      DO UPDATE SET status = 'completed', completed_at = NOW()
+    `, [orderId, restaurantId]);
+
+    // Check if all restaurants in the order have completed their portions
+    const allRestaurantsResult = await pool.query(`
+      SELECT DISTINCT r.id as restaurant_id
+      FROM order_items oi
+      LEFT JOIN dishes d ON oi.dish_id = d.id
+      LEFT JOIN restaurants r ON COALESCE(oi.restaurant_id, d.restaurant_id) = r.id
+      WHERE oi.order_id = $1
+    `, [orderId]);
+
+    const completedRestaurantsResult = await pool.query(`
+      SELECT restaurant_id 
+      FROM restaurant_order_status 
+      WHERE order_id = $1 AND status = 'completed'
+    `, [orderId]);
+
+    const cancelledRestaurantsResult = await pool.query(`
+      SELECT restaurant_id 
+      FROM restaurant_order_status 
+      WHERE order_id = $1 AND status = 'cancelled'
+    `, [orderId]);
+
+    // If all restaurants are either completed or cancelled, mark the entire order as completed
+    const totalRestaurants = allRestaurantsResult.rows.length;
+    const processedRestaurants = completedRestaurantsResult.rows.length + cancelledRestaurantsResult.rows.length;
+
+    if (processedRestaurants === totalRestaurants) {
+      await pool.query(
+        "UPDATE orders SET status = $1 WHERE id = $2",
+        ['completed', orderId]
+      );
+    }
 
     res.json({ 
       success: true, 
-      message: "Order marked as completed successfully" 
+      message: "Your restaurant's portion of the order has been marked as completed" 
     });
   } catch (err) {
-    console.error("Complete order error:", err);
+    console.error('Complete order error:', err);
     res.status(500).json({ error: "Failed to complete order" });
   }
 });
 
-// GET /api/owners/notifications - Get notifications for restaurant owner
-router.get("/notifications", async (req, res) => {
+// DELETE /api/owners/orders/:id - Mark restaurant's items as removed (soft delete)
+router.delete("/orders/:id", requireOwnerAuth, async (req, res) => {
   try {
-    const ownerId = req.session.ownerId;
+    const orderId = req.params.id;
+    const ownerId = req.owner.id;
 
-    if (!ownerId) {
-      return res.status(401).json({ error: "Must be logged in as owner" });
+    // Get the restaurant ID for this owner
+    const restaurantResult = await pool.query(
+      "SELECT id FROM restaurants WHERE owner_id = $1",
+      [ownerId]
+    );
+
+    if (restaurantResult.rows.length === 0) {
+      return res.status(404).json({ error: "Restaurant not found for this owner" });
     }
+
+    const restaurantId = restaurantResult.rows[0].id;
+
+    // Verify the order contains items from this owner's restaurant
+    const verifyResult = await pool.query(`
+      SELECT DISTINCT o.id
+      FROM orders o
+      JOIN order_items oi ON o.id = oi.order_id
+      LEFT JOIN dishes d ON oi.dish_id = d.id
+      LEFT JOIN restaurants r ON COALESCE(oi.restaurant_id, d.restaurant_id) = r.id
+      WHERE o.id = $1 AND r.owner_id = $2
+      LIMIT 1
+    `, [orderId, ownerId]);
+
+    if (verifyResult.rows.length === 0) {
+      return res.status(404).json({ error: "Order not found or you don't have permission to remove it" });
+    }
+
+    // Ensure restaurant_order_status table exists
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS restaurant_order_status (
+          id SERIAL PRIMARY KEY,
+          order_id INTEGER REFERENCES orders(id),
+          restaurant_id INTEGER REFERENCES restaurants(id),
+          status VARCHAR(50) DEFAULT 'active',
+          cancelled_at TIMESTAMP,
+          cancelled_reason TEXT,
+          completed_at TIMESTAMP,
+          removed_at TIMESTAMP,
+          created_at TIMESTAMP DEFAULT NOW(),
+          UNIQUE(order_id, restaurant_id)
+        )
+      `);
+      
+      // Add removed_at column if it doesn't exist (for existing tables)
+      await pool.query(`
+        ALTER TABLE restaurant_order_status 
+        ADD COLUMN IF NOT EXISTS removed_at TIMESTAMP
+      `);
+    } catch (err) {
+      // Handle table creation/modification silently
+    }
+
+    // Mark this restaurant's portion as removed (soft delete)
+    await pool.query(`
+      INSERT INTO restaurant_order_status (order_id, restaurant_id, status, removed_at)
+      VALUES ($1, $2, 'removed', NOW())
+      ON CONFLICT (order_id, restaurant_id) 
+      DO UPDATE SET status = 'removed', removed_at = NOW()
+    `, [orderId, restaurantId]);
+
+    res.json({ 
+      success: true, 
+      message: "Order removed from your view" 
+    });
+  } catch (err) {
+    console.error('Remove order error:', err);
+    res.status(500).json({ error: "Failed to remove order: " + err.message });
+  }
+});
+
+// GET /api/owners/notifications - Get notifications for restaurant owner
+router.get("/notifications", requireOwnerAuth, async (req, res) => {
+  try {
+    const ownerId = req.owner.id;
 
     // Get all notifications for this owner
     const notificationsResult = await pool.query(`
@@ -544,20 +777,16 @@ router.get("/notifications", async (req, res) => {
       unreadCount: notificationsResult.rows.filter(n => !n.read).length
     });
   } catch (err) {
-    console.error("Get notifications error:", err);
+    // Get notifications error
     res.status(500).json({ error: "Failed to get notifications" });
   }
 });
 
 // POST /api/owners/notifications/:id/mark-read - Mark notification as read
-router.post("/notifications/:id/mark-read", async (req, res) => {
+router.post("/notifications/:id/mark-read", requireOwnerAuth, async (req, res) => {
   try {
     const notificationId = req.params.id;
-    const ownerId = req.session.ownerId;
-
-    if (!ownerId) {
-      return res.status(401).json({ error: "Must be logged in as owner" });
-    }
+    const ownerId = req.owner.id;
 
     // Mark notification as read (ensure it belongs to this owner)
     const result = await pool.query(
@@ -571,19 +800,15 @@ router.post("/notifications/:id/mark-read", async (req, res) => {
 
     res.json({ success: true, message: "Notification marked as read" });
   } catch (err) {
-    console.error("Mark notification read error:", err);
+    // Mark notification read error
     res.status(500).json({ error: "Failed to mark notification as read" });
   }
 });
 
 // POST /api/owners/notifications/mark-all-read - Mark all notifications as read
-router.post("/notifications/mark-all-read", async (req, res) => {
+router.post("/notifications/mark-all-read", requireOwnerAuth, async (req, res) => {
   try {
-    const ownerId = req.session.ownerId;
-
-    if (!ownerId) {
-      return res.status(401).json({ error: "Must be logged in as owner" });
-    }
+    const ownerId = req.owner.id;
 
     await pool.query(
       "UPDATE notifications SET read = TRUE WHERE owner_id = $1 AND read = FALSE",
@@ -592,21 +817,17 @@ router.post("/notifications/mark-all-read", async (req, res) => {
 
     res.json({ success: true, message: "All notifications marked as read" });
   } catch (err) {
-    console.error("Mark all notifications read error:", err);
+    // Mark all notifications read error
     res.status(500).json({ error: "Failed to mark all notifications as read" });
   }
 });
 
 // POST /api/owners/refunds/:notificationId/process - Process refund request
-router.post("/refunds/:notificationId/process", async (req, res) => {
+router.post("/refunds/:notificationId/process", requireOwnerAuth, async (req, res) => {
   try {
     const notificationId = req.params.notificationId;
-    const ownerId = req.session.ownerId;
+    const ownerId = req.owner.id;
     const { action, notes } = req.body; // action: 'approve' or 'deny'
-
-    if (!ownerId) {
-      return res.status(401).json({ error: "Must be logged in as owner" });
-    }
 
     // Get the notification and verify ownership
     const notificationResult = await pool.query(
@@ -663,21 +884,28 @@ router.post("/refunds/:notificationId/process", async (req, res) => {
         )
       `);
     } catch (err) {
-      console.log("Customer notifications table creation check:", err.message);
+      // Customer notifications table creation check
     }
 
-    // Create notification for customer
+    // Create notification for customer with restaurant-specific information
+    const restaurantName = notificationData.restaurantName || 'Restaurant';
+    const restaurantTotal = notificationData.restaurantTotal || 0;
+    const itemCount = notificationData.itemCount || 0;
+    
     const customerNotificationTitle = action === 'approve' 
-      ? 'Refund Approved' 
-      : 'Refund Request Denied';
+      ? `Refund Approved - ${restaurantName}` 
+      : `Refund Request Denied - ${restaurantName}`;
     
     const customerNotificationMessage = action === 'approve'
-      ? `Your refund request for order #${order.id} has been approved by the restaurant. The refund will be processed shortly.`
-      : `Your refund request for order #${order.id} has been denied by the restaurant.`;
+      ? `Your refund request for order #${order.id} has been approved by ${restaurantName}. Refund amount: $${Number(restaurantTotal).toFixed(2)} for ${itemCount} item${itemCount !== 1 ? 's' : ''}. The refund will be processed shortly.`
+      : `Your refund request for order #${order.id} has been denied by ${restaurantName}. Amount: $${Number(restaurantTotal).toFixed(2)} for ${itemCount} item${itemCount !== 1 ? 's' : ''}.`;
 
     const customerNotificationData = {
       orderId: order.id,
       orderTotal: order.total,
+      restaurantTotal: restaurantTotal,
+      restaurantName: restaurantName,
+      itemCount: itemCount,
       refundAction: action,
       refundNotes: notes || '',
       processedAt: new Date().toISOString()
@@ -695,9 +923,9 @@ router.post("/refunds/:notificationId/process", async (req, res) => {
     );
 
     // Log the refund decision
-    console.log(`💰 Refund ${action} for order #${notification.order_id} by owner ${ownerId}`);
-    console.log(`📝 Notes: ${notes || 'No notes provided'}`);
-    console.log(`📧 Customer notification sent to user ${order.customer_id} (${order.customer_email})`);
+    // Refund action processed for order by owner
+    // Notes provided for refund action
+    // Customer notification sent
 
     res.json({ 
       success: true, 
@@ -705,8 +933,60 @@ router.post("/refunds/:notificationId/process", async (req, res) => {
       action: action
     });
   } catch (err) {
-    console.error("Process refund error:", err);
+    // Process refund error
     res.status(500).json({ error: "Failed to process refund request" });
+  }
+});
+
+// PUT /api/owners/restaurant/logo - Update restaurant logo
+router.put("/restaurant/logo", requireOwnerAuth, uploadLogo.single("logo"), async (req, res) => {
+  try {
+    const ownerId = req.owner.id;
+    
+    if (!req.file) {
+      return res.status(400).json({ error: "No logo file provided" });
+    }
+
+    const newLogoPath = `/uploads/restaurant_logos/${req.file.filename}`;
+
+    // Get current restaurant data to find old logo
+    const restaurantResult = await pool.query(
+      "SELECT image_url FROM restaurants WHERE owner_id = $1",
+      [ownerId]
+    );
+
+    if (restaurantResult.rows.length === 0) {
+      return res.status(404).json({ error: "Restaurant not found" });
+    }
+
+    const oldLogoPath = restaurantResult.rows[0].image_url;
+
+    // Update restaurant with new logo path
+    await pool.query(
+      "UPDATE restaurants SET image_url = $1 WHERE owner_id = $2",
+      [newLogoPath, ownerId]
+    );
+
+    // Delete old logo file if it exists
+    if (oldLogoPath) {
+      const fullOldPath = path.join(process.cwd(), oldLogoPath.replace(/^\//, ''));
+      try {
+        if (fs.existsSync(fullOldPath)) {
+          fs.unlinkSync(fullOldPath);
+        }
+      } catch (deleteErr) {
+        // Old file deletion failed but continue
+      }
+    }
+
+    res.json({ 
+      success: true, 
+      message: "Logo updated successfully",
+      image_url: newLogoPath 
+    });
+  } catch (err) {
+    // Logo update error
+    res.status(500).json({ error: "Failed to update logo" });
   }
 });
 
