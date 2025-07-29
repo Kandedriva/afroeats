@@ -5,13 +5,12 @@ import ToggleSwitch from "../Components/ToggleSwitch";
 import { toast } from 'react-toastify';
 
 function OwnerDashboard() {
-  const { owner, loading: authLoading, fetchSubscriptionStatus: refreshSubscriptionStatus } = useContext(OwnerAuthContext);
+  const { owner, loading: authLoading } = useContext(OwnerAuthContext);
   const [restaurant, setRestaurant] = useState(null);
   const [dishes, setDishes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [stripeStatus, setStripeStatus] = useState(null);
   const [connecting, setConnecting] = useState(false);
-  const [subscriptionStatus, setSubscriptionStatus] = useState(null);
   const [orders, setOrders] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -23,45 +22,13 @@ function OwnerDashboard() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Handle subscription success callback and Stripe Connect returns
-    const handleSubscriptionSuccess = async () => {
+    // Handle Stripe Connect returns
+    const handleStripeReturns = async () => {
       const urlParams = new URLSearchParams(window.location.search);
-      const sessionId = urlParams.get('session_id');
-      const devSubscription = urlParams.get('dev_subscription');
-      const subscriptionSuccess = urlParams.get('subscription_success');
-      const subscriptionError = urlParams.get('subscription_error');
       const stripeReturn = urlParams.get('stripe_return');
       const stripeRefresh = urlParams.get('stripe_refresh');
       
-      if (sessionId) {
-        try {
-          const res = await fetch(`http://localhost:5001/api/subscription/success?session_id=${sessionId}`, {
-            credentials: "include",
-          });
-          
-          if (res.ok) {
-            // Subscription activated successfully
-            // Clean URL and refresh subscription status
-            window.history.replaceState({}, document.title, window.location.pathname);
-            setTimeout(() => {
-              refreshSubscriptionStatus();
-            }, 500);
-          }
-        } catch (err) {
-          // Subscription success handler error
-        }
-      } else if (devSubscription || subscriptionSuccess) {
-        // Demo subscription activated
-        // Clean URL and refresh subscription status
-        window.history.replaceState({}, document.title, window.location.pathname);
-        setTimeout(() => {
-          refreshSubscriptionStatus();
-        }, 500);
-      } else if (subscriptionError) {
-        // Subscription error occurred
-        // Clean URL
-        window.history.replaceState({}, document.title, window.location.pathname);
-      } else if (stripeReturn || stripeRefresh) {
+      if (stripeReturn || stripeRefresh) {
         // Returned from Stripe Connect onboarding
         // Clean URL and refresh Stripe Connect status
         window.history.replaceState({}, document.title, window.location.pathname);
@@ -105,23 +72,6 @@ function OwnerDashboard() {
       }
     };
 
-    const fetchLocalSubscriptionStatus = async () => {
-      try {
-        const res = await fetch("http://localhost:5001/api/subscription/status", {
-          credentials: "include",
-        });
-        
-        if (res.ok) {
-          const data = await res.json();
-          setSubscriptionStatus(data);
-        } else {
-          setSubscriptionStatus({ active: false });
-        }
-      } catch (err) {
-        // Subscription status fetch error
-        setSubscriptionStatus({ active: false });
-      }
-    };
 
     const fetchOrders = async () => {
       try {
@@ -154,9 +104,8 @@ function OwnerDashboard() {
       }
     };
 
-    handleSubscriptionSuccess();
+    handleStripeReturns();
     fetchDashboard();
-    fetchLocalSubscriptionStatus();
     fetchStripeConnectStatus();
     fetchOrders();
     fetchNotifications();
@@ -517,44 +466,11 @@ function OwnerDashboard() {
 
   
 
-  const handleSubscribe = () => {
-    navigate("/owner/subscribe");
-  };
 
   return (
     <div className="max-w-4xl mx-auto p-6">
       <h1 className="text-3xl font-bold mb-4">Welcome to your Dashboard</h1>
 
-      {/* Subscription Status Section */}
-      {subscriptionStatus && (
-        <div className={`mb-6 p-4 border rounded ${subscriptionStatus.active ? 'bg-green-50 border-green-200' : 'bg-yellow-50 border-yellow-200'}`}>
-          {subscriptionStatus.active ? (
-            <div className="flex items-center">
-              <span className="text-green-600 text-xl mr-2">✅</span>
-              <div>
-                <h3 className="font-semibold text-green-800">Subscription Active</h3>
-                <p className="text-green-600">You can add dishes and manage your restaurant.</p>
-              </div>
-            </div>
-          ) : (
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <span className="text-yellow-600 text-xl mr-2">⚠️</span>
-                <div>
-                  <h3 className="font-semibold text-yellow-800">Subscription Required</h3>
-                  <p className="text-yellow-600">Subscribe to add dishes and start receiving orders.</p>
-                </div>
-              </div>
-              <button
-                onClick={handleSubscribe}
-                className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
-              >
-                Subscribe Now
-              </button>
-            </div>
-          )}
-        </div>
-      )}
 
       {restaurant && (
         <div className="mb-6 p-4 border rounded bg-white">

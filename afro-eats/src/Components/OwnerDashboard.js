@@ -11,32 +11,11 @@ const OwnerDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [stripeStatus, setStripeStatus] = useState(null);
   const [stripeLoading, setStripeLoading] = useState(false);
-  const [subscriptionActive, setSubscriptionActive] = useState(false);
 
   const navigate = useNavigate();
   const { checking } = useOwnerAuth();
 
   useEffect(() => {
-    const checkSubscriptionStatus = async () => {
-      try {
-        const res = await fetch("http://localhost:5001/api/stripe/subscription-status", {
-          credentials: "include",
-        });
-
-        if (res.status === 403) {
-          // Not subscribed
-          return navigate("/owner/subscribe");
-        } else if (res.status === 401) {
-          // Not logged in
-          return navigate("/owner/login");
-        }
-
-        const data = await res.json();
-        setSubscriptionActive(data.subscription_active);
-      } catch (err) {
-        // Handle subscription status check error silently
-      }
-    };
 
     const fetchStripeStatus = async () => {
       try {
@@ -67,11 +46,9 @@ const OwnerDashboard = () => {
       }
     };
 
-    // Check auth/subscription first before fetching data
-    checkSubscriptionStatus().then(() => {
-      fetchStripeStatus();
-      fetchDashboardData();
-    });
+    // Fetch dashboard data directly
+    fetchStripeStatus();
+    fetchDashboardData();
   }, [navigate]);
 
   const connectStripe = async () => {

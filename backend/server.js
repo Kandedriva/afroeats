@@ -16,7 +16,6 @@ import restaurantRoutes from "./routes/restaurantRoutes.js";
 import ownerRoutes from "./routes/ownerRoutes.js";
 import ownerAuthRoutes from "./routes/ownerAuthRoutes.js";
 import stripeRoutes from "./routes/stripeRoutes.js";
-import subscriptionRoutes from "./routes/subscriptionRoutes.js";
 import webhookRoutes from "./routes/webhook.js";
 import adminRoutes from "./routes/adminRoutes.js";
 
@@ -153,7 +152,6 @@ app.use("/api", restaurantRoutes);
 app.use("/api/owners", ownerRoutes);
 app.use("/api/auth", ownerAuthRoutes);
 app.use("/api", stripeRoutes);
-app.use("/api/subscription", subscriptionRoutes);
 app.use("/api", webhookRoutes);
 app.use("/api/admin", adminRoutes);
 

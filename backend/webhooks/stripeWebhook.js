@@ -19,19 +19,7 @@ export const handleStripeWebhook = async (req, res) => {
     case 'checkout.session.completed':
       const session = event.data.object;
       
-      if (session.mode === 'subscription') {
-        const ownerId = session.metadata.ownerId;
-        
-        try {
-          await pool.query(
-            "UPDATE restaurant_owners SET is_subscribed = true WHERE id = $1",
-            [ownerId]
-          );
-          // Subscription activated for owner
-        } catch (err) {
-          // Database update error
-        }
-      } else if (session.mode === 'payment' && session.metadata.orderId) {
+      if (session.mode === 'payment' && session.metadata.orderId) {
         // Handle order payment completion with Connect transfers
         const orderId = session.metadata.orderId;
         const userId = session.metadata.userId;
@@ -107,28 +95,6 @@ export const handleStripeWebhook = async (req, res) => {
       }
       break;
       
-    case 'customer.subscription.deleted':
-      const subscription = event.data.object;
-      
-      try {
-        // Find owner by stripe customer ID
-        const ownerResult = await pool.query(
-          "SELECT id FROM restaurant_owners WHERE stripe_customer_id = $1",
-          [subscription.customer]
-        );
-        
-        if (ownerResult.rows.length > 0) {
-          const ownerId = ownerResult.rows[0].id;
-          await pool.query(
-            "UPDATE restaurant_owners SET is_subscribed = false WHERE id = $1",
-            [ownerId]
-          );
-          // Subscription cancelled for owner
-        }
-      } catch (err) {
-        // Database update error
-      }
-      break;
       
     default:
       // Unhandled event type

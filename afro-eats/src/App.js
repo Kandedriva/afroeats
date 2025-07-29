@@ -18,7 +18,6 @@ import DeliveryOptions from "./pages/DeliveryOptions";
 import Checkout from "./pages/Checkout";
 import { useContext } from "react";
 import OwnerLogin from "./Components/OwnerLogin";
-import OwnerSubscribePage from "./pages/OwnerSubscribePage";
 import OwnerPasswordUpdate from "./pages/OwnerPasswordUpdate";
 import UserPasswordUpdate from "./pages/UserPasswordUpdate";
 import CustomerOrders from "./pages/CustomerOrders";
@@ -93,7 +92,6 @@ function AppContent() {
         <Route path="/register-owner" element={<RegisterOwner />} />
         <Route path="/owner/login" element={<OwnerLogin />} />
         <Route path="/owner/password-update" element={<OwnerPasswordUpdate />} />
-        <Route path="/owner/subscribe" element={<OwnerSubscribePage />} />
         <Route 
           path="/order-success" 
           element={
