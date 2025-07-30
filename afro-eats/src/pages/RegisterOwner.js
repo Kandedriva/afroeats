@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Link } from "react-router-dom";
 import { useOwnerAuth } from "../context/OwnerAuthContext";
+import { API_BASE_URL } from "../config/api";
 
 const RegisterOwner = () => {
   const [formData, setFormData] = useState({
@@ -39,7 +40,7 @@ const RegisterOwner = () => {
     }
 
     try {
-      const res = await fetch("http://localhost:5001/api/owners/register", {
+      const res = await fetch(`${API_BASE_URL}/api/owners/register`, {
         method: "POST",
         body: data,
         credentials: "include",

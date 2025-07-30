@@ -1,6 +1,7 @@
 // frontend/components/StripeConnectButton.js
 import React, { useState } from "react";
 import { toast } from 'react-toastify';
+import { API_BASE_URL } from "../config/api";
 
 function StripeConnectButton() {
   const [loading, setLoading] = useState(false);
@@ -8,7 +9,7 @@ function StripeConnectButton() {
   const handleConnect = async () => {
     try {
       setLoading(true);
-      const res = await fetch("http://localhost:5001/api/stripe/create-stripe-account", {
+      const res = await fetch(`${API_BASE_URL}/api/stripe/create-stripe-account`, {
         method: "POST",
         credentials: "include",
         headers: {

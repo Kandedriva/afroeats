@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useOwnerAuth } from "../context/OwnerAuthContext";
+import { API_BASE_URL } from "../config/api";
 
 const OwnerNavbar = () => {
   const { owner, logout } = useOwnerAuth();
@@ -12,7 +13,7 @@ const OwnerNavbar = () => {
   const fetchRestaurant = useCallback(async () => {
     if (owner) {
       try {
-        const res = await fetch("http://localhost:5001/api/owners/restaurant", {
+        const res = await fetch(`${API_BASE_URL}/api/owners/restaurant`, {
           credentials: "include",
         });
 
@@ -29,7 +30,7 @@ const OwnerNavbar = () => {
   const fetchNotificationCount = useCallback(async () => {
     if (owner) {
       try {
-        const res = await fetch("http://localhost:5001/api/owners/notifications", {
+        const res = await fetch(`${API_BASE_URL}/api/owners/notifications`, {
           credentials: "include",
         });
         
@@ -46,7 +47,7 @@ const OwnerNavbar = () => {
   const fetchActiveOrderCount = useCallback(async () => {
     if (owner) {
       try {
-        const res = await fetch("http://localhost:5001/api/owners/orders", {
+        const res = await fetch(`${API_BASE_URL}/api/owners/orders`, {
           credentials: "include",
         });
         
@@ -104,7 +105,7 @@ const OwnerNavbar = () => {
           <div className="flex items-center space-x-3">
             {restaurant.image_url && (
               <img
-                src={`http://localhost:5001/${restaurant.image_url.replace(/\\/g, "/")}`}
+                src={`${API_BASE_URL}/${restaurant.image_url.replace(/\\/g, "/")}`}
                 alt={restaurant.name}
                 className="w-8 h-8 rounded-full object-cover border-2 border-gray-300"
                 onError={(e) => {

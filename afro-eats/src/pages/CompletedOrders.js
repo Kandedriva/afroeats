@@ -2,6 +2,7 @@ import React, { useEffect, useState, useContext } from "react";
 import { OwnerAuthContext } from "../context/OwnerAuthContext";
 import { Navigate } from "react-router-dom";
 import { toast } from 'react-toastify';
+import { API_BASE_URL } from "../config/api";
 
 function CompletedOrders() {
   const { owner, loading: authLoading } = useContext(OwnerAuthContext);
@@ -17,7 +18,7 @@ function CompletedOrders() {
     const fetchData = async () => {
       try {
         // Fetch orders
-        const ordersRes = await fetch("http://localhost:5001/api/owners/orders", {
+        const ordersRes = await fetch(`${API_BASE_URL}/api/owners/orders`, {
           credentials: "include",
         });
         
@@ -27,7 +28,7 @@ function CompletedOrders() {
         }
 
         // Fetch restaurant info
-        const restaurantRes = await fetch("http://localhost:5001/api/owners/restaurant", {
+        const restaurantRes = await fetch(`${API_BASE_URL}/api/owners/restaurant`, {
           credentials: "include",
         });
         
@@ -57,7 +58,7 @@ function CompletedOrders() {
 
     setIsDeleting(true);
     try {
-      const res = await fetch(`http://localhost:5001/api/owners/orders/${orderToDelete}`, {
+      const res = await fetch(`${API_BASE_URL}/api/owners/orders/${orderToDelete}`, {
         method: "DELETE",
         credentials: "include",
       });

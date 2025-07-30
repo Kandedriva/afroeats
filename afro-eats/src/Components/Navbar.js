@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { useContext, useState, useEffect } from "react";
 import { AuthContext } from "../context/AuthContext";
 import { CartContext } from "../context/CartContext";
+import { API_BASE_URL } from "../config/api";
 
 function Navbar() {
   const { user, logout } = useContext(AuthContext);
@@ -24,7 +25,7 @@ function Navbar() {
 
   const fetchNotificationCount = async () => {
     try {
-      const res = await fetch("http://localhost:5001/api/auth/notifications", {
+      const res = await fetch(`${API_BASE_URL}/api/auth/notifications`, {
         credentials: "include",
       });
       

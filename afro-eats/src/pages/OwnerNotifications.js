@@ -2,6 +2,7 @@ import React, { useEffect, useState, useContext, useCallback } from "react";
 import { OwnerAuthContext } from "../context/OwnerAuthContext";
 import { Navigate, Link } from "react-router-dom";
 import { toast } from 'react-toastify';
+import { API_BASE_URL } from "../config/api";
 
 function OwnerNotifications() {
   const { owner, loading: authLoading } = useContext(OwnerAuthContext);
@@ -16,7 +17,7 @@ function OwnerNotifications() {
 
   const fetchNotifications = useCallback(async () => {
     try {
-      const res = await fetch("http://localhost:5001/api/owners/notifications", {
+      const res = await fetch(`${API_BASE_URL}/api/owners/notifications`, {
         credentials: "include",
       });
       
@@ -38,7 +39,7 @@ function OwnerNotifications() {
 
   const markNotificationRead = async (notificationId) => {
     try {
-      const res = await fetch(`http://localhost:5001/api/owners/notifications/${notificationId}/mark-read`, {
+      const res = await fetch(`${API_BASE_URL}/api/owners/notifications/${notificationId}/mark-read`, {
         method: "POST",
         credentials: "include",
       });
@@ -70,7 +71,7 @@ function OwnerNotifications() {
     
     try {
       setProcessingRefund(true);
-      const res = await fetch(`http://localhost:5001/api/owners/refunds/${selectedNotificationId}/process`, {
+      const res = await fetch(`${API_BASE_URL}/api/owners/refunds/${selectedNotificationId}/process`, {
         method: "POST",
         credentials: "include",
         headers: {
@@ -125,7 +126,7 @@ function OwnerNotifications() {
 
   const markAllAsRead = async () => {
     try {
-      await fetch("http://localhost:5001/api/owners/notifications/mark-all-read", {
+      await fetch(`${API_BASE_URL}/api/owners/notifications/mark-all-read`, {
         method: "POST",
         credentials: "include",
       });

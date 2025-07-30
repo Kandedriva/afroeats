@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { API_BASE_URL } from "../config/api";
 
 function AddDish() {
   const [name, setName] = useState("");
@@ -23,7 +24,7 @@ function AddDish() {
     if (image) formData.append("image", image);
 
     try {
-      const res = await fetch("http://localhost:5001/api/owners/dishes", {
+      const res = await fetch(`${API_BASE_URL}/api/owners/dishes`, {
         method: "POST",
         credentials: "include",
         body: formData,

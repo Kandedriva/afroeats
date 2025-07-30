@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import RestaurantCard from "../Components/RestaurantCard";
+import { API_BASE_URL } from "../config/api";
 
 export default function RestaurantList() {
   const [restaurants, setRestaurants] = useState([]);
@@ -8,7 +9,7 @@ export default function RestaurantList() {
   useEffect(() => {
     const fetchRestaurants = async () => {
       try {
-        const res = await fetch("http://localhost:5001/api/restaurants");
+        const res = await fetch(`${API_BASE_URL}/api/restaurants`);
         if (!res.ok) throw new Error("Failed to fetch restaurants");
         const data = await res.json();
         setRestaurants(data);

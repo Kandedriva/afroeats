@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { API_BASE_URL } from "../config/api";
 
 export default function useOwnerAuth() {
   const [checking, setChecking] = useState(true);
@@ -9,7 +10,7 @@ export default function useOwnerAuth() {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const res = await fetch("http://localhost:5001/api/owners/dashboard", {
+        const res = await fetch(`${API_BASE_URL}/api/owners/dashboard`, {
           method: "GET",
           credentials: "include",
         });

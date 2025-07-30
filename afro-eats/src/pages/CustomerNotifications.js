@@ -2,6 +2,7 @@ import React, { useState, useEffect, useContext, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
 import { toast } from 'react-toastify';
+import { API_BASE_URL } from "../config/api";
 
 function CustomerNotifications() {
   const [notifications, setNotifications] = useState([]);
@@ -14,7 +15,7 @@ function CustomerNotifications() {
   const fetchNotifications = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch("http://localhost:5001/api/auth/notifications", {
+      const res = await fetch(`${API_BASE_URL}/api/auth/notifications`, {
         credentials: "include",
       });
       
@@ -38,7 +39,7 @@ function CustomerNotifications() {
 
   const markNotificationRead = async (notificationId) => {
     try {
-      const res = await fetch(`http://localhost:5001/api/auth/notifications/${notificationId}/mark-read`, {
+      const res = await fetch(`${API_BASE_URL}/api/auth/notifications/${notificationId}/mark-read`, {
         method: "POST",
         credentials: "include",
       });
@@ -60,7 +61,7 @@ function CustomerNotifications() {
 
   const markAllAsRead = async () => {
     try {
-      await fetch("http://localhost:5001/api/auth/notifications/mark-all-read", {
+      await fetch(`${API_BASE_URL}/api/auth/notifications/mark-all-read`, {
         method: "POST",
         credentials: "include",
       });
@@ -74,7 +75,7 @@ function CustomerNotifications() {
 
   const deleteAllRead = async () => {
     try {
-      const res = await fetch("http://localhost:5001/api/auth/notifications/delete-read", {
+      const res = await fetch(`${API_BASE_URL}/api/auth/notifications/delete-read`, {
         method: "DELETE",
         credentials: "include",
       });

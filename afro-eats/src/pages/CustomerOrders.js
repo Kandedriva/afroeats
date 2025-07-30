@@ -2,6 +2,7 @@ import React, { useState, useEffect, useContext, useCallback } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
 import { toast } from 'react-toastify';
+import { API_BASE_URL } from "../config/api";
 
 function CustomerOrders() {
   const [orders, setOrders] = useState([]);
@@ -19,7 +20,7 @@ function CustomerOrders() {
   const fetchOrders = useCallback(async () => {
     try {
       setOrdersLoading(true);
-      const res = await fetch("http://localhost:5001/api/auth/orders", {
+      const res = await fetch(`${API_BASE_URL}/api/auth/orders`, {
         credentials: "include",
       });
 
@@ -39,7 +40,7 @@ function CustomerOrders() {
 
   const fetchNotifications = useCallback(async () => {
     try {
-      const res = await fetch("http://localhost:5001/api/auth/notifications", {
+      const res = await fetch(`${API_BASE_URL}/api/auth/notifications`, {
         credentials: "include",
       });
       
@@ -69,7 +70,7 @@ function CustomerOrders() {
 
   const cancelOrder = async (orderId) => {
     try {
-      const res = await fetch(`http://localhost:5001/api/auth/orders/${orderId}/cancel`, {
+      const res = await fetch(`${API_BASE_URL}/api/auth/orders/${orderId}/cancel`, {
         method: "POST",
         credentials: "include",
         headers: {
@@ -140,7 +141,7 @@ function CustomerOrders() {
 
   const removeOrder = async (orderId) => {
     try {
-      const res = await fetch(`http://localhost:5001/api/auth/orders/${orderId}`, {
+      const res = await fetch(`${API_BASE_URL}/api/auth/orders/${orderId}`, {
         method: "DELETE",
         credentials: "include",
       });
@@ -165,7 +166,7 @@ function CustomerOrders() {
   // TEMPORARY: Testing function to update order status for debugging
   const updateOrderStatus = async (orderId, newStatus) => {
     try {
-      const res = await fetch(`http://localhost:5001/api/auth/orders/${orderId}/update-status`, {
+      const res = await fetch(`${API_BASE_URL}/api/auth/orders/${orderId}/update-status`, {
         method: "POST",
         credentials: "include",
         headers: {
@@ -259,7 +260,7 @@ function CustomerOrders() {
               <button
                 onClick={async () => {
                   try {
-                    await fetch("http://localhost:5001/api/auth/notifications/mark-all-read", {
+                    await fetch(`${API_BASE_URL}/api/auth/notifications/mark-all-read`, {
                       method: "POST",
                       credentials: "include",
                     });

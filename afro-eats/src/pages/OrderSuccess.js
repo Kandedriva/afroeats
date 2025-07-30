@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useCart } from "../context/CartContext";
+import { API_BASE_URL } from "../config/api";
 
 function OrderSuccess() {
   const [orderDetails, setOrderDetails] = useState(null);
@@ -22,7 +23,7 @@ function OrderSuccess() {
       try {
         if (sessionId && !isDemo) {
           // Handle real Stripe payment success
-          const res = await fetch(`http://localhost:5001/api/orders/success?session_id=${sessionId}&order_id=${orderId}`, {
+          const res = await fetch(`${API_BASE_URL}/api/orders/success?session_id=${sessionId}&order_id=${orderId}`, {
             credentials: "include",
           });
           
@@ -33,7 +34,7 @@ function OrderSuccess() {
         }
 
         // Get order details
-        const orderRes = await fetch(`http://localhost:5001/api/orders/${orderId}`, {
+        const orderRes = await fetch(`${API_BASE_URL}/api/orders/${orderId}`, {
           credentials: "include",
         });
 

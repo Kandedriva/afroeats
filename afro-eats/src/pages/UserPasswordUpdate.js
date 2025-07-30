@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { API_BASE_URL } from "../config/api";
 
 function UserPasswordUpdate() {
   const [form, setForm] = useState({
@@ -37,7 +38,7 @@ function UserPasswordUpdate() {
     setLoading(true);
 
     try {
-      const res = await fetch("http://localhost:5001/api/auth/update-password", {
+      const res = await fetch(`${API_BASE_URL}/api/auth/update-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

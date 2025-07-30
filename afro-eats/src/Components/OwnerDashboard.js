@@ -4,6 +4,7 @@ import useOwnerAuth from "../hooks/useOwnerAuth";
 import OwnerNavbar from "./OwnerNavbar";
 import ToggleSwitch from "./ToggleSwitch";
 import { toast } from 'react-toastify';
+import { API_BASE_URL } from "../config/api";
 
 const OwnerDashboard = () => {
   const [orders, setOrders] = useState([]);
@@ -19,7 +20,7 @@ const OwnerDashboard = () => {
 
     const fetchStripeStatus = async () => {
       try {
-        const res = await fetch("http://localhost:5001/api/owners/stripe/account-status", {
+        const res = await fetch(`${API_BASE_URL}/api/owners/stripe/account-status`, {
           credentials: "include",
         });
         if (!res.ok) throw new Error("Could not fetch Stripe account status");
@@ -32,7 +33,7 @@ const OwnerDashboard = () => {
 
     const fetchDashboardData = async () => {
       try {
-        const res = await fetch("http://localhost:5001/api/owners/dashboard", {
+        const res = await fetch(`${API_BASE_URL}/api/owners/dashboard`, {
           credentials: "include",
         });
         if (!res.ok) throw new Error("Error fetching dashboard data");
@@ -54,7 +55,7 @@ const OwnerDashboard = () => {
   const connectStripe = async () => {
     try {
       setStripeLoading(true);
-      const res = await fetch("http://localhost:5001/api/owners/stripe/create-stripe-account", {
+      const res = await fetch(`${API_BASE_URL}/api/owners/stripe/create-stripe-account`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -73,7 +74,7 @@ const OwnerDashboard = () => {
   const toggleAvailability = async (dishId, currentStatus) => {
     try {
       const res = await fetch(
-        `http://localhost:5001/api/owners/dishes/${dishId}/availability`,
+        `${API_BASE_URL}/api/owners/dishes/${dishId}/availability`,
         {
           method: "PATCH",
           credentials: "include",
@@ -149,7 +150,7 @@ const OwnerDashboard = () => {
                   <div className="flex items-center gap-4">
                     {dish.image_url && (
                       <img
-                        src={`http://localhost:5001${dish.image_url.replace(/\\/g, "/")}`}
+                        src={`${API_BASE_URL}${dish.image_url.replace(/\\/g, "/")}`}
                         alt={dish.name}
                         className="w-20 h-20 object-cover rounded"
                       />
@@ -200,7 +201,7 @@ const OwnerDashboard = () => {
                   <div className="flex items-center gap-4">
                     {order.image_url && (
                       <img
-                        src={`http://localhost:5001${order.image_url.replace(/\\/g, "/")}`}
+                        src={`${API_BASE_URL}${order.image_url.replace(/\\/g, "/")}`}
                         alt={order.dish_name}
                         className="w-20 h-20 object-cover rounded"
                       />
