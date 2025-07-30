@@ -27,13 +27,12 @@ import OrderDetails from "./pages/OrderDetails";
 import OrderSuccess from "./pages/OrderSuccess";
 import ProtectedOwnerRoute from "./Components/ProtectedOwnerRoute";
 import ProtectedRoute from "./Components/ProtectedRoute";
-import { OwnerAuthProvider, OwnerAuthContext } from "./context/OwnerAuthContext";
+import { OwnerAuthProvider } from "./context/OwnerAuthContext";
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
 function AppContent() {
   const { user } = useContext(AuthContext);
-  const { owner } = useContext(OwnerAuthContext); // use owner context
   const location = useLocation();
   const isOwnerRoute = location.pathname.startsWith("/owner");
 

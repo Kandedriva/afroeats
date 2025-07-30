@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useContext } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import React, { useState, useEffect, useContext, useCallback } from "react";
+import { Link } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
 import { toast } from 'react-toastify';
 
@@ -10,15 +10,8 @@ function CustomerNotifications() {
   const [filterType, setFilterType] = useState('all'); // all, refund, order_update
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const { user, loading: authLoading } = useContext(AuthContext);
-  const navigate = useNavigate();
 
-  useEffect(() => {
-    if (user && !authLoading) {
-      fetchNotifications();
-    }
-  }, [user, authLoading]);
-
-  const fetchNotifications = async () => {
+  const fetchNotifications = useCallback(async () => {
     try {
       setLoading(true);
       const res = await fetch("http://localhost:5001/api/auth/notifications", {
@@ -35,7 +28,13 @@ function CustomerNotifications() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (user && !authLoading) {
+      fetchNotifications();
+    }
+  }, [user, authLoading, fetchNotifications]);
 
   const markNotificationRead = async (notificationId) => {
     try {
