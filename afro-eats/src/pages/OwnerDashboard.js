@@ -3,6 +3,7 @@ import { OwnerAuthContext } from "../context/OwnerAuthContext";
 import { Navigate, useNavigate, Link } from "react-router-dom";
 import ToggleSwitch from "../Components/ToggleSwitch";
 import { toast } from 'react-toastify';
+import { API_BASE_URL } from "../config/api";
 
 function OwnerDashboard() {
   const { owner, loading: authLoading } = useContext(OwnerAuthContext);
@@ -44,7 +45,7 @@ function OwnerDashboard() {
 
     const fetchDashboard = async () => {
       try {
-        const res = await fetch("http://localhost:5001/api/owners/dashboard", {
+        const res = await fetch(`${API_BASE_URL}/api/owners/dashboard`, {
           credentials: "include",
         });
 
@@ -57,7 +58,7 @@ function OwnerDashboard() {
         setDishes(data.dishes);
         
         // Get restaurant info separately
-        const restaurantRes = await fetch("http://localhost:5001/api/owners/restaurant", {
+        const restaurantRes = await fetch(`${API_BASE_URL}/api/owners/restaurant`, {
           credentials: "include",
         });
         
@@ -75,7 +76,7 @@ function OwnerDashboard() {
 
     const fetchOrders = async () => {
       try {
-        const res = await fetch("http://localhost:5001/api/owners/orders", {
+        const res = await fetch(`${API_BASE_URL}/api/owners/orders`, {
           credentials: "include",
         });
         
@@ -90,7 +91,7 @@ function OwnerDashboard() {
 
     const fetchNotifications = async () => {
       try {
-        const res = await fetch("http://localhost:5001/api/owners/notifications", {
+        const res = await fetch(`${API_BASE_URL}/api/owners/notifications`, {
           credentials: "include",
         });
         
@@ -113,7 +114,7 @@ function OwnerDashboard() {
 
   const fetchStripeConnectStatus = async () => {
     try {
-      const res = await fetch("http://localhost:5001/api/stripe/connect-status", {
+      const res = await fetch(`${API_BASE_URL}/api/stripe/connect-status`, {
         credentials: "include",
       });
       
@@ -150,7 +151,7 @@ function OwnerDashboard() {
   const handleConnectStripe = async () => {
     try {
       setConnecting(true);
-      const res = await fetch("http://localhost:5001/api/stripe/create-stripe-account", {
+      const res = await fetch(`${API_BASE_URL}/api/stripe/create-stripe-account`, {
         method: "POST",
         credentials: "include",
       });
@@ -177,7 +178,7 @@ function OwnerDashboard() {
   const toggleAvailability = async (dishId, currentStatus) => {
     try {
       const res = await fetch(
-        `http://localhost:5001/api/owners/dishes/${dishId}/availability`,
+        `${API_BASE_URL}/api/owners/dishes/${dishId}/availability`,
         {
           method: "PATCH",
           credentials: "include",
@@ -207,7 +208,7 @@ function OwnerDashboard() {
 
   const completeOrder = async (orderId) => {
     try {
-      const res = await fetch(`http://localhost:5001/api/owners/orders/${orderId}/complete`, {
+      const res = await fetch(`${API_BASE_URL}/api/owners/orders/${orderId}/complete`, {
         method: "POST",
         credentials: "include",
       });
@@ -237,7 +238,7 @@ function OwnerDashboard() {
 
   const removeOrder = async (orderId) => {
     try {
-      const res = await fetch(`http://localhost:5001/api/owners/orders/${orderId}`, {
+      const res = await fetch(`${API_BASE_URL}/api/owners/orders/${orderId}`, {
         method: "DELETE",
         credentials: "include",
       });
@@ -382,7 +383,7 @@ function OwnerDashboard() {
       const formData = new FormData();
       formData.append('logo', file);
 
-      const res = await fetch("http://localhost:5001/api/owners/restaurant/logo", {
+      const res = await fetch(`${API_BASE_URL}/api/owners/restaurant/logo`, {
         method: "PUT",
         credentials: "include",
         body: formData,
@@ -394,7 +395,7 @@ function OwnerDashboard() {
       }
 
       // Refetch complete restaurant data to ensure consistency
-      const restaurantRes = await fetch("http://localhost:5001/api/owners/restaurant", {
+      const restaurantRes = await fetch(`${API_BASE_URL}/api/owners/restaurant`, {
         credentials: "include",
       });
       
@@ -460,7 +461,7 @@ function OwnerDashboard() {
             {restaurant.image_url ? (
               <div className="relative inline-block">
                 <img
-                  src={`http://localhost:5001${restaurant.image_url.replace(/\\/g, "/")}?t=${logoTimestamp}`}
+                  src={`${API_BASE_URL}${restaurant.image_url.replace(/\\/g, "/")}?t=${logoTimestamp}`}
                   alt="Restaurant Logo"
                   className="w-32 h-32 object-cover rounded-lg shadow-md cursor-pointer hover:shadow-lg transition-shadow border-2 border-gray-200 hover:border-blue-300"
                   onClick={handleLogoClick}
@@ -588,7 +589,7 @@ function OwnerDashboard() {
               <button
                 onClick={async () => {
                   try {
-                    await fetch("http://localhost:5001/api/owners/notifications/mark-all-read", {
+                    await fetch(`${API_BASE_URL}/api/owners/notifications/mark-all-read`, {
                       method: "POST",
                       credentials: "include",
                     });
@@ -663,7 +664,7 @@ function OwnerDashboard() {
               <div className="flex items-center gap-4">
                 {dish.image_url && (
                   <img
-                    src={`http://localhost:5001${dish.image_url.replace(/\\/g, "/")}`}
+                    src={`${API_BASE_URL}${dish.image_url.replace(/\\/g, "/")}`}
                     alt={dish.name}
                     className="w-24 h-24 object-cover rounded"
                   />
@@ -911,7 +912,7 @@ function OwnerDashboard() {
                 <div className="mb-4">
                   <p className="text-sm font-medium text-gray-700 mb-2">Current Logo:</p>
                   <img
-                    src={`http://localhost:5001${restaurant.image_url.replace(/\\/g, "/")}`}
+                    src={`${API_BASE_URL}${restaurant.image_url.replace(/\\/g, "/")}`}
                     alt="Current Logo"
                     className="w-20 h-20 object-cover rounded-lg border-2 border-gray-200"
                   />

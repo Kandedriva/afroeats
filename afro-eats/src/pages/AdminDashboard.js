@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
+import { API_BASE_URL } from '../config/api';
 
 const AdminDashboard = () => {
   const [admin, setAdmin] = useState(null);
@@ -36,7 +37,7 @@ const AdminDashboard = () => {
 
   const checkAdminAuth = async () => {
     try {
-      const res = await fetch('http://localhost:5001/api/admin/me', {
+      const res = await fetch(`${API_BASE_URL}/api/admin/me`, {
         credentials: 'include'
       });
       
@@ -53,7 +54,7 @@ const AdminDashboard = () => {
 
   const loadDashboardData = async () => {
     try {
-      const res = await fetch('http://localhost:5001/api/admin/dashboard', {
+      const res = await fetch(`${API_BASE_URL}/api/admin/dashboard`, {
         credentials: 'include'
       });
       
@@ -68,7 +69,7 @@ const AdminDashboard = () => {
 
   const loadAnalytics = async () => {
     try {
-      const res = await fetch('http://localhost:5001/api/admin/analytics?period=30', {
+      const res = await fetch(`${API_BASE_URL}/api/admin/analytics?period=30`, {
         credentials: 'include'
       });
       
@@ -83,7 +84,7 @@ const AdminDashboard = () => {
 
   const loadSystemHealth = async () => {
     try {
-      const res = await fetch('http://localhost:5001/api/admin/system', {
+      const res = await fetch(`${API_BASE_URL}/api/admin/system`, {
         credentials: 'include'
       });
       
@@ -98,7 +99,7 @@ const AdminDashboard = () => {
 
   const loadUsers = async () => {
     try {
-      const res = await fetch('http://localhost:5001/api/admin/users', {
+      const res = await fetch(`${API_BASE_URL}/api/admin/users`, {
         credentials: 'include'
       });
       
@@ -113,7 +114,7 @@ const AdminDashboard = () => {
 
   const loadRestaurants = async () => {
     try {
-      const res = await fetch('http://localhost:5001/api/admin/restaurants', {
+      const res = await fetch(`${API_BASE_URL}/api/admin/restaurants`, {
         credentials: 'include'
       });
       
@@ -128,7 +129,7 @@ const AdminDashboard = () => {
 
   const loadOrders = async () => {
     try {
-      const res = await fetch('http://localhost:5001/api/admin/orders', {
+      const res = await fetch(`${API_BASE_URL}/api/admin/orders`, {
         credentials: 'include'
       });
       
@@ -162,7 +163,7 @@ const AdminDashboard = () => {
 
   const logout = async () => {
     try {
-      await fetch('http://localhost:5001/api/admin/logout', {
+      await fetch(`${API_BASE_URL}/api/admin/logout`, {
         method: 'POST',
         credentials: 'include'
       });

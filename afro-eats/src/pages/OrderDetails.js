@@ -2,6 +2,7 @@ import React, { useState, useEffect, useContext, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
 import { toast } from 'react-toastify';
+import { API_BASE_URL } from "../config/api";
 
 function OrderDetails() {
   const [order, setOrder] = useState(null);
@@ -16,7 +17,7 @@ function OrderDetails() {
   const fetchOrderDetails = useCallback(async () => {
     try {
       setOrderLoading(true);
-      const res = await fetch(`http://localhost:5001/api/orders/${orderId}`, {
+      const res = await fetch(`${API_BASE_URL}/api/orders/${orderId}`, {
         credentials: "include",
       });
 

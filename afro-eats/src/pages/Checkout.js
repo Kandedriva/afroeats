@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useCart } from "../context/CartContext";
 import { useNavigate } from "react-router-dom";
 import { toast } from 'react-toastify';
+import { API_BASE_URL } from "../config/api";
 
 export default function Checkout({ user }) {
   const { cart, clearCart } = useCart();
@@ -20,7 +21,7 @@ export default function Checkout({ user }) {
     const fetchUserInfo = async () => {
       if (user) {
         try {
-          const res = await fetch("http://localhost:5001/api/auth/me", {
+          const res = await fetch(`${API_BASE_URL}/api/auth/me`, {
             credentials: "include",
           });
           if (res.ok) {
@@ -73,7 +74,7 @@ export default function Checkout({ user }) {
         restaurant_id: item.restaurantId
       }));
 
-      const res = await fetch("http://localhost:5001/api/orders/checkout-session", {
+      const res = await fetch(`${API_BASE_URL}/api/orders/checkout-session`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -102,7 +103,7 @@ export default function Checkout({ user }) {
           toast.error(`Payment failed: ${restaurantNames} haven't connected their Stripe accounts yet. Using demo mode instead.`);
           
           // Fall back to demo mode
-          const demoRes = await fetch("http://localhost:5001/api/orders", {
+          const demoRes = await fetch(`${API_BASE_URL}/api/orders`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",

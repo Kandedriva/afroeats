@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useCart } from "../context/CartContext";
 import { toast } from 'react-toastify';
+import { API_BASE_URL } from "../config/api";
 
 export default function RestaurantDetails() {
   const { id } = useParams();
@@ -14,7 +15,7 @@ export default function RestaurantDetails() {
   useEffect(() => {
     const fetchRestaurantDetails = async () => {
       try {
-        const res = await fetch(`http://localhost:5001/api/restaurants/${id}`);
+        const res = await fetch(`${API_BASE_URL}/api/restaurants/${id}`);
         if (!res.ok) {
           throw new Error("Restaurant not found");
         }
@@ -70,7 +71,7 @@ export default function RestaurantDetails() {
               }`}
             >
               <img
-                src={`http://localhost:5001${dish.image_url}`}
+                src={`${API_BASE_URL}${dish.image_url}`}
                 alt={dish.name}
                 className="w-full h-40 object-cover rounded mb-3"
               />

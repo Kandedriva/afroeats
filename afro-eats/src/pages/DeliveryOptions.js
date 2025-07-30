@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
 import { toast } from 'react-toastify';
+import { API_BASE_URL } from "../config/api";
 
 export default function DeliveryOptions() {
   const navigate = useNavigate();
@@ -36,7 +37,7 @@ export default function DeliveryOptions() {
 
   const fetchUserProfile = async () => {
     try {
-      const res = await fetch("http://localhost:5001/api/auth/profile", {
+      const res = await fetch(`${API_BASE_URL}/api/auth/profile`, {
         credentials: "include",
       });
 
@@ -81,7 +82,7 @@ export default function DeliveryOptions() {
       };
 
       // Create Stripe checkout session with delivery preferences
-      const res = await fetch("http://localhost:5001/api/orders/checkout-session", {
+      const res = await fetch(`${API_BASE_URL}/api/orders/checkout-session`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

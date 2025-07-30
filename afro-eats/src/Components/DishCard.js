@@ -1,6 +1,7 @@
 import React from "react";
 import { useCart } from "../context/CartContext";
 import { toast } from 'react-toastify';
+import { API_BASE_URL } from "../config/api";
 
 function DishCard({ dish }) {
   const { addToCart } = useCart();
@@ -17,7 +18,7 @@ function DishCard({ dish }) {
   return (
     <div className="bg-white rounded-2xl shadow p-4">
       <img
-        src={`http://localhost:5001${dish.image_url}`}
+        src={`${API_BASE_URL}${dish.image_url}`}
         alt={dish.name}
         className="w-full h-40 object-cover rounded mb-2"
       />

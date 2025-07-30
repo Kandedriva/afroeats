@@ -1,9 +1,10 @@
 import React from "react";
 import { Link } from "react-router-dom";
+import { API_BASE_URL } from "../config/api";
 
 function RestaurantCard({ restaurant }) {
   const imageUrl = restaurant.image_url
-    ? `http://localhost:5001${restaurant.image_url.replace(/\\/g, "/")}`
+    ? `${API_BASE_URL}${restaurant.image_url.replace(/\\/g, "/")}`
     : "https://via.placeholder.com/300x200?text=No+Image";
 
   return (

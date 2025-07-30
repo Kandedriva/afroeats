@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useContext } from "react";
 import { AuthContext } from "../context/AuthContext";
 import { toast } from 'react-toastify';
+import { API_BASE_URL } from "../config/api";
 
 function CustomerProfile() {
   const { user, loading: authLoading, setUser } = useContext(AuthContext);
@@ -18,7 +19,7 @@ function CustomerProfile() {
     const fetchUserProfile = async () => {
       if (user && !authLoading) {
         try {
-          const res = await fetch("http://localhost:5001/api/auth/me", {
+          const res = await fetch(`${API_BASE_URL}/api/auth/me`, {
             credentials: "include",
           });
           
@@ -84,7 +85,7 @@ function CustomerProfile() {
 
     setUpdating(true);
     try {
-      const res = await fetch("http://localhost:5001/api/auth/update-profile", {
+      const res = await fetch(`${API_BASE_URL}/api/auth/update-profile`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",

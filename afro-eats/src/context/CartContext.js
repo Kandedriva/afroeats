@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { useAuth } from "./AuthContext";
+import { API_BASE_URL } from "../config/api";
 
 export const CartContext = createContext();
 
@@ -10,7 +11,7 @@ export const CartProvider = ({ children }) => {
 
   const fetchCart = useCallback(async () => {
     try {
-      const res = await fetch("http://localhost:5001/api/cart", {
+      const res = await fetch(`${API_BASE_URL}/api/cart`, {
         credentials: "include",
       });
 
@@ -54,7 +55,7 @@ export const CartProvider = ({ children }) => {
 
   const addToCart = async (dish) => {
     try {
-      const res = await fetch("http://localhost:5001/api/cart", {
+      const res = await fetch(`${API_BASE_URL}/api/cart`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -90,7 +91,7 @@ export const CartProvider = ({ children }) => {
 
   const updateQuantity = async (id, quantity) => {
     try {
-      const res = await fetch("http://localhost:5001/api/cart", {
+      const res = await fetch(`${API_BASE_URL}/api/cart`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -113,7 +114,7 @@ export const CartProvider = ({ children }) => {
 
   const removeFromCart = async (id) => {
     try {
-      const res = await fetch(`http://localhost:5001/api/cart/${id}`, {
+      const res = await fetch(`${API_BASE_URL}/api/cart/${id}`, {
         method: "DELETE",
         credentials: "include",
       });
@@ -132,7 +133,7 @@ export const CartProvider = ({ children }) => {
     try {
       setCart([]);
       
-      const res = await fetch("http://localhost:5001/api/cart", {
+      const res = await fetch(`${API_BASE_URL}/api/cart`, {
         method: "DELETE",
         credentials: "include",
       });

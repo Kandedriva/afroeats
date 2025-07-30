@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useOwnerAuth } from "../context/OwnerAuthContext";
+import { API_BASE_URL } from "../config/api";
 
 function OwnerLogin() {
   const [email, setEmail] = useState("");
@@ -14,7 +15,7 @@ function OwnerLogin() {
     setError("");
 
     try {
-      const res = await fetch("http://localhost:5001/api/auth/owners/login", {
+      const res = await fetch(`${API_BASE_URL}/api/auth/owners/login`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

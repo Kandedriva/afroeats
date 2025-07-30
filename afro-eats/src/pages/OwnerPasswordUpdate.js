@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { API_BASE_URL } from "../config/api";
 
 const OwnerPasswordUpdate = () => {
   const [formData, setFormData] = useState({
@@ -40,7 +41,7 @@ const OwnerPasswordUpdate = () => {
     }
 
     try {
-      const res = await fetch("http://localhost:5001/api/owners/update-password", {
+      const res = await fetch(`${API_BASE_URL}/api/owners/update-password`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

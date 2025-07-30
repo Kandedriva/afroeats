@@ -1,4 +1,5 @@
 import React, { createContext, useEffect, useState, useContext } from "react";
+import { API_BASE_URL } from "../config/api";
 
 export const OwnerAuthContext = createContext();
 
@@ -10,7 +11,7 @@ export function OwnerAuthProvider({ children }) {
   useEffect(() => {
     const fetchOwner = async () => {
       try {
-        const res = await fetch("http://localhost:5001/api/owners/me", {
+        const res = await fetch(`${API_BASE_URL}/api/owners/me`, {
           credentials: "include",
         });
 
@@ -34,7 +35,7 @@ export function OwnerAuthProvider({ children }) {
 
   const logout = async () => {
     try {
-      await fetch("http://localhost:5001/api/owners/logout", {
+      await fetch(`${API_BASE_URL}/api/owners/logout`, {
         method: "POST",
         credentials: "include",
       });
@@ -47,7 +48,7 @@ export function OwnerAuthProvider({ children }) {
   const refreshAuth = async () => {
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:5001/api/owners/me", {
+      const res = await fetch(`${API_BASE_URL}/api/owners/me`, {
         credentials: "include",
       });
 
