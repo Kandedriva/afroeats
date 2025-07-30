@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useContext } from "react";
+import React, { useEffect, useState, useContext, useCallback } from "react";
 import { OwnerAuthContext } from "../context/OwnerAuthContext";
 import { Navigate, Link } from "react-router-dom";
 import { toast } from 'react-toastify';
@@ -14,27 +14,27 @@ function OwnerNotifications() {
   const [selectedNotificationId, setSelectedNotificationId] = useState(null);
   const [processingRefund, setProcessingRefund] = useState(false);
 
-  useEffect(() => {
-    const fetchNotifications = async () => {
-      try {
-        const res = await fetch("http://localhost:5001/api/owners/notifications", {
-          credentials: "include",
-        });
-        
-        if (res.ok) {
-          const data = await res.json();
-          setNotifications(data.notifications || []);
-          setUnreadCount(data.unreadCount || 0);
-        }
-      } catch (err) {
-        // Notifications fetch error
-      } finally {
-        setLoading(false);
+  const fetchNotifications = useCallback(async () => {
+    try {
+      const res = await fetch("http://localhost:5001/api/owners/notifications", {
+        credentials: "include",
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        setNotifications(data.notifications || []);
+        setUnreadCount(data.unreadCount || 0);
       }
-    };
-
-    fetchNotifications();
+    } catch (err) {
+      // Notifications fetch error
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchNotifications();
+  }, [fetchNotifications]);
 
   const markNotificationRead = async (notificationId) => {
     try {

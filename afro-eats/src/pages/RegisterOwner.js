@@ -51,8 +51,6 @@ const RegisterOwner = () => {
         return;
       }
 
-      const result = await res.json();
-
       // Refresh auth context and redirect
       await refreshAuth();
       navigate("/owner/dashboard");

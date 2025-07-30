@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useOwnerAuth } from "../context/OwnerAuthContext";
 
@@ -9,59 +9,59 @@ const OwnerNavbar = () => {
   const [activeOrderCount, setActiveOrderCount] = useState(0);
   const navigate = useNavigate();
 
+  const fetchRestaurant = useCallback(async () => {
+    if (owner) {
+      try {
+        const res = await fetch("http://localhost:5001/api/owners/restaurant", {
+          credentials: "include",
+        });
+
+        if (res.ok) {
+          const restaurantData = await res.json();
+          setRestaurant(restaurantData);
+        }
+      } catch (err) {
+        // Restaurant fetch failed
+      }
+    }
+  }, [owner]);
+
+  const fetchNotificationCount = useCallback(async () => {
+    if (owner) {
+      try {
+        const res = await fetch("http://localhost:5001/api/owners/notifications", {
+          credentials: "include",
+        });
+        
+        if (res.ok) {
+          const data = await res.json();
+          setUnreadCount(data.unreadCount || 0);
+        }
+      } catch (err) {
+        // Notifications fetch failed
+      }
+    }
+  }, [owner]);
+
+  const fetchActiveOrderCount = useCallback(async () => {
+    if (owner) {
+      try {
+        const res = await fetch("http://localhost:5001/api/owners/orders", {
+          credentials: "include",
+        });
+        
+        if (res.ok) {
+          const data = await res.json();
+          const activeOrders = (data.orders || []).filter(order => order.status !== 'completed');
+          setActiveOrderCount(activeOrders.length);
+        }
+      } catch (err) {
+        // Orders fetch failed
+      }
+    }
+  }, [owner]);
+
   useEffect(() => {
-    const fetchRestaurant = async () => {
-      if (owner) {
-        try {
-          const res = await fetch("http://localhost:5001/api/owners/restaurant", {
-            credentials: "include",
-          });
-
-          if (res.ok) {
-            const restaurantData = await res.json();
-            setRestaurant(restaurantData);
-          }
-        } catch (err) {
-          // Restaurant fetch failed
-        }
-      }
-    };
-
-    const fetchNotificationCount = async () => {
-      if (owner) {
-        try {
-          const res = await fetch("http://localhost:5001/api/owners/notifications", {
-            credentials: "include",
-          });
-          
-          if (res.ok) {
-            const data = await res.json();
-            setUnreadCount(data.unreadCount || 0);
-          }
-        } catch (err) {
-          // Notifications fetch failed
-        }
-      }
-    };
-
-    const fetchActiveOrderCount = async () => {
-      if (owner) {
-        try {
-          const res = await fetch("http://localhost:5001/api/owners/orders", {
-            credentials: "include",
-          });
-          
-          if (res.ok) {
-            const data = await res.json();
-            const activeOrders = (data.orders || []).filter(order => order.status !== 'completed');
-            setActiveOrderCount(activeOrders.length);
-          }
-        } catch (err) {
-          // Orders fetch failed
-        }
-      }
-    };
-
     fetchRestaurant();
     fetchNotificationCount();
     fetchActiveOrderCount();
@@ -86,7 +86,7 @@ const OwnerNavbar = () => {
       window.removeEventListener('logoUpdated', handleLogoUpdate);
       clearInterval(updateInterval);
     };
-  }, [owner]);
+  }, [owner, fetchRestaurant, fetchNotificationCount, fetchActiveOrderCount]);
 
   const handleLogout = async () => {
     try {

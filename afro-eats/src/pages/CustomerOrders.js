@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect, useContext, useCallback } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
 import { toast } from 'react-toastify';
@@ -16,15 +16,7 @@ function CustomerOrders() {
   const { user, loading: authLoading } = useContext(AuthContext);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    // Component is now protected by ProtectedRoute, so user is guaranteed to exist
-    if (user && !authLoading) {
-      fetchOrders();
-      fetchNotifications();
-    }
-  }, [user, authLoading]);
-
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
     try {
       setOrdersLoading(true);
       const res = await fetch("http://localhost:5001/api/auth/orders", {
@@ -43,9 +35,9 @@ function CustomerOrders() {
     } finally {
       setOrdersLoading(false);
     }
-  };
+  }, []);
 
-  const fetchNotifications = async () => {
+  const fetchNotifications = useCallback(async () => {
     try {
       const res = await fetch("http://localhost:5001/api/auth/notifications", {
         credentials: "include",
@@ -59,29 +51,15 @@ function CustomerOrders() {
     } catch (err) {
       // Handle notifications fetch error silently
     }
-  };
+  }, []);
 
-  const markNotificationRead = async (notificationId) => {
-    try {
-      const res = await fetch(`http://localhost:5001/api/auth/notifications/${notificationId}/mark-read`, {
-        method: "POST",
-        credentials: "include",
-      });
-
-      if (res.ok) {
-        setNotifications(prev => 
-          prev.map(notification => 
-            notification.id === notificationId 
-              ? { ...notification, read: true }
-              : notification
-          )
-        );
-        setUnreadCount(prev => Math.max(0, prev - 1));
-      }
-    } catch (err) {
-      // Handle mark notification read error silently
+  useEffect(() => {
+    // Component is now protected by ProtectedRoute, so user is guaranteed to exist
+    if (user && !authLoading) {
+      fetchOrders();
+      fetchNotifications();
     }
-  };
+  }, [user, authLoading, fetchOrders, fetchNotifications]);
 
   const showCancelModal = (orderId) => {
     setShowCancelConfirm(orderId);

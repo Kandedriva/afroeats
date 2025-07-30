@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect, useContext, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
 import { toast } from 'react-toastify';
@@ -13,14 +13,7 @@ function OrderDetails() {
   const { orderId } = useParams();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    // Component is now protected by ProtectedRoute, so user is guaranteed to exist
-    if (user && !authLoading) {
-      fetchOrderDetails();
-    }
-  }, [user, authLoading, orderId]);
-
-  const fetchOrderDetails = async () => {
+  const fetchOrderDetails = useCallback(async () => {
     try {
       setOrderLoading(true);
       const res = await fetch(`http://localhost:5001/api/orders/${orderId}`, {
@@ -39,7 +32,14 @@ function OrderDetails() {
     } finally {
       setOrderLoading(false);
     }
-  };
+  }, [orderId]);
+
+  useEffect(() => {
+    // Component is now protected by ProtectedRoute, so user is guaranteed to exist
+    if (user && !authLoading) {
+      fetchOrderDetails();
+    }
+  }, [user, authLoading, orderId, fetchOrderDetails]);
 
   const getStatusColor = (status) => {
     switch (status) {

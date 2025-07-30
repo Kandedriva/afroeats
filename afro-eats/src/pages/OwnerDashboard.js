@@ -341,27 +341,6 @@ function OwnerDashboard() {
     }, 250);
   };
 
-  const markNotificationRead = async (notificationId) => {
-    try {
-      const res = await fetch(`http://localhost:5001/api/owners/notifications/${notificationId}/mark-read`, {
-        method: "POST",
-        credentials: "include",
-      });
-
-      if (res.ok) {
-        setNotifications(prev => 
-          prev.map(notification => 
-            notification.id === notificationId 
-              ? { ...notification, read: true }
-              : notification
-          )
-        );
-        setUnreadCount(prev => Math.max(0, prev - 1));
-      }
-    } catch (err) {
-      // Mark notification read error
-    }
-  };
 
   // Helper functions for order filtering
   const getActiveOrders = () => {
@@ -414,8 +393,6 @@ function OwnerDashboard() {
         throw new Error(errorData.error || "Failed to upload logo");
       }
 
-      const data = await res.json();
-      
       // Refetch complete restaurant data to ensure consistency
       const restaurantRes = await fetch("http://localhost:5001/api/owners/restaurant", {
         credentials: "include",
