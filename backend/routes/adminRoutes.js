@@ -3,7 +3,7 @@ import bcrypt from 'bcrypt';
 import pool from '../db.js';
 import { AnalyticsService } from '../services/analytics.js';
 import { getQueueStats } from '../services/queue.js';
-import { cache } from '../redis.js';
+import { cache } from '../utils/cache.js';
 import { rateLimits, validators, handleValidationErrors } from '../middleware/security.js';
 import { 
   checkAccountLockout, 

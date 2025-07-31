@@ -1,4 +1,4 @@
-import { cache } from '../redis.js';
+import { cache } from '../utils/cache.js';
 
 // Account lockout settings
 const MAX_LOGIN_ATTEMPTS = parseInt(process.env.MAX_LOGIN_ATTEMPTS) || 5;

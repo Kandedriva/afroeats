@@ -2,5 +2,9 @@
   "dependencies": {
     "@stripe/react-stripe-js": "^3.7.0",
     "@stripe/stripe-js": "^7.5.0"
-  }
+  },
+  "scripts": {
+  "start": "node server.js" 
+}
+
 }

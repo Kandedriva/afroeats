@@ -1,4 +1,4 @@
-import { cache } from '../redis.js';
+import { cache } from '../utils/cache.js';
 import pool from '../db.js';
 
 export class AnalyticsService {
