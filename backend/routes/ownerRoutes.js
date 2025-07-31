@@ -1,6 +1,6 @@
 import express from "express";
 import multer from "multer";
-import bcrypt from "bcrypt";
+import bcryptjs from "bcryptjs";
 import pool from "../db.js";
 import path from "path";
 import fs from "fs";
@@ -39,8 +39,8 @@ router.post("/register", uploadLogo.single("logo"), async (req, res) => {
       return res.status(400).json({ error: "Owner already exists" });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const hashedSecretWord = await bcrypt.hash(secret_word, 10);
+    const hashedPassword = await bcryptjs.hash(password, 10);
+    const hashedSecretWord = await bcryptjs.hash(secret_word, 10);
 
     // Create owner (handle case where columns might not exist)
     let ownerResult;
@@ -113,7 +113,7 @@ router.post("/login", checkAccountLockout, async (req, res) => {
     const owner = ownerRes.rows[0];
 
     // Compare password
-    const match = await bcrypt.compare(password, owner.password);
+    const match = await bcryptjs.compare(password, owner.password);
     if (!match) {
       await handleFailedLogin(req, res, () => {});
       const attemptInfo = req.loginAttempts ? ` (${req.loginAttempts.remaining} attempts remaining)` : '';
@@ -541,13 +541,13 @@ router.post("/update-password", async (req, res) => {
       });
     }
 
-    const secretWordMatch = await bcrypt.compare(secret_word, owner.secret_word);
+    const secretWordMatch = await bcryptjs.compare(secret_word, owner.secret_word);
     if (!secretWordMatch) {
       return res.status(400).json({ error: "Invalid secret word" });
     }
 
     // Hash new password
-    const hashedNewPassword = await bcrypt.hash(new_password, 10);
+    const hashedNewPassword = await bcryptjs.hash(new_password, 10);
 
     // Update password
     await pool.query(

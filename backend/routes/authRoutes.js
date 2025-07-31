@@ -1,5 +1,5 @@
 import express from "express";
-import bcrypt from "bcrypt";
+import bcryptjs from "bcryptjs";
 import pool from "../db.js";
 import { 
   checkAccountLockout, 
@@ -21,8 +21,8 @@ router.post("/register", async (req, res) => {
     }
 
     const saltRounds = 10;
-    const hashedPassword = await bcrypt.hash(password, saltRounds);
-    const hashedSecretWord = await bcrypt.hash(secret_word, saltRounds);
+    const hashedPassword = await bcryptjs.hash(password, saltRounds);
+    const hashedSecretWord = await bcryptjs.hash(secret_word, saltRounds);
 
     // Try to insert with all fields, with graceful fallbacks
     let newUser;
@@ -75,7 +75,7 @@ router.post("/login", checkAccountLockout, async (req, res) => {
       const user = userResult.rows[0];
   
       // 2. Compare password with hashed password
-      const isMatch = await bcrypt.compare(password, user.password);
+      const isMatch = await bcryptjs.compare(password, user.password);
       if (!isMatch) {
         await handleFailedLogin(req, res, () => {});
         const attemptInfo = req.loginAttempts ? ` (${req.loginAttempts.remaining} attempts remaining)` : '';
@@ -205,13 +205,13 @@ router.post("/update-password", async (req, res) => {
       });
     }
 
-    const secretWordMatch = await bcrypt.compare(secret_word, user.secret_word);
+    const secretWordMatch = await bcryptjs.compare(secret_word, user.secret_word);
     if (!secretWordMatch) {
       return res.status(400).json({ error: "Invalid secret word" });
     }
 
     // Hash new password
-    const hashedNewPassword = await bcrypt.hash(new_password, 10);
+    const hashedNewPassword = await bcryptjs.hash(new_password, 10);
 
     // Update password
     await pool.query(

@@ -1,5 +1,5 @@
 import express from 'express';
-import bcrypt from 'bcrypt';
+import bcryptjs from 'bcryptjs';
 import pool from '../db.js';
 import { AnalyticsService } from '../services/analytics.js';
 import { getQueueStats } from '../services/queue.js';
@@ -66,7 +66,7 @@ router.post('/login', rateLimits.auth, checkAccountLockout, [
     const admin = adminResult.rows[0];
     
     // Verify password
-    const isValidPassword = await bcrypt.compare(password, admin.password_hash);
+    const isValidPassword = await bcryptjs.compare(password, admin.password_hash);
     if (!isValidPassword) {
       await handleFailedLogin(req, res, () => {});
       const attemptInfo = req.loginAttempts ? ` (${req.loginAttempts.remaining} attempts remaining)` : '';

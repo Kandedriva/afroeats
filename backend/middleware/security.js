@@ -38,28 +38,68 @@ export const rateLimits = {
   upload: createRateLimit(15 * 60 * 1000, 10, 'Too many upload attempts')
 };
 
-// CORS configuration
+// CORS configuration with comprehensive origin handling
 export const corsOptions = {
   origin: function (origin, callback) {
+    // Get all possible frontend URLs from environment variables
     const allowedOrigins = [
+      // Development origins
       'http://localhost:3000',
-      'http://localhost:3001', 
+      'http://localhost:3001',
+      'http://127.0.0.1:3000',
+      'http://127.0.0.1:3001',
+      
+      // Production origins from environment variables
       process.env.FRONTEND_URL,
-      process.env.ADMIN_URL
-    ].filter(Boolean);
+      process.env.CLIENT_URL,
+      process.env.ADMIN_URL,
+      process.env.REACT_APP_FRONTEND_URL,
+      
+      // Specific production URLs
+      'https://afoodzone.com',
+      'https://www.afoodzone.com',
+      'https://afoodzone.netlify.app',
+      'https://afoodzone.vercel.app'
+    ].filter(Boolean); // Remove undefined values
     
-    // Allow requests with no origin (mobile apps, etc.)
-    if (!origin) return callback(null, true);
+    console.log('🌐 CORS Request from origin:', origin);
+    console.log('🌐 Allowed origins:', allowedOrigins);
     
+    // Allow requests with no origin (mobile apps, Postman, etc.)
+    if (!origin) {
+      console.log('✅ CORS: Allowing request with no origin');
+      return callback(null, true);
+    }
+    
+    // Check if origin is in allowed list
     if (allowedOrigins.includes(origin)) {
+      console.log('✅ CORS: Origin allowed:', origin);
       callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS'));
+      console.log('❌ CORS: Origin rejected:', origin);
+      console.log('💡 CORS: Add this origin to your environment variables if it should be allowed');
+      
+      // In development, be more lenient
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔧 Development mode: Allowing origin anyway');
+        callback(null, true);
+      } else {
+        callback(new Error(`CORS policy violation: Origin ${origin} is not allowed`));
+      }
     }
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'],
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'X-Requested-With',
+    'Accept',
+    'Origin',
+    'Cache-Control',
+    'X-File-Name'
+  ],
+  exposedHeaders: ['Set-Cookie'],
   maxAge: 86400 // 24 hours
 };
 
