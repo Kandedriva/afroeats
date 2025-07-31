@@ -3,8 +3,9 @@ import React, { useEffect, useState } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { useCart } from "../context/CartContext";
+import { API_BASE_URL } from "../config/api";
 
-const stripePromise = loadStripe(process.env.REACT_APP_STRIPE_PUB_KEY);
+const stripePromise = loadStripe(process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY);
 
 function CheckoutForm() {
   const stripe = useStripe();
@@ -15,7 +16,7 @@ function CheckoutForm() {
   useEffect(() => {
     const total = cart.reduce((sum, i) => sum + i.price * i.quantity, 0);
     const ownerId = cart[0]?.restaurantId;
-    fetch("/api/owners/stripe/create-payment-intent", {
+    fetch(`${API_BASE_URL}/api/owners/stripe/create-payment-intent`, {
       method: "POST",
       headers: {"Content-Type":"application/json"},
       body: JSON.stringify({ amount: Math.round(total*100), items: cart, restaurantOwnerId: ownerId }),
@@ -39,7 +40,7 @@ function FormInner() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const result = await stripe.confirmPayment({ elements, confirmParams: { return_url: process.env.REACT_APP_CLIENT_URL + "/order-success" } });
+    const result = await stripe.confirmPayment({ elements, confirmParams: { return_url: `${window.location.origin}/order-success` } });
     if (!result.error) clearCart();
   };
 
