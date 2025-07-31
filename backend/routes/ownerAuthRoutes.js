@@ -1,7 +1,7 @@
 // routes/ownerAuthRoutes.js
 import express from "express";
 import pool from "../db.js";
-import bcrypt from "bcrypt";
+import bcryptjs from "bcryptjs";
 
 const router = express.Router();
 
@@ -20,7 +20,7 @@ router.post("/owners/login", async (req, res) => {
     }
 
     const owner = result.rows[0];
-    const isMatch = await bcrypt.compare(password, owner.password);
+    const isMatch = await bcryptjs.compare(password, owner.password);
 
     if (!isMatch) {
       return res.status(400).json({ error: "Invalid credentials" });

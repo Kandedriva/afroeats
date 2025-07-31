@@ -177,6 +177,28 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
+// CORS test endpoint
+app.get('/api/cors-test', (req, res) => {
+  res.json({
+    message: '✅ CORS is working correctly!',
+    origin: req.get('Origin') || 'No origin header',
+    timestamp: new Date().toISOString(),
+    headers: {
+      'Access-Control-Allow-Origin': req.get('Origin') || '*',
+      'Access-Control-Allow-Credentials': 'true'
+    }
+  });
+});
+
+// OPTIONS preflight for all API routes
+app.options('/api/*', (req, res) => {
+  res.header('Access-Control-Allow-Origin', req.get('Origin') || '*');
+  res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.sendStatus(200);
+});
+
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({

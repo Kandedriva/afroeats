@@ -1,10 +1,24 @@
 {
+  "name": "afro-restaurant-app",
+  "version": "1.0.0",
+  "description": "Afro Restaurant Food Delivery Platform",
+  "license": "MIT",
+  "author": "Afro Restaurant Team",
+  "private": true,
   "dependencies": {
     "@stripe/react-stripe-js": "^3.7.0",
     "@stripe/stripe-js": "^7.5.0"
   },
   "scripts": {
-  "start": "node server.js" 
-}
-
+    "start": "node backend/server.js",
+    "dev": "npm run dev:backend",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd afro-eats && npm start",
+    "install:all": "npm install && cd backend && npm install && cd ../afro-eats && npm install",
+    "build": "cd afro-eats && npm run build"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
 }
