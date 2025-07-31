@@ -2,7 +2,7 @@ import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 import cors from 'cors';
 import { body, param, query, validationResult } from 'express-validator';
-import { cache } from '../redis.js';
+import { cache } from '../utils/cache.js';
 
 // Rate limiting configurations with fallback
 export const createRateLimit = (windowMs, max, message) => {

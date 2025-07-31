@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import session from "express-session";
-import ConnectRedis from "connect-redis";
+import ConnectPgSimple from "connect-pg-simple";
 import path from "path";
 import { fileURLToPath } from "url";
 import crypto from "crypto";
@@ -30,7 +30,7 @@ import {
 } from "./middleware/security.js";
 import { trackVisitorMiddleware, AnalyticsService } from "./services/analytics.js";
 import { scheduleRecurringJobs, jobs } from "./services/queue.js";
-import redisClient, { cache } from "./redis.js";
+import { cache } from "./utils/cache.js";
 
 dotenv.config();
 
@@ -43,22 +43,12 @@ const PORT = process.env.PORT || 5001;
 // Trust proxy (important for rate limiting and IP detection)
 app.set('trust proxy', 1);
 
-// Initialize Redis connection with timeout
-const initializeRedis = async () => {
+// Initialize database session store
+const initializeSessionStore = async () => {
   try {
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Redis connection timeout')), 5000)
-    );
-    
-    const connectPromise = redisClient.isOpen ? 
-      Promise.resolve() : 
-      redisClient.connect();
-    
-    await Promise.race([connectPromise, timeoutPromise]);
-    console.log('✅ Redis connected successfully');
+    console.log('✅ Using PostgreSQL session store');
   } catch (error) {
-    console.log('⚠️ Redis unavailable, using memory session store');
-    // Don't throw error, just continue without Redis
+    console.log('⚠️ Session store initialization failed, using memory store');
   }
 };
 
@@ -94,50 +84,36 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads"), {
   lastModified: true
 }));
 
-// Redis session store
-const RedisStore = ConnectRedis.default || ConnectRedis;
+// PostgreSQL session store
+const PgSession = ConnectPgSimple(session);
 
-// Session configuration with Redis fallback
+// Session configuration with PostgreSQL store
 const sessionConfig = {
   secret: process.env.SESSION_SECRET || "afoodzone-super-secret-key-change-in-production",
   resave: false,
   saveUninitialized: false,
   name: 'afoodzone.sid',
   cookie: {
-    // Set session to last 2 years (2 years * 365 days * 24 hours * 60 minutes * 60 seconds * 1000 milliseconds)
-    maxAge: process.env.SESSION_TIMEOUT ? parseInt(process.env.SESSION_TIMEOUT) : 2 * 365 * 24 * 60 * 60 * 1000, // Default 2 years
+    // Set session to last 30 days (within 32-bit integer limit)
+    maxAge: process.env.SESSION_TIMEOUT ? parseInt(process.env.SESSION_TIMEOUT) : 30 * 24 * 60 * 60 * 1000, // Default 30 days
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax'
   },
-  rolling: true, // This extends the session on each request (refreshes the 2-year timer)
+  rolling: true, // This extends the session on each request
   unset: 'destroy', // Clear the session when unset
   genid: () => {
     // Generate more secure session IDs
     return crypto.randomBytes(32).toString('hex');
-  }
+  },
+  store: new PgSession({
+    pool: pool, // Use existing PostgreSQL connection pool
+    tableName: 'sessions', // Session table name
+    createTableIfMissing: true // Auto-create sessions table
+  })
 };
 
-// Try Redis session store, fallback to memory
-try {
-  if (redisClient.isOpen || process.env.REDIS_HOST) {
-    sessionConfig.store = new RedisStore({ 
-      client: redisClient,
-      // Configure Redis store for persistent sessions
-      ttl: 2 * 365 * 24 * 60 * 60, // 2 years in seconds (matches cookie maxAge)
-      prefix: 'afoodzone:sess:', // Prefix for session keys in Redis
-      disableTouch: false, // Allow session refresh on activity
-      disableTTL: false // Enable TTL for session expiration
-    });
-    console.log('✅ Using Redis session store with 2-year persistence');
-  } else {
-    console.log('⚠️ Redis not available, using memory session store');
-    console.log('⚠️ WARNING: Sessions will be lost on server restart!');
-  }
-} catch (error) {
-  console.log('⚠️ Redis session store failed, using memory fallback');
-  console.log('⚠️ WARNING: Sessions will be lost on server restart!');
-}
+console.log('✅ Using PostgreSQL session store with persistent sessions');
 
 app.use(session(sessionConfig));
 
@@ -170,16 +146,17 @@ app.get('/api/health', async (req, res) => {
       console.log('Database health check failed:', dbError.message);
     }
     
-    // Check Redis (non-blocking)
-    let redisStatus = 'disconnected';
+    // Check cache (non-blocking)
+    let cacheStatus = 'connected';
     try {
       await Promise.race([
         cache.set('health_check', 'ok', 10),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Redis timeout')), 1000))
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Cache timeout')), 1000))
       ]);
-      redisStatus = 'connected';
-    } catch (redisError) {
-      console.log('Redis health check failed:', redisError.message);
+      cacheStatus = 'connected';
+    } catch (cacheError) {
+      console.log('Cache health check failed:', cacheError.message);
+      cacheStatus = 'disconnected';
     }
     
     res.json({
@@ -187,7 +164,7 @@ app.get('/api/health', async (req, res) => {
       timestamp: new Date().toISOString(),
       services: {
         database: dbStatus,
-        redis: redisStatus,
+        cache: cacheStatus,
         server: 'running'
       }
     });
@@ -210,7 +187,7 @@ app.use((req, res) => {
 });
 
 // Global error handler
-app.use((error, req, res, next) => {
+app.use((error, req, res) => {
   console.error('Global error handler:', error);
   
   // Log security events
@@ -229,8 +206,8 @@ app.use((error, req, res, next) => {
 // Initialize services and start server
 const startServer = async () => {
   try {
-    // Initialize Redis
-    await initializeRedis();
+    // Initialize session store
+    await initializeSessionStore();
     
     // Run database migrations (you would implement this)
     console.log('📊 Database schema ready');

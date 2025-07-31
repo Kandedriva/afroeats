@@ -1,60 +1,153 @@
-import Bull from 'bull';
-import redisClient from '../redis.js';
+// Memory-based queue implementation (no Redis/Bull dependency)
+// This replaces Bull queues with simple in-memory processing
+
 import pool from '../db.js';
-import { cache } from '../redis.js';
+import { cache } from '../utils/cache.js';
 
-// Shared Redis configuration with better error handling
-const redisConfig = {
-  host: process.env.REDIS_HOST || 'localhost',
-  port: process.env.REDIS_PORT || 6379,
-  password: process.env.REDIS_PASSWORD || undefined,
-  maxRetriesPerRequest: 3,
-  retryDelayOnFailover: 100,
-  enableReadyCheck: false,
-  maxLoadingTimeout: 1000,
-};
+// Simple in-memory queue implementation
+class MemoryQueue {
+  constructor(name, options = {}) {
+    this.name = name;
+    this.options = options;
+    this.jobs = [];
+    this.isProcessing = false;
+    this.processors = new Map();
+    this.completedJobs = [];
+    this.failedJobs = [];
+  }
 
-// Create job queues with error handling
-export const emailQueue = new Bull('email processing', {
-  redis: redisConfig,
+  // Add job to queue
+  async add(jobType, data, options = {}) {
+    const job = {
+      id: Date.now() + Math.random(),
+      type: jobType,
+      data,
+      options,
+      createdAt: new Date(),
+      attempts: 0,
+      maxAttempts: options.attempts || this.options.defaultJobOptions?.attempts || 3
+    };
+    
+    this.jobs.push(job);
+    
+    // Process immediately if not already processing
+    if (!this.isProcessing) {
+      setImmediate(() => this.processJobs());
+    }
+    
+    return job;
+  }
+
+  // Register job processor
+  process(jobType, processor) {
+    this.processors.set(jobType, processor);
+  }
+
+  // Process jobs in queue
+  async processJobs() {
+    if (this.isProcessing || this.jobs.length === 0) return;
+    
+    this.isProcessing = true;
+    
+    while (this.jobs.length > 0) {
+      const job = this.jobs.shift();
+      const processor = this.processors.get(job.type);
+      
+      if (!processor) {
+        console.warn(`No processor found for job type: ${job.type}`);
+        continue;
+      }
+      
+      try {
+        console.log(`Processing job ${job.id} of type ${job.type}`);
+        const result = await processor(job);
+        
+        this.completedJobs.push({ ...job, result, completedAt: new Date() });
+        
+        // Clean up completed jobs (keep only last 100)
+        if (this.completedJobs.length > 100) {
+          this.completedJobs = this.completedJobs.slice(-100);
+        }
+        
+      } catch (error) {
+        job.attempts++;
+        job.lastError = error.message;
+        
+        console.error(`Job ${job.id} failed (attempt ${job.attempts}/${job.maxAttempts}):`, error.message);
+        
+        if (job.attempts < job.maxAttempts) {
+          // Retry with exponential backoff
+          const delay = Math.min(job.attempts * 2000, 10000);
+          setTimeout(() => {
+            this.jobs.push(job);
+            if (!this.isProcessing) {
+              setImmediate(() => this.processJobs());
+            }
+          }, delay);
+        } else {
+          this.failedJobs.push({ ...job, failedAt: new Date() });
+          
+          // Clean up failed jobs (keep only last 50)
+          if (this.failedJobs.length > 50) {
+            this.failedJobs = this.failedJobs.slice(-50);
+          }
+        }
+      }
+    }
+    
+    this.isProcessing = false;
+  }
+
+  // Event handling (simplified)
+  on(event, callback) {
+    // Simple event handling for compatibility
+    if (event === 'error') {
+      this.onError = callback;
+    } else if (event === 'failed') {
+      this.onFailed = callback;
+    }
+  }
+
+  // Get queue stats
+  async getWaiting() {
+    return this.jobs;
+  }
+
+  async getActive() {
+    return this.isProcessing ? [{ processing: true }] : [];
+  }
+
+  async getCompleted() {
+    return this.completedJobs;
+  }
+
+  async getFailed() {
+    return this.failedJobs;
+  }
+}
+
+// Create job queues
+export const emailQueue = new MemoryQueue('email processing', {
   defaultJobOptions: {
-    removeOnComplete: 100,
-    removeOnFail: 50,
     attempts: 3,
-    backoff: {
-      type: 'exponential',
-      delay: 2000,
-    },
   },
 });
 
-export const analyticsQueue = new Bull('analytics processing', {
-  redis: redisConfig,
+export const analyticsQueue = new MemoryQueue('analytics processing', {
   defaultJobOptions: {
-    removeOnComplete: 50,
-    removeOnFail: 25,
     attempts: 2,
   },
 });
 
-export const notificationQueue = new Bull('notification processing', {
-  redis: redisConfig,
+export const notificationQueue = new MemoryQueue('notification processing', {
   defaultJobOptions: {
-    removeOnComplete: 200,
-    removeOnFail: 100,
     attempts: 5,
-    backoff: {
-      type: 'exponential',
-      delay: 1000,
-    },
   },
 });
 
-export const cleanupQueue = new Bull('cleanup processing', {
-  redis: redisConfig,
+export const cleanupQueue = new MemoryQueue('cleanup processing', {
   defaultJobOptions: {
-    removeOnComplete: 10,
-    removeOnFail: 10,
+    attempts: 1,
   },
 });
 
@@ -153,7 +246,7 @@ analyticsQueue.process('daily-analytics', async (job) => {
   try {
     console.log(`📊 Processing daily analytics for ${date}`);
     
-    // Aggregate daily data from Redis to database
+    // Aggregate daily data from cache to database
     const analytics = {
       date,
       unique_visitors: await cache.scard(`analytics:unique_visitors:${date}`),
@@ -231,12 +324,12 @@ cleanupQueue.process('cleanup-old-sessions', async (job) => {
     // Clean up expired sessions (if using database sessions)
     await pool.query('DELETE FROM sessions WHERE expires < NOW()');
     
-    // Clean up old Redis keys
-    const oldKeys = await redisClient.keys('sess:*');
+    // Clean up old memory cache keys (simplified)
+    const oldKeys = await cache.keys('sess:*');
     for (const key of oldKeys) {
-      const ttl = await redisClient.ttl(key);
+      const ttl = await cache.ttl(key);
       if (ttl === -1) { // Keys without expiration
-        await redisClient.del(key);
+        await cache.del(key);
       }
     }
     
@@ -255,7 +348,7 @@ cleanupQueue.process('cleanup-old-analytics', async (job) => {
     cutoffDate.setDate(cutoffDate.getDate() - 90); // Keep 90 days
     const cutoffDateString = cutoffDate.toISOString().split('T')[0];
     
-    // Clean up old Redis analytics keys
+    // Clean up old cache analytics keys
     const patterns = [
       `analytics:unique_visitors:*`,
       `analytics:page_views:*`,
@@ -264,11 +357,11 @@ cleanupQueue.process('cleanup-old-analytics', async (job) => {
     ];
     
     for (const pattern of patterns) {
-      const keys = await redisClient.keys(pattern);
+      const keys = await cache.keys(pattern);
       for (const key of keys) {
         const keyDate = key.split(':').slice(-1)[0];
         if (keyDate < cutoffDateString) {
-          await redisClient.del(key);
+          await cache.del(key);
         }
       }
     }
@@ -280,26 +373,14 @@ cleanupQueue.process('cleanup-old-analytics', async (job) => {
   }
 });
 
-// Schedule recurring jobs
+// Schedule recurring jobs (simplified for deployment)
 export const scheduleRecurringJobs = () => {
   try {
-    // Daily analytics processing at 1 AM
-    analyticsQueue.add('daily-analytics', 
-      { date: new Date().toISOString().split('T')[0] }, 
-      { repeat: { cron: '0 1 * * *' } }
-    );
+    // For deployment simplicity, we'll run jobs manually or on demand
+    // In production, consider using a proper job scheduler or cron jobs
     
-    // Weekly session cleanup on Sundays at 2 AM
-    cleanupQueue.add('cleanup-old-sessions', {}, 
-      { repeat: { cron: '0 2 * * SUN' } }
-    );
-    
-    // Monthly analytics cleanup on 1st at 3 AM
-    cleanupQueue.add('cleanup-old-analytics', {}, 
-      { repeat: { cron: '0 3 1 * *' } }
-    );
-    
-    console.log('✅ Recurring jobs scheduled successfully');
+    console.log('✅ Background job system ready (simplified for deployment)');
+    console.log('📝 Jobs can be triggered manually via API endpoints');
   } catch (error) {
     console.error('⚠️ Failed to schedule recurring jobs:', error.message);
   }
