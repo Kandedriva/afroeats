@@ -26,7 +26,20 @@ const logoStorage = multer.diskStorage({
     cb(null, uniqueName);
   },
 });
-const uploadLogo = multer({ storage: logoStorage });
+const uploadLogo = multer({ 
+  storage: logoStorage,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    // Accept only image files
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed'), false);
+    }
+  }
+});
 
 // ========= OWNER REGISTRATION ==========
 router.post("/register", uploadLogo.single("logo"), async (req, res) => {
@@ -165,7 +178,20 @@ const dishStorage = multer.diskStorage({
     cb(null, uniqueName);
   },
 });
-const uploadDish = multer({ storage: dishStorage });
+const uploadDish = multer({ 
+  storage: dishStorage,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    // Accept only image files
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed'), false);
+    }
+  }
+});
 
 // ========= ADD DISH ==========
 router.post("/dishes", requireOwnerAuth, uploadDish.single("image"), async (req, res) => {
