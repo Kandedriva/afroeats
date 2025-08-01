@@ -1,11 +1,9 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { API_BASE_URL } from "../config/api";
+import { getImageUrl, handleImageError } from "../utils/imageUtils";
 
 function RestaurantCard({ restaurant }) {
-  const imageUrl = restaurant.image_url
-    ? `${API_BASE_URL}${restaurant.image_url.replace(/\\/g, "/")}`
-    : "https://via.placeholder.com/300x200?text=No+Image";
+  const imageUrl = getImageUrl(restaurant.image_url, "No Restaurant Image");
 
   return (
     <Link to={`/restaurants/${restaurant.id}`}>
@@ -14,6 +12,7 @@ function RestaurantCard({ restaurant }) {
           className="w-full h-40 object-cover"
           src={imageUrl}
           alt={restaurant.name}
+          onError={(e) => handleImageError(e, "No Restaurant Image")}
         />
         <div className="p-4">
           <h3 className="text-xl font-semibold text-gray-800">{restaurant.name}</h3>

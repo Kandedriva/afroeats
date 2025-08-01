@@ -47,7 +47,7 @@ router.post("/owners/login", async (req, res) => {
 // ========== OWNER LOGOUT ==========
 router.post("/owners/logout", (req, res) => {
   req.session.destroy(() => {
-    res.clearCookie("connect.sid");
+    res.clearCookie("afoodzone.sid"); // Match the session cookie name
     res.json({ message: "Logged out" });
   });
 });

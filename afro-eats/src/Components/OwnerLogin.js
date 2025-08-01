@@ -15,7 +15,7 @@ function OwnerLogin() {
     setError("");
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/auth/owners/login`, {
+      const res = await fetch(`${API_BASE_URL}/api/owners/login`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

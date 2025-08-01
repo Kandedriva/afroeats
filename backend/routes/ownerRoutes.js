@@ -146,7 +146,7 @@ router.post("/logout", (req, res) => {
       return res.status(500).json({ error: "Failed to log out" });
     }
 
-    res.clearCookie("connect.sid"); // default session cookie name
+    res.clearCookie("afoodzone.sid"); // Match the session cookie name
     res.status(200).json({ message: "Logged out successfully" });
   });
 });
