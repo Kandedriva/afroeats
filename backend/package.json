@@ -7,12 +7,14 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
+    "build": "echo 'Backend build complete - no build step needed'",
     "test": "echo \"Error: no test specified\" && exit 1",
     "migrate": "node -e \"console.log('Run migrations manually: psql -d your_db -f migrations/security_analytics.sql')\"",
     "seed": "node scripts/seed.js",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "security-check": "npm audit"
+    "security-check": "npm audit",
+    "postinstall": "echo 'Backend dependencies installed with npm'"
   },
   "keywords": [
     "food-delivery",
@@ -49,6 +51,5 @@
   "engines": {
     "node": ">=18.16.0",
     "npm": ">=9.0.0"
-  },
-  "packageManager": "npm@9.8.1"
+  }
 }

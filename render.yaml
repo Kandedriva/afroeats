@@ -4,13 +4,17 @@ services:
     env: node
     region: oregon
     plan: starter
-    buildCommand: cd backend && npm ci
+    buildCommand: cd backend && ./build.sh
     startCommand: cd backend && npm start
     envVars:
       - key: NODE_ENV
         value: production
       - key: NPM_CONFIG_PRODUCTION
         value: false
+      - key: DISABLE_YARN
+        value: true
+      - key: NPM_CONFIG_PACKAGE_LOCK
+        value: true
     healthCheckPath: /api/health
     
   - type: web  
