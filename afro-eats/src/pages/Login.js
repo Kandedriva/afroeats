@@ -35,12 +35,13 @@ export default function Login() {
         body: JSON.stringify(formData),
       });
 
-      const data = await response.json();
-      setUser(data.user)
-
       if (!response.ok) {
-        throw new Error(data.error || "Login failed");
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Login failed");
       }
+
+      const data = await response.json();
+      setUser(data.user);
 
       // ✅ Redirect to restaurant list on success
       navigate("/");

@@ -94,8 +94,8 @@ const sessionConfig = {
   saveUninitialized: false,
   name: 'afoodzone.sid',
   cookie: {
-    // Set session to last 30 days (within 32-bit integer limit)
-    maxAge: process.env.SESSION_TIMEOUT ? parseInt(process.env.SESSION_TIMEOUT) : 30 * 24 * 60 * 60 * 1000, // Default 30 days
+    // Set session to last 1 year (365 days)
+    maxAge: process.env.SESSION_TIMEOUT ? parseInt(process.env.SESSION_TIMEOUT) : 365 * 24 * 60 * 60 * 1000, // Default 1 year
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // 'none' for production cross-origin, 'lax' for development
@@ -110,7 +110,9 @@ const sessionConfig = {
   store: new PgSession({
     pool: pool, // Use existing PostgreSQL connection pool
     tableName: 'sessions', // Session table name
-    createTableIfMissing: true // Auto-create sessions table
+    createTableIfMissing: true, // Auto-create sessions table
+    pruneSessionInterval: 60 * 15, // Prune expired sessions every 15 minutes (in seconds)
+    errorLog: console.error.bind(console) // Log session store errors
   })
 };
 
@@ -193,6 +195,9 @@ app.get('/api/cors-test', (req, res) => {
 
 // Session debug endpoint
 app.get('/api/session-debug', (req, res) => {
+  const sessionTimeout = process.env.SESSION_TIMEOUT ? parseInt(process.env.SESSION_TIMEOUT) : 365 * 24 * 60 * 60 * 1000;
+  const sessionTimeoutDays = Math.floor(sessionTimeout / (24 * 60 * 60 * 1000));
+  
   res.json({
     message: '🔍 Session Debug Info',
     sessionId: req.sessionID,
@@ -201,13 +206,17 @@ app.get('/api/session-debug', (req, res) => {
       userName: req.session.userName,
       ownerId: req.session.ownerId,
       ownerName: req.session.ownerName,
+      cookie: req.session.cookie
     },
     cookies: req.headers.cookie,
     env: process.env.NODE_ENV,
     sessionConfig: {
+      maxAge: sessionTimeout,
+      maxAgeDays: sessionTimeoutDays,
       secure: process.env.NODE_ENV === 'production',
       sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       domain: process.env.NODE_ENV === 'production' ? process.env.COOKIE_DOMAIN : undefined,
+      rolling: true
     },
     timestamp: new Date().toISOString()
   });
