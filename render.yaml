@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: afro-restaurant-backend
+    env: node
+    region: oregon
+    plan: starter
+    buildCommand: cd backend && npm ci
+    startCommand: cd backend && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NPM_CONFIG_PRODUCTION
+        value: false
+    healthCheckPath: /api/health
+    
+  - type: web  
+    name: afro-restaurant-frontend
+    env: static
+    region: oregon
+    plan: starter
+    buildCommand: cd afro-eats && npm ci && npm run build
+    staticPublishPath: ./afro-eats/build
+    envVars:
+      - key: NODE_ENV
+        value: production
+        
+# Global settings to force npm usage
+buildTool: npm
