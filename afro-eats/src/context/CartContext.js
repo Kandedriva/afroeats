@@ -86,6 +86,8 @@ export const CartProvider = ({ children }) => {
         ]);
       }
     } catch (err) {
+      console.error('Add to cart error:', err);
+      throw err; // Re-throw the error so the component can handle it
     }
   };
 

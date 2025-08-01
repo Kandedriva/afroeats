@@ -98,7 +98,8 @@ const sessionConfig = {
     maxAge: process.env.SESSION_TIMEOUT ? parseInt(process.env.SESSION_TIMEOUT) : 30 * 24 * 60 * 60 * 1000, // Default 30 days
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax'
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // 'none' for production cross-origin, 'lax' for development
+    domain: process.env.NODE_ENV === 'production' ? process.env.COOKIE_DOMAIN : undefined // No domain restriction in development
   },
   rolling: true, // This extends the session on each request
   unset: 'destroy', // Clear the session when unset
@@ -187,6 +188,28 @@ app.get('/api/cors-test', (req, res) => {
       'Access-Control-Allow-Origin': req.get('Origin') || '*',
       'Access-Control-Allow-Credentials': 'true'
     }
+  });
+});
+
+// Session debug endpoint
+app.get('/api/session-debug', (req, res) => {
+  res.json({
+    message: '🔍 Session Debug Info',
+    sessionId: req.sessionID,
+    session: {
+      userId: req.session.userId,
+      userName: req.session.userName,
+      ownerId: req.session.ownerId,
+      ownerName: req.session.ownerName,
+    },
+    cookies: req.headers.cookie,
+    env: process.env.NODE_ENV,
+    sessionConfig: {
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      domain: process.env.NODE_ENV === 'production' ? process.env.COOKIE_DOMAIN : undefined,
+    },
+    timestamp: new Date().toISOString()
   });
 });
 

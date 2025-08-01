@@ -157,7 +157,7 @@ router.get("/profile", async (req, res) => {
       if (err) {
         return res.status(500).json({ error: "Logout failed" });
       }
-      res.clearCookie("connect.sid"); // Name of session cookie
+      res.clearCookie("afoodzone.sid"); // Match the session cookie name
       res.sendStatus(200);
     });
   });
