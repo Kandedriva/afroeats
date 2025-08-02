@@ -100,7 +100,9 @@ export const corsOptions = {
     'X-File-Name'
   ],
   exposedHeaders: ['Set-Cookie'],
-  maxAge: 86400 // 24 hours
+  maxAge: 86400, // 24 hours
+  preflightContinue: false,
+  optionsSuccessStatus: 200 // For legacy mobile browser support
 };
 
 // Helmet configuration for security headers

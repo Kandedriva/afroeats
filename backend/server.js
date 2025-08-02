@@ -77,6 +77,24 @@ app.use('/api/admin/login', rateLimits.auth);
 app.use('/api/orders', rateLimits.orders);
 app.use('/api/', rateLimits.general);
 
+// Mobile-friendly session handling middleware
+app.use((req, res, next) => {
+  const userAgent = req.get('User-Agent') || '';
+  const isMobile = /Mobile|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+  
+  if (isMobile) {
+    // Set mobile-specific headers for better cookie handling
+    res.set({
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    });
+  }
+  
+  req.isMobile = isMobile;
+  next();
+});
+
 // Static file serving with security
 app.use("/uploads", express.static(path.join(__dirname, "uploads"), {
   maxAge: '1d',
@@ -97,12 +115,20 @@ const sessionConfig = {
     // Set session to last 1 year (365 days)
     maxAge: process.env.SESSION_TIMEOUT ? parseInt(process.env.SESSION_TIMEOUT) : 365 * 24 * 60 * 60 * 1000, // Default 1 year
     httpOnly: true,
+    // For mobile compatibility, always use secure in production
     secure: process.env.NODE_ENV === 'production',
-    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // 'none' for production cross-origin, 'lax' for development
-    domain: process.env.NODE_ENV === 'production' ? process.env.COOKIE_DOMAIN : undefined // No domain restriction in development
+    // Use 'lax' for better mobile compatibility instead of 'none'
+    sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'lax',
+    // Don't set domain to allow for better mobile browser compatibility
+    domain: undefined,
+    // Additional mobile-friendly settings
+    path: '/'
   },
   rolling: true, // This extends the session on each request
   unset: 'destroy', // Clear the session when unset
+  // Mobile-specific session settings
+  saveUninitialized: false, // Don't save uninitialized sessions for mobile
+  resave: false, // Don't force session save on mobile
   genid: () => {
     // Generate more secure session IDs
     return crypto.randomBytes(32).toString('hex');
@@ -133,6 +159,30 @@ app.use("/api/auth", ownerAuthRoutes);
 app.use("/api", stripeRoutes);
 app.use("/api", webhookRoutes);
 app.use("/api/admin", adminRoutes);
+
+// Session debug endpoint for mobile testing
+app.get('/api/session-debug', (req, res) => {
+  const userAgent = req.get('User-Agent') || '';
+  const isMobile = /Mobile|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+  
+  res.json({
+    sessionId: req.sessionID,
+    session: req.session,
+    cookies: req.headers.cookie,
+    userAgent: userAgent,
+    isMobile: isMobile,
+    cookieSettings: {
+      name: 'afoodzone.sid',
+      maxAge: 365 * 24 * 60 * 60 * 1000,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      domain: undefined,
+      path: '/'
+    },
+    timestamp: new Date().toISOString()
+  });
+});
 
 // Health check endpoint
 app.get('/api/health', async (req, res) => {
@@ -289,13 +339,13 @@ const startServer = async () => {
 process.on('SIGTERM', async () => {
   console.log('🛑 SIGTERM received, shutting down gracefully');
   
-  // Close Redis connection
-  if (redisClient.isOpen) {
-    await redisClient.quit();
-  }
-  
   // Close database pool
-  await pool.end();
+  try {
+    await pool.end();
+    console.log('✅ Database pool closed');
+  } catch (error) {
+    console.error('❌ Error closing database pool:', error);
+  }
   
   process.exit(0);
 });
@@ -303,13 +353,13 @@ process.on('SIGTERM', async () => {
 process.on('SIGINT', async () => {
   console.log('🛑 SIGINT received, shutting down gracefully');
   
-  // Close Redis connection
-  if (redisClient.isOpen) {
-    await redisClient.quit();
-  }
-  
   // Close database pool
-  await pool.end();
+  try {
+    await pool.end();
+    console.log('✅ Database pool closed');
+  } catch (error) {
+    console.error('❌ Error closing database pool:', error);
+  }
   
   process.exit(0);
 });
