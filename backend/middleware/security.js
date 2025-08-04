@@ -62,9 +62,13 @@ export const corsOptions = {
       'https://afoodzone.netlify.app',
       'https://afoodzone.vercel.app',
       
-      // Backend service URLs (for admin dashboard)
+      // Backend service URLs (for admin dashboard and legacy support)
       'https://a-food-zone.onrender.com',
-      'https://afro-restaurant-backend.onrender.com'
+      'https://afro-restaurant-backend.onrender.com',
+      
+      // Support for both API and frontend subdomains
+      'https://app.afoodzone.com',
+      'https://admin.afoodzone.com'
     ].filter(Boolean); // Remove undefined values
     
     console.log('🌐 CORS Request from origin:', origin);
