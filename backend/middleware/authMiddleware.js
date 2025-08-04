@@ -14,11 +14,7 @@ export function requireAuth(req, res, next) {
       
       console.log('Auth failed: No valid session', debugInfo);
       
-      // Set headers to ensure proper CORS handling
-      if (req.get('Origin')) {
-        res.set('Access-Control-Allow-Origin', req.get('Origin'));
-        res.set('Access-Control-Allow-Credentials', 'true');
-      }
+      // CORS headers are handled by the main CORS middleware
       
       return res.status(401).json({ 
         error: "Unauthorized",
