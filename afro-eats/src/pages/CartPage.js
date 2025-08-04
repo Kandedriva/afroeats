@@ -42,47 +42,58 @@ export default function CartPage() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto mt-10 p-4">
-      <h2 className="text-2xl font-bold mb-6">Your Cart</h2>
+    <div className="max-w-4xl mx-auto mt-4 sm:mt-10 p-4 sm:p-6">
+      <h2 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6">Your Cart</h2>
 
       {Object.entries(grouped).map(([restaurant, items]) => (
-        <div key={restaurant} className="mb-8 bg-white p-6 rounded-lg shadow-sm border">
-          <h3 className="text-xl font-semibold text-green-700 mb-4">
+        <div key={restaurant} className="mb-6 sm:mb-8 bg-white p-4 sm:p-6 rounded-lg shadow-sm border">
+          <h3 className="text-lg sm:text-xl font-semibold text-green-700 mb-3 sm:mb-4">
             🏪 {restaurant}
           </h3>
 
           {items.map((item) => (
             <div
               key={item.id}
-              className="flex items-center justify-between mb-4 border-b pb-2"
+              className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 pb-4 border-b border-gray-100 last:border-b-0"
             >
-              <div>
-                <p className="font-medium">{item.name}</p>
+              <div className="mb-3 sm:mb-0">
+                <p className="font-medium text-gray-800">{item.name}</p>
                 <p className="text-sm text-gray-500">
-                  ${Number(item.price || 0).toFixed(2)} x {item.quantity}
+                  ${Number(item.price || 0).toFixed(2)} each
                 </p>
               </div>
 
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                  className="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300"
-                >
-                  -
-                </button>
-                <span>{item.quantity}</span>
-                <button
-                  onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                  className="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300"
-                >
-                  +
-                </button>
-                <button
-                  onClick={() => removeFromCart(item.id)}
-                  className="ml-4 text-red-500 hover:underline text-sm"
-                >
-                  Remove
-                </button>
+              <div className="flex items-center justify-between sm:flex-col sm:items-end sm:space-y-2">
+                <div className="flex items-center space-x-3">
+                  <button
+                    onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                    className="w-8 h-8 flex items-center justify-center bg-gray-200 rounded-full hover:bg-gray-300 transition-colors touch-manipulation"
+                    style={{ WebkitTapHighlightColor: 'transparent' }}
+                  >
+                    -
+                  </button>
+                  <span className="font-medium text-lg w-8 text-center">{item.quantity}</span>
+                  <button
+                    onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                    className="w-8 h-8 flex items-center justify-center bg-gray-200 rounded-full hover:bg-gray-300 transition-colors touch-manipulation"
+                    style={{ WebkitTapHighlightColor: 'transparent' }}
+                  >
+                    +
+                  </button>
+                </div>
+                
+                <div className="flex items-center space-x-3">
+                  <span className="font-semibold text-gray-800">
+                    ${(Number(item.price || 0) * item.quantity).toFixed(2)}
+                  </span>
+                  <button
+                    onClick={() => removeFromCart(item.id)}
+                    className="text-red-500 hover:text-red-700 text-sm font-medium px-2 py-1 hover:bg-red-50 rounded transition-colors touch-manipulation"
+                    style={{ WebkitTapHighlightColor: 'transparent' }}
+                  >
+                    Remove
+                  </button>
+                </div>
               </div>
             </div>
           ))}
@@ -118,18 +129,20 @@ export default function CartPage() {
         <p className="text-sm text-gray-600 mt-1">
           Platform fee ($1.20) will be added at checkout
         </p>
-        <div className="mt-4 space-x-3">
+        <div className="mt-4 flex flex-col sm:flex-row gap-3 sm:justify-end">
           <button
             onClick={clearCart}
-            className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+            className="px-4 py-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors touch-manipulation font-medium"
+            style={{ WebkitTapHighlightColor: 'transparent', minHeight: '44px' }}
           >
             Clear Cart
           </button>
           <button
             onClick={handleCheckout}
-            className="px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700 font-semibold"
+            className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold transition-colors touch-manipulation"
+            style={{ WebkitTapHighlightColor: 'transparent', minHeight: '44px' }}
           >
-            Checkout
+            Proceed to Checkout
           </button>
         </div>
       </div>

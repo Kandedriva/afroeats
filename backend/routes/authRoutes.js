@@ -88,11 +88,24 @@ router.post("/login", checkAccountLockout, async (req, res) => {
       // 3. Clear failed attempts on successful login
       await handleSuccessfulLogin(req, res, () => {});
   
-      // 4. Set session data
+      // 4. Set session data with mobile-friendly settings
       req.session.userId = user.id;
       req.session.userName = user.name.split(" ")[0]; // just first name for greeting
+      
+      // For mobile users, ensure session is properly saved
+      if (req.isMobile) {
+        req.session.isMobile = true;
+        // Force session save for mobile browsers
+        req.session.save((err) => {
+          if (err) console.error('Session save error:', err);
+        });
+      }
   
-      // 5. Respond with user info
+      // 5. Respond with user info and mobile-friendly headers
+      res.set({
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache'
+      });
       res.json({ user: { id: user.id, name: user.name, email: user.email } });
   
     } catch (err) {
@@ -101,19 +114,35 @@ router.post("/login", checkAccountLockout, async (req, res) => {
     }
   });
 
-  // in authRoutes.js
+  // Enhanced /me endpoint with mobile session handling
 router.get("/me", async (req, res) => {
+    // Set mobile-friendly headers
+    res.set({
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    });
+
     if (req.session.userId) {
       try {
         // Get full user info from database
         const userResult = await pool.query("SELECT id, name, email FROM users WHERE id = $1", [req.session.userId]);
         
         if (userResult.rows.length > 0) {
+          // Extend session on successful auth check for mobile users
+          if (req.isMobile && req.session) {
+            req.session.touch(); // This refreshes the session expiry
+          }
           res.json(userResult.rows[0]);
         } else {
+          // User exists in session but not in DB - clear session
+          req.session.destroy((err) => {
+            if (err) console.error('Session destroy error:', err);
+          });
           res.status(401).json({ error: "User not found" });
         }
       } catch (err) {
+        console.error('Auth check error:', err);
         res.status(500).json({ error: "Server error" });
       }
     } else {
@@ -153,13 +182,52 @@ router.get("/profile", async (req, res) => {
 });
 
   router.post("/logout", (req, res) => {
+    // Mobile-friendly logout with proper cookie clearing
     req.session.destroy((err) => {
       if (err) {
+        console.error('Logout session destroy error:', err);
         return res.status(500).json({ error: "Logout failed" });
       }
-      res.clearCookie("afoodzone.sid"); // Match the session cookie name
-      res.sendStatus(200);
+      
+      // Clear cookie with proper mobile-friendly settings
+      res.clearCookie("afoodzone.sid", {
+        path: '/',
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax'
+      });
+      
+      // Set headers to prevent caching
+      res.set({
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      });
+      
+      res.json({ message: "Logout successful" });
     });
+  });
+
+  // Session refresh endpoint for mobile browsers
+  router.post("/refresh-session", (req, res) => {
+    if (req.session.userId) {
+      // Touch the session to extend its life
+      req.session.touch();
+      req.session.save((err) => {
+        if (err) {
+          console.error('Session refresh error:', err);
+          return res.status(500).json({ error: "Session refresh failed" });
+        }
+        
+        res.json({ 
+          message: "Session refreshed", 
+          sessionId: req.sessionID,
+          isMobile: req.isMobile 
+        });
+      });
+    } else {
+      res.status(401).json({ error: "No active session to refresh" });
+    }
   });
   
   
