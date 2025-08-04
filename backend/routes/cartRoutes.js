@@ -57,6 +57,7 @@ router.post("/", requireAuth, async (req, res) => {
       res.json(inserted.rows[0]);
     }
   } catch (err) {
+    console.error('Cart add operation error:', err);
     res.status(500).json({ error: "Server error" });
   }
 });

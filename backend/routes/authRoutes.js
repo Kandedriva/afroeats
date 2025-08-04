@@ -14,45 +14,63 @@ const router = express.Router();
 router.post("/register", async (req, res) => {
   const { name, email, password, secret_word, address, phone } = req.body;
 
+  const client = await pool.connect();
   try {
-    const userExists = await pool.query("SELECT * FROM users WHERE email = $1", [email]);
+    await client.query('BEGIN');
+    
+    const userExists = await client.query("SELECT * FROM users WHERE email = $1", [email]);
     if (userExists.rows.length > 0) {
+      await client.query('ROLLBACK');
       return res.status(400).json({ error: "User already exists" });
     }
 
     const saltRounds = 10;
     const hashedPassword = await bcryptjs.hash(password, saltRounds);
-    const hashedSecretWord = await bcryptjs.hash(secret_word, saltRounds);
+    const hashedSecretWord = secret_word ? await bcryptjs.hash(secret_word, saltRounds) : null;
+
+    console.log('Registering user:', { name, email });
 
     // Try to insert with all fields, with graceful fallbacks
     let newUser;
     try {
-      newUser = await pool.query(
+      newUser = await client.query(
         "INSERT INTO users (name, email, password, secret_word, address, phone) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, name, email",
         [name, email, hashedPassword, hashedSecretWord, address, phone]
       );
     } catch (err) {
       try {
         // Try with just secret_word (no address/phone)
-        newUser = await pool.query(
+        newUser = await client.query(
           "INSERT INTO users (name, email, password, secret_word) VALUES ($1, $2, $3, $4) RETURNING id, name, email",
           [name, email, hashedPassword, hashedSecretWord]
         );
       } catch (err2) {
         // Fallback to basic registration if other columns don't exist
-        newUser = await pool.query(
+        newUser = await client.query(
           "INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING id, name, email",
           [name, email, hashedPassword]
         );
       }
     }
 
+    // Commit the transaction
+    await client.query('COMMIT');
+
     req.session.userId = newUser.rows[0].id;
     req.session.userName = newUser.rows[0].name.split(" ")[0];
 
+    // Force session save for mobile compatibility
+    req.session.save((err) => {
+      if (err) console.error('Session save error:', err);
+    });
+
     res.status(201).json({ user: newUser.rows[0] });
   } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Registration error:', err);
     res.status(500).json({ error: "Server error" });
+  } finally {
+    client.release();
   }
 });
 
