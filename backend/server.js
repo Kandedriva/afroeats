@@ -124,10 +124,10 @@ const sessionConfig = {
     httpOnly: true,
     // For mobile compatibility, always use secure in production
     secure: process.env.NODE_ENV === 'production',
-    // Use 'lax' since API and frontend are on same domain (afoodzone.com)
-    sameSite: 'lax',
-    // Set domain for afoodzone.com and its subdomains
-    domain: process.env.NODE_ENV === 'production' ? '.afoodzone.com' : undefined,
+    // Use 'none' for cross-site cookies between different domains (afoodzone.com <-> a-food-zone.onrender.com)
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    // Don't set domain to allow cookies to work across different domains
+    domain: undefined,
     // Additional mobile-friendly settings
     path: '/'
   },
@@ -330,8 +330,8 @@ app.get('/api/session-debug', (req, res) => {
       maxAge: sessionTimeout,
       maxAgeDays: sessionTimeoutDays,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      domain: process.env.NODE_ENV === 'production' ? '.afoodzone.com' : undefined,
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      domain: undefined,
       rolling: true
     },
     timestamp: new Date().toISOString()

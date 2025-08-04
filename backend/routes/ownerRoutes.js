@@ -159,7 +159,12 @@ router.post("/logout", (req, res) => {
       return res.status(500).json({ error: "Failed to log out" });
     }
 
-    res.clearCookie("afoodzone.sid"); // Match the session cookie name
+    res.clearCookie("afoodzone.sid", {
+      path: '/',
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
+    }); // Match the session cookie name
     res.status(200).json({ message: "Logged out successfully" });
   });
 });
