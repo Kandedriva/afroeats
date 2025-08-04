@@ -58,6 +58,7 @@ export const corsOptions = {
       // Specific production URLs
       'https://afoodzone.com',
       'https://www.afoodzone.com',
+      'https://api.afoodzone.com',
       'https://afoodzone.netlify.app',
       'https://afoodzone.vercel.app',
       
