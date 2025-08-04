@@ -127,7 +127,7 @@ const sessionConfig = {
     // Use 'lax' for better mobile compatibility instead of 'none'
     sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'lax',
     // Don't set domain to allow for better mobile browser compatibility
-    domain: undefined,
+    domain: '.afoodzone.com',
     // Additional mobile-friendly settings
     path: '/'
   },
