@@ -124,10 +124,11 @@ const sessionConfig = {
     httpOnly: true,
     // For mobile compatibility, always use secure in production
     secure: process.env.NODE_ENV === 'production',
-    // Use 'lax' for better mobile compatibility instead of 'none'
-    sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'lax',
-    // Set appropriate domain for production
-    domain: process.env.NODE_ENV === 'production' ? '.afoodzone.com' : undefined,
+    // Use 'none' for cross-site requests in production, 'lax' for development
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    // Only set domain if we're actually deployed on afoodzone.com domain
+    // If deployed on Render/other platforms, don't set domain to allow cross-site cookies
+    domain: undefined,
     // Additional mobile-friendly settings
     path: '/'
   },
