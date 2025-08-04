@@ -208,6 +208,43 @@ app.get('/api/session-debug', (req, res) => {
   });
 });
 
+// Remove test endpoints in production
+if (process.env.NODE_ENV !== 'production') {
+  // Test session endpoint for debugging
+  app.post('/api/test-session', (req, res) => {
+    const { userId } = req.body;
+    if (userId) {
+      req.session.userId = userId;
+      req.session.userName = 'TestUser';
+      res.json({ message: 'Session set', sessionId: req.sessionID, userId: userId });
+    } else {
+      res.status(400).json({ error: 'userId required' });
+    }
+  });
+
+  // Test database query endpoint
+  app.get('/api/test-dishes', async (req, res) => {
+    try {
+      const result = await pool.query('SELECT id, name, restaurant_id FROM dishes ORDER BY id LIMIT 10');
+      res.json({ dishes: result.rows });
+    } catch (err) {
+      console.error('Database query error:', err);
+      res.status(500).json({ error: 'Database error' });
+    }
+  });
+
+  // Test restaurants endpoint
+  app.get('/api/test-restaurants', async (req, res) => {
+    try {
+      const result = await pool.query('SELECT id, name FROM restaurants ORDER BY id LIMIT 10');
+      res.json({ restaurants: result.rows });
+    } catch (err) {
+      console.error('Database query error:', err);
+      res.status(500).json({ error: 'Database error' });
+    }
+  });
+}
+
 // Health check endpoint
 app.get('/api/health', async (req, res) => {
   try {
