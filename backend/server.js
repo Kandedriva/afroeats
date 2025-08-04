@@ -160,6 +160,23 @@ app.use("/api", stripeRoutes);
 app.use("/api", webhookRoutes);
 app.use("/api/admin", adminRoutes);
 
+// Root route for deployment health checks
+app.get('/', (req, res) => {
+  res.status(200).json({
+    message: "A Food Zone Backend API is running successfully",
+    status: "healthy",
+    environment: process.env.NODE_ENV || 'development',
+    timestamp: new Date().toISOString(),
+    version: "1.0.0",
+    endpoints: {
+      health: "/api/health",
+      admin: "/api/admin",
+      restaurants: "/api/restaurants",
+      auth: "/api/auth"
+    }
+  });
+});
+
 // Session debug endpoint for mobile testing
 app.get('/api/session-debug', (req, res) => {
   const userAgent = req.get('User-Agent') || '';
@@ -281,17 +298,26 @@ app.options('/api/*', (req, res) => {
   res.sendStatus(200);
 });
 
-// 404 handler
-app.use((req, res) => {
+// Catch-all route for undefined endpoints
+app.use('*', (req, res) => {
   res.status(404).json({
-    error: 'Endpoint not found',
+    error: "Endpoint not found",
     path: req.originalUrl,
-    method: req.method
+    method: req.method,
+    message: "The requested endpoint does not exist. Check the API documentation for available routes.",
+    availableEndpoints: {
+      root: "/",
+      health: "/api/health",
+      auth: "/api/auth",
+      restaurants: "/api/restaurants",
+      orders: "/api/orders",
+      admin: "/api/admin"
+    }
   });
 });
 
 // Global error handler
-app.use((error, req, res) => {
+app.use((error, req, res, next) => {
   console.error('Global error handler:', error);
   
   // Log security events
