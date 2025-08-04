@@ -30,6 +30,14 @@ import ProtectedRoute from "./Components/ProtectedRoute";
 import { OwnerAuthProvider } from "./context/OwnerAuthContext";
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import './utils/networkTest';
+
+// Debug environment variables
+console.log('🔧 Environment Debug:', {
+  NODE_ENV: process.env.NODE_ENV,
+  REACT_APP_API_BASE_URL: process.env.REACT_APP_API_BASE_URL,
+  API_BASE_URL_FROM_CONFIG: require('./config/api').API_BASE_URL
+});
 
 function AppContent() {
   const { user } = useContext(AuthContext);
