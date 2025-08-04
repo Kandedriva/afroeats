@@ -186,27 +186,26 @@ app.get('/', (req, res) => {
   });
 });
 
-// Session debug endpoint for mobile testing
-app.get('/api/session-debug', (req, res) => {
-  const userAgent = req.get('User-Agent') || '';
-  const isMobile = /Mobile|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+// Test session creation endpoint (for debugging)
+app.post('/api/test-session-create', (req, res) => {
+  req.session.testUserId = 'test-user-' + Date.now();
+  req.session.testTime = new Date().toISOString();
   
-  res.json({
-    sessionId: req.sessionID,
-    session: req.session,
-    cookies: req.headers.cookie,
-    userAgent: userAgent,
-    isMobile: isMobile,
-    cookieSettings: {
-      name: 'afoodzone.sid',
-      maxAge: 365 * 24 * 60 * 60 * 1000,
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      domain: undefined,
-      path: '/'
-    },
-    timestamp: new Date().toISOString()
+  req.session.save((err) => {
+    if (err) {
+      console.error('Test session save error:', err);
+      return res.status(500).json({ error: 'Session save failed', details: err.message });
+    }
+    
+    res.json({
+      message: 'Test session created successfully',
+      sessionId: req.sessionID,
+      testUserId: req.session.testUserId,
+      testTime: req.session.testTime,
+      cookies: req.headers.cookie,
+      userAgent: req.get('User-Agent'),
+      timestamp: new Date().toISOString()
+    });
   });
 });
 
