@@ -181,3 +181,4 @@ Thumbs.db
 # Prevent node_modules lockfile changes from being tracked
 node_modules/.package-lock.json
 node_modules/**/.package-lock.json
+backend/.env.production
