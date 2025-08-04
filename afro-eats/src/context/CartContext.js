@@ -9,10 +9,14 @@ export const CartProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
 
-  const fetchCart = useCallback(async () => {
+  const fetchCart = useCallback(async (retryCount = 0) => {
     try {
       const res = await fetch(`${API_BASE_URL}/api/cart`, {
         credentials: "include",
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
       });
 
       if (res.status === 401) {
@@ -21,6 +25,11 @@ export const CartProvider = ({ children }) => {
       }
 
       if (!res.ok) {
+        // Retry once for mobile network issues
+        if (retryCount < 1 && res.status >= 500) {
+          setTimeout(() => fetchCart(retryCount + 1), 1000);
+          return;
+        }
         const errorText = await res.text();
         throw new Error(errorText || "Failed to fetch cart");
       }
@@ -38,7 +47,10 @@ export const CartProvider = ({ children }) => {
 
       setCart(formatted);
     } catch (err) {
+      console.error('Fetch cart error:', err);
       if (!err.message.includes("401")) {
+        // Only show error for non-auth issues
+        console.error('Cart fetch failed:', err.message);
       }
     } finally {
       setLoading(false);
@@ -57,13 +69,20 @@ export const CartProvider = ({ children }) => {
     try {
       const res = await fetch(`${API_BASE_URL}/api/cart`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          'Cache-Control': 'no-cache'
+        },
         credentials: "include",
         body: JSON.stringify({ dishId: dish.id, quantity: 1 }),
       });
 
+      if (res.status === 401) {
+        throw new Error("Unauthorized - Please log in to add items to cart");
+      }
+
       if (!res.ok) {
-        const errorData = await res.json();
+        const errorData = await res.json().catch(() => ({ error: "Network error" }));
         throw new Error(errorData.error || "Failed to add to cart");
       }
 
