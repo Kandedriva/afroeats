@@ -77,10 +77,33 @@ app.use('/api/admin/login', rateLimits.auth);
 app.use('/api/orders', rateLimits.orders);
 app.use('/api/', rateLimits.general);
 
-// Mobile-friendly session handling middleware
+// Enhanced session handling middleware for cross-domain cookie support
 app.use((req, res, next) => {
   const userAgent = req.get('User-Agent') || '';
   const isMobile = /Mobile|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+  const isChrome = /Chrome/.test(userAgent);
+  const origin = req.get('Origin');
+  
+  // Set enhanced headers for cross-domain cookie support
+  if (process.env.NODE_ENV === 'production') {
+    res.set({
+      'Access-Control-Allow-Credentials': 'true',
+      'Access-Control-Expose-Headers': 'Set-Cookie',
+      // Add specific headers for Chrome and cross-domain cookies
+      'Set-Cookie-SameSite': 'None',
+      'Vary': 'Origin, Cookie'
+    });
+    
+    // For Chrome users, add additional debug information
+    if (isChrome && !req.headers.cookie) {
+      console.log('⚠️ Chrome user without cookies detected:', {
+        userAgent: userAgent.substring(0, 100),
+        origin,
+        hasSessionId: !!req.sessionID,
+        cookieHeader: req.headers.cookie ? 'present' : 'missing'
+      });
+    }
+  }
   
   if (isMobile) {
     // Set mobile-specific headers for better cookie handling
@@ -92,6 +115,7 @@ app.use((req, res, next) => {
   }
   
   req.isMobile = isMobile;
+  req.isChrome = isChrome;
   next();
 });
 
@@ -309,6 +333,8 @@ app.get('/api/cors-test', (req, res) => {
 app.get('/api/session-debug', (req, res) => {
   const sessionTimeout = process.env.SESSION_TIMEOUT ? parseInt(process.env.SESSION_TIMEOUT) : 365 * 24 * 60 * 60 * 1000;
   const sessionTimeoutDays = Math.floor(sessionTimeout / (24 * 60 * 60 * 1000));
+  const userAgent = req.get('User-Agent') || '';
+  const isChrome = /Chrome/.test(userAgent);
   
   res.json({
     message: '🔍 Session Debug Info',
@@ -326,6 +352,11 @@ app.get('/api/session-debug', (req, res) => {
     origin: req.get('Origin'),
     referer: req.get('Referer'),
     env: process.env.NODE_ENV,
+    browserInfo: {
+      isChrome,
+      cookiesEnabled: !!req.headers.cookie,
+      thirdPartyCookieSupport: isChrome ? 'potentially-blocked' : 'likely-supported'
+    },
     sessionConfig: {
       maxAge: sessionTimeout,
       maxAgeDays: sessionTimeoutDays,
@@ -335,6 +366,44 @@ app.get('/api/session-debug', (req, res) => {
       rolling: true
     },
     timestamp: new Date().toISOString()
+  });
+});
+
+// Session recovery endpoint for Chrome users with cookie issues
+app.post('/api/session-recover', (req, res) => {
+  const { userId, loginTime } = req.body;
+  
+  if (!userId || !loginTime) {
+    return res.status(400).json({ 
+      error: 'Missing userId or loginTime for session recovery' 
+    });
+  }
+  
+  // Verify the user exists and the loginTime is recent (within last hour)
+  const timeDiff = Date.now() - new Date(loginTime).getTime();
+  if (timeDiff > 60 * 60 * 1000) { // 1 hour
+    return res.status(400).json({ 
+      error: 'Login time too old for session recovery' 
+    });
+  }
+  
+  // Create a new session with the user data
+  req.session.userId = userId;
+  req.session.loginTime = loginTime;
+  req.session.recoveredSession = true;
+  
+  req.session.save((err) => {
+    if (err) {
+      console.error('Session recovery save error:', err);
+      return res.status(500).json({ error: 'Failed to recover session' });
+    }
+    
+    res.json({
+      success: true,
+      message: 'Session recovered successfully',
+      sessionId: req.sessionID,
+      userId: req.session.userId
+    });
   });
 });
 
