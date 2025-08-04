@@ -124,11 +124,10 @@ const sessionConfig = {
     httpOnly: true,
     // For mobile compatibility, always use secure in production
     secure: process.env.NODE_ENV === 'production',
-    // Use 'none' for cross-site requests in production, 'lax' for development
-    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-    // Only set domain if we're actually deployed on afoodzone.com domain
-    // If deployed on Render/other platforms, don't set domain to allow cross-site cookies
-    domain: undefined,
+    // Use 'lax' since API and frontend are on same domain (afoodzone.com)
+    sameSite: 'lax',
+    // Set domain for afoodzone.com and its subdomains
+    domain: process.env.NODE_ENV === 'production' ? '.afoodzone.com' : undefined,
     // Additional mobile-friendly settings
     path: '/'
   },
@@ -318,18 +317,22 @@ app.get('/api/session-debug', (req, res) => {
     session: {
       userId: req.session.userId,
       userName: req.session.userName,
-      ownerId: req.session.ownerId,
-      ownerName: req.session.ownerName,
+      userEmail: req.session.userEmail,
+      loginTime: req.session.loginTime,
+      isMobile: req.session.isMobile,
       cookie: req.session.cookie
     },
     cookies: req.headers.cookie,
+    userAgent: req.get('User-Agent'),
+    origin: req.get('Origin'),
+    referer: req.get('Referer'),
     env: process.env.NODE_ENV,
     sessionConfig: {
       maxAge: sessionTimeout,
       maxAgeDays: sessionTimeoutDays,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-      domain: process.env.NODE_ENV === 'production' ? process.env.COOKIE_DOMAIN : undefined,
+      sameSite: 'lax',
+      domain: process.env.NODE_ENV === 'production' ? '.afoodzone.com' : undefined,
       rolling: true
     },
     timestamp: new Date().toISOString()
