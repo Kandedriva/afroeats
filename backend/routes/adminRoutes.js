@@ -281,7 +281,7 @@ router.get('/restaurants', requireAdminAuth, async (req, res) => {
       params.push(`%${search}%`);
     }
     
-    // Get restaurants with statistics
+    // Get restaurants with statistics (simplified for current schema)
     const restaurantsResult = await pool.query(`
       SELECT 
         r.id,
@@ -289,21 +289,23 @@ router.get('/restaurants', requireAdminAuth, async (req, res) => {
         r.address,
         r.phone_number,
         r.image_url,
-        r.created_at,
         ro.name as owner_name,
         ro.email as owner_email,
-        COUNT(DISTINCT d.id) as total_dishes,
-        COUNT(DISTINCT o.id) as total_orders,
-        COALESCE(SUM(oi.price * oi.quantity), 0) as total_revenue,
-        MAX(o.created_at) as last_order_date
+        COALESCE(
+          (SELECT COUNT(*) FROM dishes d WHERE d.restaurant_id = r.id), 
+          0
+        ) as total_dishes,
+        COALESCE(
+          (SELECT COUNT(*) FROM orders o 
+           JOIN order_items oi ON o.id = oi.order_id 
+           JOIN dishes d ON oi.dish_id = d.id 
+           WHERE d.restaurant_id = r.id AND o.status IN ('paid', 'completed')), 
+          0
+        ) as total_orders
       FROM restaurants r
       JOIN restaurant_owners ro ON r.owner_id = ro.id
-      LEFT JOIN dishes d ON r.id = d.restaurant_id
-      LEFT JOIN order_items oi ON r.id = COALESCE(oi.restaurant_id, (SELECT restaurant_id FROM dishes WHERE id = oi.dish_id))
-      LEFT JOIN orders o ON oi.order_id = o.id AND o.status IN ('paid', 'completed')
       ${whereClause}
-      GROUP BY r.id, r.name, r.address, r.phone_number, r.image_url, r.created_at, ro.name, ro.email
-      ORDER BY r.created_at DESC
+      ORDER BY r.name
       LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}
     `, [...params, limit, offset]);
     
