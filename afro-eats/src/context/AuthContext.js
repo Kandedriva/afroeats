@@ -9,13 +9,17 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  // Check user session on load
+  // Check user session on load with mobile-friendly retry logic
   useEffect(() => {
-    const fetchUser = async () => {
+    const fetchUser = async (retryCount = 0) => {
       try {
         setLoading(true);
         const res = await fetch(`${API_BASE_URL}/api/auth/me`, {
           credentials: "include",
+          headers: {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+          }
         });
 
         if (res.status === 401) {
@@ -23,11 +27,19 @@ export const AuthProvider = ({ children }) => {
           return;
         }
 
-        if (!res.ok) throw new Error("Failed to fetch user");
+        if (!res.ok) {
+          // Retry once for mobile network issues
+          if (retryCount < 1) {
+            setTimeout(() => fetchUser(retryCount + 1), 1000);
+            return;
+          }
+          throw new Error("Failed to fetch user");
+        }
 
         const data = await res.json();
         setUser(data);
       } catch (err) {
+        console.error('Auth check error:', err);
         setUser(null);
       } finally {
         setLoading(false);
@@ -35,6 +47,20 @@ export const AuthProvider = ({ children }) => {
     };
 
     fetchUser();
+
+    // Add visibility change listener for mobile browsers
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && user) {
+        // Refresh auth when app becomes visible (mobile browser switching)
+        fetchUser();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
   const logout = async () => {
