@@ -31,7 +31,6 @@ import {
 import { trackVisitorMiddleware, AnalyticsService } from "./services/analytics.js";
 import { scheduleRecurringJobs, jobs } from "./services/queue.js";
 import { cache } from "./utils/cache.js";
-import { sessionDebugMiddleware, sessionEventLogger } from "./middleware/sessionDebug.js";
 
 dotenv.config();
 
@@ -154,9 +153,7 @@ console.log('✅ Using PostgreSQL session store with persistent sessions');
 
 app.use(session(sessionConfig));
 
-// Session debugging middleware (for production troubleshooting)
-app.use(sessionEventLogger);
-app.use(sessionDebugMiddleware);
+// Session debugging can be enabled by uncommenting the lines below and ensuring sessionDebug.js is available
 
 // Visitor tracking middleware (for frontend pages)
 app.use(trackVisitorMiddleware);
