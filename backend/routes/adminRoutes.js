@@ -42,7 +42,7 @@ const requireAdminAuth = async (req, res, next) => {
 // Admin login
 router.post('/login', rateLimits.auth, checkAccountLockout, [
   validators.email,
-  validators.password,
+  validators.adminPassword,
   handleValidationErrors
 ], async (req, res) => {
   try {
@@ -67,6 +67,7 @@ router.post('/login', rateLimits.auth, checkAccountLockout, [
     
     // Verify password
     const isValidPassword = await bcryptjs.compare(password, admin.password_hash);
+    
     if (!isValidPassword) {
       await handleFailedLogin(req, res, () => {});
       const attemptInfo = req.loginAttempts ? ` (${req.loginAttempts.remaining} attempts remaining)` : '';

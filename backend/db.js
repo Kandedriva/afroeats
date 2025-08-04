@@ -5,18 +5,18 @@ dotenv.config();
 
 const { Pool } = pkg;
 
-// SSL configuration for Neon (always required)
-const sslConfig = {
+// SSL configuration for Neon (only for production)
+const sslConfig = process.env.NODE_ENV === 'production' ? {
   ssl: {
     rejectUnauthorized: false // Neon requires SSL but doesn't need strict cert validation
   }
-};
+} : {};
 
 const pool = new Pool({
   user: process.env.PGUSER || process.env.DATABASE_USER || process.env.DB_USER || 'postgres',
   host: process.env.PGHOST || process.env.DATABASE_HOST || process.env.DB_HOST || 'localhost',
-  database: process.env.PGDATABASE || process.env.DATABASE_NAME || process.env.DB_NAME || 'afoodzone',
-  password: process.env.PGPASSWORD || process.env.DATABASE_PASSWORD || process.env.DB_PASSWORD || 'password',
+  database: process.env.PGDATABASE || process.env.DATABASE_NAME || process.env.DB_NAME || 'afroeats',
+  password: process.env.PGPASSWORD || process.env.DATABASE_PASSWORD || process.env.DB_PASSWORD || 'Dkkande',
   port: process.env.PGPORT || process.env.DATABASE_PORT || process.env.DB_PORT || 5432,
   
   // SSL configuration (required for Neon)
