@@ -31,6 +31,7 @@ import {
 import { trackVisitorMiddleware, AnalyticsService } from "./services/analytics.js";
 import { scheduleRecurringJobs, jobs } from "./services/queue.js";
 import { cache } from "./utils/cache.js";
+import { sessionDebugMiddleware, sessionEventLogger } from "./middleware/sessionDebug.js";
 
 dotenv.config();
 
@@ -126,8 +127,8 @@ const sessionConfig = {
     secure: process.env.NODE_ENV === 'production',
     // Use 'lax' for better mobile compatibility instead of 'none'
     sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'lax',
-    // Don't set domain to allow for better mobile browser compatibility
-    domain: process.env.COOKIE_DOMAIN,
+    // Set appropriate domain for production
+    domain: process.env.NODE_ENV === 'production' ? '.afoodzone.com' : undefined,
     // Additional mobile-friendly settings
     path: '/'
   },
@@ -152,6 +153,10 @@ const sessionConfig = {
 console.log('✅ Using PostgreSQL session store with persistent sessions');
 
 app.use(session(sessionConfig));
+
+// Session debugging middleware (for production troubleshooting)
+app.use(sessionEventLogger);
+app.use(sessionDebugMiddleware);
 
 // Visitor tracking middleware (for frontend pages)
 app.use(trackVisitorMiddleware);

@@ -108,25 +108,45 @@ router.post("/login", checkAccountLockout, async (req, res) => {
       // 3. Clear failed attempts on successful login
       await handleSuccessfulLogin(req, res, () => {});
   
-      // 4. Set session data with mobile-friendly settings
+      // 4. Set session data with production-friendly settings
       req.session.userId = user.id;
       req.session.userName = user.name.split(" ")[0]; // just first name for greeting
+      req.session.userEmail = user.email; // Store email for reference
+      req.session.loginTime = new Date().toISOString();
       
-      // For mobile users, ensure session is properly saved
+      // Mark session as mobile if detected
       if (req.isMobile) {
         req.session.isMobile = true;
-        // Force session save for mobile browsers
-        req.session.save((err) => {
-          if (err) console.error('Session save error:', err);
-        });
       }
-  
-      // 5. Respond with user info and mobile-friendly headers
-      res.set({
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache'
+      
+      // Force session save for production reliability
+      req.session.save((err) => {
+        if (err) {
+          console.error('Session save error:', err);
+          return res.status(500).json({ error: "Session save failed" });
+        }
+        
+        console.log('✅ Session saved successfully for user:', user.id, 'SessionID:', req.sessionID);
+        
+        // 5. Respond with user info and production-friendly headers
+        res.set({
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Access-Control-Allow-Credentials': 'true'
+        });
+        
+        res.json({ 
+          user: { 
+            id: user.id, 
+            name: user.name, 
+            email: user.email 
+          },
+          sessionInfo: {
+            sessionId: req.sessionID,
+            loginTime: req.session.loginTime
+          }
+        });
       });
-      res.json({ user: { id: user.id, name: user.name, email: user.email } });
   
     } catch (err) {
       console.error('Login error:', err);
