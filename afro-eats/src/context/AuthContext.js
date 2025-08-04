@@ -113,7 +113,7 @@ export const AuthProvider = ({ children }) => {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, []);
+  }, [user]);
 
   const logout = async () => {
     try {
