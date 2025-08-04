@@ -336,14 +336,7 @@ app.get('/api/session-debug', (req, res) => {
   });
 });
 
-// OPTIONS preflight for all API routes
-app.options('/api/*', (req, res) => {
-  res.header('Access-Control-Allow-Origin', req.get('Origin') || '*');
-  res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.sendStatus(200);
-});
+// OPTIONS preflight is handled automatically by the CORS middleware above
 
 // Catch-all route for undefined endpoints
 app.use('*', (req, res) => {

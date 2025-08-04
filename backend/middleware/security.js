@@ -71,12 +71,13 @@ export const corsOptions = {
       'https://admin.afoodzone.com'
     ].filter(Boolean); // Remove undefined values
     
-    console.log('🌐 CORS Request from origin:', origin);
+    console.log('🌐 CORS Request from origin:', origin || 'NO_ORIGIN');
     console.log('🌐 Allowed origins:', allowedOrigins);
     
     // Allow requests with no origin (mobile apps, Postman, etc.)
-    if (!origin) {
-      console.log('✅ CORS: Allowing request with no origin');
+    // Check for both undefined and "undefined" string
+    if (!origin || origin === 'undefined') {
+      console.log('✅ CORS: Allowing request with no origin (undefined)');
       return callback(null, true);
     }
     
