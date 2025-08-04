@@ -47,7 +47,12 @@ router.post("/owners/login", async (req, res) => {
 // ========== OWNER LOGOUT ==========
 router.post("/owners/logout", (req, res) => {
   req.session.destroy(() => {
-    res.clearCookie("afoodzone.sid"); // Match the session cookie name
+    res.clearCookie("afoodzone.sid", {
+      path: '/',
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
+    }); // Match the session cookie name
     res.json({ message: "Logged out" });
   });
 });
