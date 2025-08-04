@@ -106,6 +106,7 @@ export const corsOptions = {
     'X-Requested-With',
     'Accept',
     'Origin',
+    'Pragma',
     'Cache-Control',
     'X-File-Name'
   ],
