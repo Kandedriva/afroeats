@@ -82,11 +82,12 @@ router.post("/login", checkAccountLockout, async (req, res) => {
       // 1. Check if user exists
       const userResult = await pool.query("SELECT * FROM users WHERE email = $1", [email]);
       if (userResult.rows.length === 0) {
-        await handleFailedLogin(req, res, () => {});
-        const attemptInfo = req.loginAttempts ? ` (${req.loginAttempts.remaining} attempts remaining)` : '';
-        return res.status(400).json({ 
-          error: "Invalid email or password" + attemptInfo,
-          attemptsRemaining: req.loginAttempts?.remaining
+        return await handleFailedLogin(req, res, () => {
+          const attemptInfo = req.loginAttempts ? ` (${req.loginAttempts.remaining} attempts remaining)` : '';
+          res.status(400).json({ 
+            error: "Invalid email or password" + attemptInfo,
+            attemptsRemaining: req.loginAttempts?.remaining
+          });
         });
       }
   
@@ -95,11 +96,12 @@ router.post("/login", checkAccountLockout, async (req, res) => {
       // 2. Compare password with hashed password
       const isMatch = await bcryptjs.compare(password, user.password);
       if (!isMatch) {
-        await handleFailedLogin(req, res, () => {});
-        const attemptInfo = req.loginAttempts ? ` (${req.loginAttempts.remaining} attempts remaining)` : '';
-        return res.status(400).json({ 
-          error: "Invalid email or password" + attemptInfo,
-          attemptsRemaining: req.loginAttempts?.remaining
+        return await handleFailedLogin(req, res, () => {
+          const attemptInfo = req.loginAttempts ? ` (${req.loginAttempts.remaining} attempts remaining)` : '';
+          res.status(400).json({ 
+            error: "Invalid email or password" + attemptInfo,
+            attemptsRemaining: req.loginAttempts?.remaining
+          });
         });
       }
   
