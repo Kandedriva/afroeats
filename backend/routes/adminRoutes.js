@@ -5,11 +5,6 @@ import { AnalyticsService } from '../services/analytics.js';
 import { getQueueStats } from '../services/queue.js';
 import { cache } from '../utils/cache.js';
 import { rateLimits, validators, handleValidationErrors } from '../middleware/security.js';
-import { 
-  checkAccountLockout, 
-  handleFailedLogin, 
-  handleSuccessfulLogin 
-} from '../middleware/accountLockout.js';
 
 const router = express.Router();
 
@@ -40,7 +35,7 @@ const requireAdminAuth = async (req, res, next) => {
 };
 
 // Admin login
-router.post('/login', rateLimits.auth, checkAccountLockout, [
+router.post('/login', rateLimits.auth, [
   validators.email,
   validators.adminPassword,
   handleValidationErrors
@@ -55,11 +50,8 @@ router.post('/login', rateLimits.auth, checkAccountLockout, [
     );
     
     if (adminResult.rows.length === 0) {
-      await handleFailedLogin(req, res, () => {});
-      const attemptInfo = req.loginAttempts ? ` (${req.loginAttempts.remaining} attempts remaining)` : '';
       return res.status(401).json({ 
-        error: 'Invalid credentials' + attemptInfo,
-        attemptsRemaining: req.loginAttempts?.remaining
+        error: 'Invalid credentials'
       });
     }
     
@@ -69,16 +61,10 @@ router.post('/login', rateLimits.auth, checkAccountLockout, [
     const isValidPassword = await bcryptjs.compare(password, admin.password_hash);
     
     if (!isValidPassword) {
-      await handleFailedLogin(req, res, () => {});
-      const attemptInfo = req.loginAttempts ? ` (${req.loginAttempts.remaining} attempts remaining)` : '';
       return res.status(401).json({ 
-        error: 'Invalid credentials' + attemptInfo,
-        attemptsRemaining: req.loginAttempts?.remaining
+        error: 'Invalid credentials'
       });
     }
-    
-    // Clear failed attempts on successful login
-    await handleSuccessfulLogin(req, res, () => {});
     
     // Set session
     req.session.adminId = admin.id;
