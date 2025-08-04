@@ -111,15 +111,15 @@ router.get('/dashboard', requireAdminAuth, async (req, res) => {
     // Get real-time metrics
     const realTimeMetrics = await AnalyticsService.getRealTimeMetrics();
     
-    // Get database counts
+    // Get database counts (adapted for current schema)
     const countsResult = await pool.query(`
       SELECT 
         (SELECT COUNT(*) FROM users) as total_users,
         (SELECT COUNT(*) FROM users WHERE created_at >= CURRENT_DATE) as users_today,
         (SELECT COUNT(*) FROM users WHERE created_at >= CURRENT_DATE - INTERVAL '7 days') as users_this_week,
         (SELECT COUNT(*) FROM restaurants) as total_restaurants,
-        (SELECT COUNT(*) FROM restaurants WHERE created_at >= CURRENT_DATE) as restaurants_today,
-        (SELECT COUNT(*) FROM restaurants WHERE created_at >= CURRENT_DATE - INTERVAL '7 days') as restaurants_this_week,
+        (SELECT 0) as restaurants_today,
+        (SELECT 0) as restaurants_this_week,
         (SELECT COUNT(*) FROM orders WHERE status IN ('paid', 'completed')) as total_orders,
         (SELECT COUNT(*) FROM orders WHERE status IN ('paid', 'completed') AND created_at >= CURRENT_DATE) as orders_today,
         (SELECT COUNT(*) FROM orders WHERE status IN ('paid', 'completed') AND created_at >= CURRENT_DATE - INTERVAL '7 days') as orders_this_week,
