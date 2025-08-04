@@ -136,6 +136,11 @@ export const validators = {
     .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])/)
     .withMessage('Password must be at least 12 characters with uppercase, lowercase, number, and special character (@$!%*?&)'),
   
+  // Admin password validation (less strict)
+  adminPassword: body('password')
+    .isLength({ min: 8 })
+    .withMessage('Password must be at least 8 characters'),
+  
   // Name validation
   name: body('name')
     .trim()

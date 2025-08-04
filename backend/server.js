@@ -102,6 +102,13 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads"), {
   lastModified: true
 }));
 
+// Serve admin dashboard
+app.use("/admin", express.static(path.join(__dirname, "public/admin"), {
+  maxAge: '1h',
+  etag: true,
+  lastModified: true
+}));
+
 // PostgreSQL session store
 const PgSession = ConnectPgSimple(session);
 
