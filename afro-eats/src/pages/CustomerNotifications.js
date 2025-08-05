@@ -32,10 +32,10 @@ function CustomerNotifications() {
   }, []);
 
   useEffect(() => {
-    if (user && !authLoading) {
+    if (user) {
       fetchNotifications();
     }
-  }, [user, authLoading, fetchNotifications]);
+  }, [user, fetchNotifications]);
 
   const markNotificationRead = async (notificationId) => {
     try {

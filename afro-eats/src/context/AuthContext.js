@@ -99,12 +99,34 @@ export const AuthProvider = ({ children }) => {
     };
 
     fetchUser();
+  }, []);
 
-    // Add visibility change listener for mobile browsers
+  // Separate effect for visibility change listener to avoid infinite loops
+  useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && user) {
         // Refresh auth when app becomes visible (mobile browser switching)
-        fetchUser();
+        // Use a flag to prevent setting loading to true again if already authenticated
+        fetch(`${API_BASE_URL}/api/auth/me`, {
+          credentials: "include",
+          headers: {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache',
+            'Content-Type': 'application/json'
+          }
+        }).then(res => {
+          if (res.ok) {
+            return res.json();
+          } else if (res.status === 401) {
+            setUser(null);
+          }
+        }).then(data => {
+          if (data) {
+            setUser(data);
+          }
+        }).catch(err => {
+          console.error('Visibility auth check failed:', err);
+        });
       }
     };
 

@@ -37,10 +37,10 @@ function OrderDetails() {
 
   useEffect(() => {
     // Component is now protected by ProtectedRoute, so user is guaranteed to exist
-    if (user && !authLoading) {
+    if (user) {
       fetchOrderDetails();
     }
-  }, [user, authLoading, orderId, fetchOrderDetails]);
+  }, [user, orderId, fetchOrderDetails]);
 
   const getStatusColor = (status) => {
     switch (status) {

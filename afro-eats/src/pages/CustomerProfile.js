@@ -17,7 +17,7 @@ function CustomerProfile() {
 
   useEffect(() => {
     const fetchUserProfile = async () => {
-      if (user && !authLoading) {
+      if (user) {
         try {
           const res = await fetch(`${API_BASE_URL}/api/auth/me`, {
             credentials: "include",
@@ -41,7 +41,7 @@ function CustomerProfile() {
     };
 
     fetchUserProfile();
-  }, [user, authLoading]);
+  }, [user]);
 
   const validateForm = () => {
     const newErrors = {};
