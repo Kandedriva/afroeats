@@ -56,11 +56,11 @@ function CustomerOrders() {
 
   useEffect(() => {
     // Component is now protected by ProtectedRoute, so user is guaranteed to exist
-    if (user && !authLoading) {
+    if (user) {
       fetchOrders();
       fetchNotifications();
     }
-  }, [user, authLoading, fetchOrders, fetchNotifications]);
+  }, [user, fetchOrders, fetchNotifications]);
 
   const showCancelModal = (orderId) => {
     setShowCancelConfirm(orderId);
