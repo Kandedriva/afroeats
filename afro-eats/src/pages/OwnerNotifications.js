@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useContext, useCallback } from "react";
+// React import removed as it's not needed in React 17+
+import { useEffect, useState, useContext, useCallback } from "react";
 import { OwnerAuthContext } from "../context/OwnerAuthContext";
 import { Navigate, Link } from "react-router-dom";
 import { toast } from 'react-toastify';
@@ -67,7 +68,9 @@ function OwnerNotifications() {
   };
 
   const processRefund = async () => {
-    if (!selectedNotificationId || !refundAction) return;
+    if (!selectedNotificationId || !refundAction) {
+      return;
+    }
     
     try {
       setProcessingRefund(true);
@@ -118,7 +121,7 @@ function OwnerNotifications() {
       setRefundNotes('');
     } catch (err) {
       // Process refund error
-      toast.error("Error processing refund: " + err.message);
+      toast.error(`Error processing refund: ${err.message}`);
     } finally {
       setProcessingRefund(false);
     }
@@ -204,7 +207,7 @@ function OwnerNotifications() {
         <div className="text-center py-12 bg-gray-50 rounded-lg">
           <div className="text-6xl mb-4">🔔</div>
           <h3 className="text-xl font-semibold text-gray-800 mb-2">No Notifications</h3>
-          <p className="text-gray-500">You're all caught up! New notifications will appear here.</p>
+          <p className="text-gray-500">You&apos;re all caught up! New notifications will appear here.</p>
         </div>
       ) : (
         <div className="space-y-4">
@@ -220,6 +223,14 @@ function OwnerNotifications() {
                   !notification.read ? 'bg-blue-50 border-blue-200 shadow-sm' : 'bg-white'
                 }`}
                 onClick={() => !notification.read && markNotificationRead(notification.id)}
+                onKeyDown={(e) => {
+                  if ((e.key === 'Enter' || e.key === ' ') && !notification.read) {
+                    e.preventDefault();
+                    markNotificationRead(notification.id);
+                  }
+                }}
+                role={!notification.read ? "button" : undefined}
+                tabIndex={!notification.read ? 0 : undefined}
               >
                 <div className="flex justify-between items-start mb-3">
                   <div className="flex items-center space-x-3">
@@ -331,10 +342,11 @@ function OwnerNotifications() {
             </p>
             
             <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="refund-notes" className="block text-sm font-medium text-gray-700 mb-2">
                 Notes for customer (optional):
               </label>
               <textarea
+                id="refund-notes"
                 value={refundNotes}
                 onChange={(e) => {
                   if (e.target.value.length <= 500) {
@@ -347,7 +359,6 @@ function OwnerNotifications() {
                   ? "Add any additional information about the refund process..."
                   : "Explain why the refund request is being denied..."
                 }
-                autoFocus
               />
               <div className="text-xs text-gray-500 mt-1">
                 {refundNotes.length}/500 characters
