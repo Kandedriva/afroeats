@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useContext, useCallback } from "react";
+// React import removed as it's not needed in React 17+
+import { useState, useEffect, useContext, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
 import { toast } from 'react-toastify';
@@ -301,7 +302,7 @@ function OrderDetails() {
                 Choose Restaurant to Call
               </h3>
               <p className="text-sm text-gray-600">
-                Your order contains items from multiple restaurants. Please select which restaurant you'd like to contact for support.
+                Your order contains items from multiple restaurants. Please select which restaurant you&apos;d like to contact for support.
               </p>
             </div>
             
@@ -310,6 +311,15 @@ function OrderDetails() {
                 <div
                   key={index}
                   onClick={() => callRestaurant(restaurant.phone)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      callRestaurant(restaurant.phone);
+                    }
+                  }}
+                  role="button"
+                  tabIndex="0"
+                  aria-label={`Call ${restaurant.name} at ${restaurant.phone}`}
                   className="border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 cursor-pointer transition-all duration-200 group"
                 >
                   <div className="flex items-center justify-between p-4">

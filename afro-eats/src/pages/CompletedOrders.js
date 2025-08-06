@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useContext } from "react";
+// React import removed as it's not needed in React 17+
+import { useEffect, useState, useContext } from "react";
 import { OwnerAuthContext } from "../context/OwnerAuthContext";
 import { Navigate } from "react-router-dom";
 import { toast } from 'react-toastify';
@@ -54,7 +55,9 @@ function CompletedOrders() {
   };
 
   const handleDeleteConfirm = async () => {
-    if (!orderToDelete) return;
+    if (!orderToDelete) {
+      return;
+    }
 
     setIsDeleting(true);
     try {
@@ -76,7 +79,7 @@ function CompletedOrders() {
       setShowDeleteModal(false);
       setOrderToDelete(null);
     } catch (err) {
-      toast.error("Error deleting order: " + err.message);
+      toast.error(`Error deleting order: ${err.message}`);
     } finally {
       setIsDeleting(false);
     }

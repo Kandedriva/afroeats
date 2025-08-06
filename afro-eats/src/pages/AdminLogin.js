@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+// React import removed as it's not needed in React 17+
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { API_BASE_URL } from '../config/api';
@@ -41,7 +42,7 @@ const AdminLogin = () => {
         toast.error(data.error || 'Login failed');
       }
     } catch (error) {
-      console.error('Login error:', error);
+      // console.error('Login error:', error);
       toast.error('Network error. Please try again.');
     } finally {
       setLoading(false);

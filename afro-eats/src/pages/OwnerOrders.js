@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useContext } from "react";
+// React import removed as it's not needed in React 17+
+import { useEffect, useState, useContext } from "react";
 import { OwnerAuthContext } from "../context/OwnerAuthContext";
 import { Navigate, Link } from "react-router-dom";
 import { toast } from 'react-toastify';
@@ -71,7 +72,7 @@ function OwnerOrders() {
       toast.success("Order marked as completed!");
       setShowCompleteConfirm(null);
     } catch (err) {
-      toast.error("Error completing order: " + err.message);
+      toast.error(`Error completing order: ${err.message}`);
     }
   };
 
@@ -99,7 +100,7 @@ function OwnerOrders() {
       toast.success(responseData.message);
       setShowRemoveConfirm(null);
     } catch (err) {
-      toast.error("Error removing order: " + err.message);
+      toast.error(`Error removing order: ${err.message}`);
     }
   };
 
@@ -297,8 +298,9 @@ function OwnerOrders() {
           <div className="flex flex-wrap gap-4">
             {/* Status Filter */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Filter by Status</label>
+              <label htmlFor="status-filter" className="block text-sm font-medium text-gray-700 mb-1">Filter by Status</label>
               <select
+                id="status-filter"
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
                 className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -311,8 +313,9 @@ function OwnerOrders() {
 
             {/* Sort By */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Sort By</label>
+              <label htmlFor="sort-by" className="block text-sm font-medium text-gray-700 mb-1">Sort By</label>
               <select
+                id="sort-by"
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
                 className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -524,7 +527,7 @@ function OwnerOrders() {
               Remove Order #{showRemoveConfirm}
             </h3>
             <p className="text-gray-600 mb-6">
-              Are you sure you want to remove this completed order from your view? This will hide it from your orders list but won't affect the customer's record.
+              Are you sure you want to remove this completed order from your view? This will hide it from your orders list but won&apos;t affect the customer&apos;s record.
             </p>
             <div className="flex gap-3 justify-end">
               <button

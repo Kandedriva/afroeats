@@ -1,5 +1,5 @@
 // src/pages/OwnerOnboard.jsx
-import React from "react";
+// React import removed as it's not needed in React 17+
 import { API_BASE_URL } from "../config/api";
 
 export default function OwnerOnboard() {

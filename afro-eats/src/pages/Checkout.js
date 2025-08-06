@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from "react";
+// React import removed as it's not needed in React 17+
+import { useState, useEffect } from "react";
+import PropTypes from 'prop-types';
 import { useCart } from "../context/CartContext";
 import { useNavigate } from "react-router-dom";
 import { toast } from 'react-toastify';
@@ -125,7 +127,7 @@ export default function Checkout({ user }) {
             navigate("/");
           }
         } else {
-          toast.error("Checkout failed: " + data.error);
+          toast.error(`Checkout failed: ${data.error}`);
         }
       }
     } catch (err) {
@@ -155,8 +157,9 @@ export default function Checkout({ user }) {
             
             {userInfo && userInfo.address && (
               <div className="mb-4">
-                <label className="flex items-center space-x-3">
+                <div className="flex items-center space-x-3">
                   <input
+                    id="useRegisteredAddress"
                     type="radio"
                     name="addressOption"
                     checked={useRegisteredAddress}
@@ -164,16 +167,17 @@ export default function Checkout({ user }) {
                     className="h-4 w-4 text-green-600 border-gray-300 focus:ring-green-500"
                   />
                   <div>
-                    <span className="text-sm font-medium text-gray-700">Use my registered address</span>
+                    <label htmlFor="useRegisteredAddress" className="text-sm font-medium text-gray-700 cursor-pointer">Use my registered address</label>
                     <p className="text-sm text-gray-500 mt-1">{userInfo.address}</p>
                   </div>
-                </label>
+                </div>
               </div>
             )}
             
             <div className="mb-4">
-              <label className="flex items-start space-x-3">
+              <label htmlFor="useDifferentAddress" className="flex items-start space-x-3">
                 <input
+                  id="useDifferentAddress"
                   type="radio"
                   name="addressOption"
                   checked={!useRegisteredAddress}
@@ -225,8 +229,9 @@ export default function Checkout({ user }) {
             
             {userInfo && userInfo.phone && (
               <div className="mb-4">
-                <label className="flex items-center space-x-3">
+                <div className="flex items-center space-x-3">
                   <input
+                    id="useRegisteredPhone"
                     type="radio"
                     name="phoneOption"
                     checked={useRegisteredPhone}
@@ -234,16 +239,17 @@ export default function Checkout({ user }) {
                     className="h-4 w-4 text-green-600 border-gray-300 focus:ring-green-500"
                   />
                   <div>
-                    <span className="text-sm font-medium text-gray-700">Use my registered phone</span>
+                    <label htmlFor="useRegisteredPhone" className="text-sm font-medium text-gray-700 cursor-pointer">Use my registered phone</label>
                     <p className="text-sm text-gray-500 mt-1">{userInfo.phone}</p>
                   </div>
-                </label>
+                </div>
               </div>
             )}
             
             <div className="mb-4">
-              <label className="flex items-start space-x-3">
+              <label htmlFor="useDifferentPhone" className="flex items-start space-x-3">
                 <input
+                  id="useDifferentPhone"
                   type="radio"
                   name="phoneOption"
                   checked={!useRegisteredPhone}
@@ -285,10 +291,11 @@ export default function Checkout({ user }) {
           </div>
           
           <div className="mt-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="orderDetails" className="block text-sm font-medium text-gray-700 mb-2">
               Special Instructions (Optional)
             </label>
             <textarea
+              id="orderDetails"
               value={orderDetails}
               onChange={(e) => setOrderDetails(e.target.value)}
               className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
@@ -316,3 +323,13 @@ export default function Checkout({ user }) {
     </div>
   );
 }
+
+Checkout.propTypes = {
+  user: PropTypes.shape({
+    id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    name: PropTypes.string,
+    email: PropTypes.string,
+    address: PropTypes.string,
+    phone_number: PropTypes.string,
+  }),
+};

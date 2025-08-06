@@ -21,6 +21,7 @@ function Navbar() {
       return () => clearInterval(interval);
     } else {
       setNotificationCount(0);
+      return undefined;
     }
   }, [user]);
 

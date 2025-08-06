@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useContext } from "react";
+// React import removed as it's not needed in React 17+
+import { useState, useEffect, useContext } from "react";
 import { AuthContext } from "../context/AuthContext";
 import { toast } from 'react-toastify';
 import { API_BASE_URL } from "../config/api";
@@ -134,10 +135,11 @@ function CustomerProfile() {
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Name Field */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
               Full Name *
             </label>
             <input
+              id="name"
               type="text"
               name="name"
               value={profileData.name}
@@ -154,10 +156,11 @@ function CustomerProfile() {
 
           {/* Email Field */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
               Email Address *
             </label>
             <input
+              id="email"
               type="email"
               name="email"
               value={profileData.email}
@@ -174,10 +177,11 @@ function CustomerProfile() {
 
           {/* Phone Field */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
               Phone Number
             </label>
             <input
+              id="phone"
               type="tel"
               name="phone"
               value={profileData.phone}
@@ -193,10 +197,11 @@ function CustomerProfile() {
 
           {/* Address Field */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-2">
               Address
             </label>
             <textarea
+              id="address"
               name="address"
               value={profileData.address}
               onChange={handleInputChange}

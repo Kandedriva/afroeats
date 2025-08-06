@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+// React import removed as it's not needed in React 17+
+import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useCart } from "../context/CartContext";
 import { API_BASE_URL } from "../config/api";
@@ -15,15 +16,12 @@ function OrderSuccess() {
 
   useEffect(() => {
     const handleOrderSuccess = async () => {
-      if (!orderId) {
-        navigate('/');
-        return;
-      }
-
       try {
+        let finalOrderId = orderId;
+        
         if (sessionId && !isDemo) {
-          // Handle real Stripe payment success
-          const res = await fetch(`${API_BASE_URL}/api/orders/success?session_id=${sessionId}&order_id=${orderId}`, {
+          // Handle real Stripe payment success - this will create the order
+          const res = await fetch(`${API_BASE_URL}/api/orders/success?session_id=${sessionId}`, {
             credentials: "include",
           });
           
@@ -31,10 +29,18 @@ function OrderSuccess() {
             const errorData = await res.json();
             throw new Error(errorData.error || "Failed to confirm payment");
           }
+          
+          const successData = await res.json();
+          finalOrderId = successData.orderId;
+        }
+        
+        if (!finalOrderId) {
+          navigate('/');
+          return;
         }
 
         // Get order details
-        const orderRes = await fetch(`${API_BASE_URL}/api/orders/${orderId}`, {
+        const orderRes = await fetch(`${API_BASE_URL}/api/orders/${finalOrderId}`, {
           credentials: "include",
         });
 
@@ -148,7 +154,7 @@ function OrderSuccess() {
 
       {/* What's Next */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6">
-        <h3 className="text-lg font-semibold text-blue-800 mb-3">What's Next?</h3>
+        <h3 className="text-lg font-semibold text-blue-800 mb-3">What&apos;s Next?</h3>
         <div className="space-y-2 text-blue-700">
           <div className="flex items-center">
             <span className="text-blue-600 mr-2">🍳</span>
@@ -156,7 +162,7 @@ function OrderSuccess() {
           </div>
           <div className="flex items-center">
             <span className="text-blue-600 mr-2">📧</span>
-            <span>You'll receive updates via email</span>
+            <span>You&apos;ll receive updates via email</span>
           </div>
           <div className="flex items-center">
             <span className="text-blue-600 mr-2">🚚</span>

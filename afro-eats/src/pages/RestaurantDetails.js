@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+// React import removed as it's not needed in React 17+
+import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useCart } from "../context/CartContext";
 import { toast } from 'react-toastify';
@@ -46,7 +47,7 @@ export default function RestaurantDetails() {
       await addToCart(dishWithRestaurantInfo);
       toast.success(`${dish.name} added to cart!`);
     } catch (error) {
-      console.error('Add to cart error:', error);
+      // console.error('Add to cart error:', error);
       if (error.message.includes('401') || error.message.includes('Unauthorized')) {
         toast.error("Please log in to add items to cart.");
       } else {

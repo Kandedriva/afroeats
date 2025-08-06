@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+// React import removed as it's not needed in React 17+
+import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 

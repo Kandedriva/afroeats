@@ -1,5 +1,6 @@
 // src/pages/CheckoutStripe.jsx
-import React, { useEffect, useState } from "react";
+// React import removed as it's not needed in React 17+
+import { useEffect, useState } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { useCart } from "../context/CartContext";
@@ -8,9 +9,7 @@ import { API_BASE_URL } from "../config/api";
 const stripePromise = loadStripe(process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY);
 
 function CheckoutForm() {
-  const stripe = useStripe();
-  const elements = useElements();
-  const { cart, clearCart } = useCart();
+  const { cart } = useCart();
   const [clientSecret, setClientSecret] = useState("");
 
   useEffect(() => {
@@ -25,7 +24,9 @@ function CheckoutForm() {
       .then(d => setClientSecret(d.clientSecret));
   }, [cart]);
 
-  if (!clientSecret) return <p>Preparing payment...</p>;
+  if (!clientSecret) {
+    return <p>Preparing payment...</p>;
+  }
 
   return (
     <Elements stripe={stripePromise} options={{ clientSecret }}>
@@ -41,7 +42,9 @@ function FormInner() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     const result = await stripe.confirmPayment({ elements, confirmParams: { return_url: `${window.location.origin}/order-success` } });
-    if (!result.error) clearCart();
+    if (!result.error) {
+      clearCart();
+    }
   };
 
   return (

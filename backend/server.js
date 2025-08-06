@@ -32,6 +32,10 @@ import { trackVisitorMiddleware, AnalyticsService } from "./services/analytics.j
 import { scheduleRecurringJobs, jobs } from "./services/queue.js";
 import { cache } from "./utils/cache.js";
 
+// Import logging and error monitoring
+import { logger, requestLoggingMiddleware, errorLoggingMiddleware } from "./services/logger.js";
+import { errorMonitoring, errorMonitoringMiddleware } from "./services/errorMonitoring.js";
+
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
@@ -57,6 +61,7 @@ app.use(helmetConfig);
 
 // Request logging and analytics (before CORS)
 app.use(requestLogger);
+app.use(requestLoggingMiddleware);
 
 // CORS with secure configuration
 app.use(cors(corsOptions));
@@ -427,13 +432,22 @@ app.use('*', (req, res) => {
   });
 });
 
+// Error monitoring middleware (must be before global error handler)
+app.use(errorMonitoringMiddleware);
+app.use(errorLoggingMiddleware);
+
 // Global error handler
 app.use((error, req, res, next) => {
   console.error('Global error handler:', error);
   
   // Log security events
   if (error.status === 401 || error.status === 403) {
-    // Log security event (implement logging service)
+    logger.logSecurityEvent(`${error.status} error: ${error.message}`, {
+      url: req.originalUrl,
+      method: req.method,
+      ip: req.ip,
+      userAgent: req.get('User-Agent')
+    });
   }
   
   res.status(error.status || 500).json({

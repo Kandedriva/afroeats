@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 
@@ -21,7 +21,9 @@ function AddDish() {
     formData.append("description", description);
     formData.append("price", price);
     formData.append("available", available);
-    if (image) formData.append("image", image);
+    if (image) {
+      formData.append("image", image);
+    }
 
     try {
       const res = await fetch(`${API_BASE_URL}/api/owners/dishes`, {
@@ -48,8 +50,9 @@ function AddDish() {
       {error && <p className="text-red-500 mb-2">{error}</p>}
       <form onSubmit={handleSubmit} encType="multipart/form-data">
         <div className="mb-4">
-          <label className="block text-sm font-medium">Dish Name</label>
+          <label htmlFor="dishName" className="block text-sm font-medium">Dish Name</label>
           <input
+            id="dishName"
             type="text"
             className="w-full border px-3 py-2 rounded"
             value={name}
@@ -59,8 +62,9 @@ function AddDish() {
         </div>
 
         <div className="mb-4">
-          <label className="block text-sm font-medium">Description</label>
+          <label htmlFor="description" className="block text-sm font-medium">Description</label>
           <textarea
+            id="description"
             className="w-full border px-3 py-2 rounded"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
@@ -69,8 +73,9 @@ function AddDish() {
         </div>
 
         <div className="mb-4">
-          <label className="block text-sm font-medium">Price</label>
+          <label htmlFor="price" className="block text-sm font-medium">Price</label>
           <input
+            id="price"
             type="number"
             className="w-full border px-3 py-2 rounded"
             value={price}
@@ -82,8 +87,9 @@ function AddDish() {
         </div>
 
         <div className="mb-4">
-          <label className="block text-sm font-medium">Available</label>
+          <label htmlFor="available" className="block text-sm font-medium">Available</label>
           <select
+            id="available"
             className="w-full border px-3 py-2 rounded"
             value={available}
             onChange={(e) => setAvailable(e.target.value)}
@@ -94,8 +100,9 @@ function AddDish() {
         </div>
 
         <div className="mb-6">
-          <label className="block text-sm font-medium">Dish Image (optional)</label>
+          <label htmlFor="dishImage" className="block text-sm font-medium">Dish Image (optional)</label>
           <input
+            id="dishImage"
             type="file"
             accept="image/*"
             className="w-full"

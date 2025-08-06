@@ -1,14 +1,25 @@
-import React, { useState } from "react";
+// React import removed as it's not needed in React 17+
+import { useState, useEffect } from "react";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from 'react-toastify';
 
 export default function CartPage() {
   const { cart, loading, updateQuantity, removeFromCart, clearCart, total } = useCart();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [restaurantInstructions, setRestaurantInstructions] = useState({});
+
+  // Handle checkout cancellation
+  useEffect(() => {
+    if (searchParams.get('canceled') === 'true') {
+      toast.info("Checkout was canceled. Your cart items are still saved.");
+      // Remove the canceled parameter from the URL
+      setSearchParams({});
+    }
+  }, [searchParams, setSearchParams]);
 
   if (loading) {
     return <p className="text-center mt-10">Loading cart...</p>;
@@ -44,6 +55,23 @@ export default function CartPage() {
   return (
     <div className="max-w-4xl mx-auto mt-4 sm:mt-10 p-4 sm:p-6">
       <h2 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6">Your Cart</h2>
+      
+      {/* Show cancellation notice if user just canceled checkout */}
+      {searchParams.get('canceled') === 'true' && (
+        <div className="mb-4 sm:mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <span className="text-blue-600 text-lg">💳</span>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-blue-800">Checkout Canceled</h3>
+              <p className="text-sm text-blue-700 mt-1">
+                No worries! Your cart items are still here. Ready to try again?
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {Object.entries(grouped).map(([restaurant, items]) => (
         <div key={restaurant} className="mb-6 sm:mb-8 bg-white p-4 sm:p-6 rounded-lg shadow-sm border">
@@ -100,10 +128,11 @@ export default function CartPage() {
 
           {/* Special Instructions for this restaurant */}
           <div className="mt-4 pt-4 border-t">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor={`instructions-${restaurant.replace(/\s+/g, '-').toLowerCase()}`} className="block text-sm font-medium text-gray-700 mb-2">
               Special Instructions for {restaurant} (Optional)
             </label>
             <textarea
+              id={`instructions-${restaurant.replace(/\s+/g, '-').toLowerCase()}`}
               value={restaurantInstructions[restaurant] || ""}
               onChange={(e) => setRestaurantInstructions(prev => ({
                 ...prev,
