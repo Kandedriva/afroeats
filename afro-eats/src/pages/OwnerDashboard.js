@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useContext } from "react";
+// React import removed as it's not needed in React 17+
+import { useEffect, useState, useContext } from "react";
 import { OwnerAuthContext } from "../context/OwnerAuthContext";
 import { Navigate, useNavigate, Link } from "react-router-dom";
 import ToggleSwitch from "../Components/ToggleSwitch";
@@ -169,7 +170,7 @@ function OwnerDashboard() {
       }
     } catch (err) {
       // Stripe connect error
-      toast.error("Failed to connect to Stripe: " + err.message);
+      toast.error(`Failed to connect to Stripe: ${err.message}`);
     } finally {
       setConnecting(false);
     }
@@ -187,7 +188,9 @@ function OwnerDashboard() {
         }
       );
 
-      if (!res.ok) throw new Error("Failed to update availability");
+      if (!res.ok) {
+        throw new Error("Failed to update availability");
+      }
 
       setDishes((prev) =>
         prev.map((dish) =>
@@ -228,7 +231,7 @@ function OwnerDashboard() {
       setShowCompleteConfirm(null);
     } catch (err) {
       // Complete order error
-      toast.error("Error completing order: " + err.message);
+      toast.error(`Error completing order: ${err.message}`);
     }
   };
 
@@ -256,7 +259,7 @@ function OwnerDashboard() {
       toast.success(responseData.message);
       setShowRemoveConfirm(null);
     } catch (err) {
-      toast.error("Error removing order: " + err.message);
+      toast.error(`Error removing order: ${err.message}`);
     }
   };
 
@@ -363,7 +366,9 @@ function OwnerDashboard() {
 
   const handleLogoUpload = async (event) => {
     const file = event.target.files[0];
-    if (!file) return;
+    if (!file) {
+      return;
+    }
 
     // Validate file type
     const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
@@ -415,7 +420,7 @@ function OwnerDashboard() {
       toast.success("Logo updated successfully!");
       closeLogoModal();
     } catch (err) {
-      toast.error("Error uploading logo: " + err.message);
+      toast.error(`Error uploading logo: ${err.message}`);
     } finally {
       setLogoUploading(false);
     }
@@ -446,62 +451,82 @@ function OwnerDashboard() {
 
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      <h1 className="text-3xl font-bold mb-4">Welcome to your Dashboard</h1>
+    <div className="max-w-7xl mx-auto p-4 sm:p-6">
+      <h1 className="text-2xl sm:text-3xl font-bold mb-4 sm:mb-6">Welcome to your Dashboard</h1>
 
 
       {restaurant && (
-        <div className="mb-6 p-4 border rounded bg-white">
-          <h2 className="text-xl font-semibold">{restaurant.name}</h2>
-          <p className="text-gray-600">📍 {restaurant.address}</p>
+        <div className="mb-6 p-4 sm:p-6 border rounded-lg bg-white shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4">
+            <div>
+              <h2 className="text-lg sm:text-xl font-semibold mb-1">{restaurant.name}</h2>
+              <p className="text-gray-600 text-sm sm:text-base">📍 {restaurant.address}</p>
+            </div>
+          </div>
           
           {/* Logo Section */}
           <div className="mt-4">
-            <h3 className="text-lg font-medium text-gray-800 mb-3">Restaurant Logo</h3>
-            {restaurant.image_url ? (
-              <div className="relative inline-block">
-                <img
-                  src={`${API_BASE_URL}${restaurant.image_url.replace(/\\/g, "/")}?t=${logoTimestamp}`}
-                  alt="Restaurant Logo"
-                  className="w-32 h-32 object-cover rounded-lg shadow-md cursor-pointer hover:shadow-lg transition-shadow border-2 border-gray-200 hover:border-blue-300"
-                  onClick={handleLogoClick}
-                  onError={(e) => {
-                    e.target.style.display = 'none';
-                    e.target.nextSibling.style.display = 'block';
-                  }}
-                />
+            <h3 className="text-base sm:text-lg font-medium text-gray-800 mb-3">Restaurant Logo</h3>
+            <div className="flex justify-center sm:justify-start">
+              {restaurant.image_url ? (
+                <div className="relative inline-block">
+                  <button
+                    onClick={handleLogoClick}
+                    className="w-24 h-24 sm:w-32 sm:h-32 rounded-lg shadow-md hover:shadow-lg transition-shadow border-2 border-gray-200 hover:border-blue-300 p-0 overflow-hidden"
+                    aria-label="Change restaurant logo"
+                  >
+                    <img
+                      src={`${API_BASE_URL}${restaurant.image_url.replace(/\\/g, "/")}?t=${logoTimestamp}`}
+                      alt="Restaurant Logo"
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                        e.target.parentNode.nextSibling.style.display = 'block';
+                      }}
+                    />
+                  </button>
+                  <button 
+                    className="w-24 h-24 sm:w-32 sm:h-32 border-2 border-dashed border-red-300 rounded-lg flex flex-col items-center justify-center hover:border-red-400 hover:bg-red-50 transition-colors"
+                    onClick={handleLogoClick}
+                    style={{display: 'none'}}
+                    aria-label="Upload restaurant logo"
+                  >
+                    <svg className="w-6 h-6 sm:w-8 sm:h-8 text-red-400 mb-1 sm:mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span className="text-xs sm:text-sm text-red-500 text-center px-1">Logo Error<br/>Click to re-upload</span>
+                  </button>
+                  <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-20 rounded-lg transition-all cursor-pointer flex items-center justify-center" onClick={handleLogoClick} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleLogoClick(); } }} tabIndex={0} role="button" aria-label="Change logo">
+                    <span className="text-white opacity-0 hover:opacity-100 transition-opacity text-xs sm:text-sm font-medium px-2 text-center">
+                      Click to change
+                    </span>
+                  </div>
+                </div>
+              ) : (
                 <div 
-                  className="w-32 h-32 border-2 border-dashed border-red-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-red-400 hover:bg-red-50 transition-colors"
+                  className="w-24 h-24 sm:w-32 sm:h-32 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors"
                   onClick={handleLogoClick}
-                  style={{display: 'none'}}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleLogoClick();
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
                 >
-                  <svg className="w-8 h-8 text-red-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  <svg className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400 mb-1 sm:mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                   </svg>
-                  <span className="text-sm text-red-500 text-center">Logo Error<br/>Click to re-upload</span>
+                  <span className="text-xs sm:text-sm text-gray-500 text-center px-1">Upload Logo</span>
                 </div>
-                <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-20 rounded-lg transition-all cursor-pointer flex items-center justify-center" onClick={handleLogoClick}>
-                  <span className="text-white opacity-0 hover:opacity-100 transition-opacity text-sm font-medium">
-                    Click to change
-                  </span>
-                </div>
-              </div>
-            ) : (
-              <div 
-                className="w-32 h-32 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors"
-                onClick={handleLogoClick}
-              >
-                <svg className="w-8 h-8 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                </svg>
-                <span className="text-sm text-gray-500 text-center">Upload Logo</span>
-              </div>
-            )}
+              )}
+            </div>
           </div>
 
           {/* ✅ Stripe Connect Section */}
-          <div className="mt-6 p-4 border rounded-lg bg-gray-50">
-            <h4 className="text-lg font-medium text-gray-900 mb-3">Payment Processing</h4>
+          <div className="mt-6 p-4 sm:p-6 border rounded-lg bg-gray-50">
+            <h4 className="text-base sm:text-lg font-medium text-gray-900 mb-3">Payment Processing</h4>
             {stripeStatus ? (
               stripeStatus.developmentMode ? (
                 <div className="text-blue-600">
@@ -516,10 +541,10 @@ function OwnerDashboard() {
               ) : stripeStatus.connected && stripeStatus.detailsSubmitted ? (
                 <div className="text-yellow-600">
                   <p className="mb-2">⏳ Stripe Setup In Progress</p>
-                  <p className="text-sm text-gray-600 mb-3">Your account is under review. You'll be able to receive payments once approved.</p>
+                  <p className="text-sm text-gray-600 mb-3">Your account is under review. You&apos;ll be able to receive payments once approved.</p>
                   <button
                     onClick={handleConnectStripe}
-                    className="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700 text-sm"
+                    className="bg-purple-600 text-white px-4 py-3 sm:py-2 rounded hover:bg-purple-700 text-sm font-medium w-full sm:w-auto min-h-[44px] sm:min-h-0"
                     disabled={connecting}
                   >
                     {connecting ? "Redirecting..." : "Check Status / Update Info"}
@@ -531,7 +556,7 @@ function OwnerDashboard() {
                   <p className="text-sm text-gray-600 mb-3">Please complete your Stripe account setup to start receiving payments.</p>
                   <button
                     onClick={handleConnectStripe}
-                    className="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700"
+                    className="bg-purple-600 text-white px-4 py-3 sm:py-2 rounded hover:bg-purple-700 font-medium w-full sm:w-auto min-h-[44px] sm:min-h-0"
                     disabled={connecting}
                   >
                     {connecting ? "Redirecting..." : "Complete Setup"}
@@ -543,7 +568,7 @@ function OwnerDashboard() {
                   <p className="text-sm text-gray-600 mb-3">Connect your Stripe account to receive payments from customers.</p>
                   <button
                     onClick={handleConnectStripe}
-                    className="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700"
+                    className="bg-purple-600 text-white px-4 py-3 sm:py-2 rounded hover:bg-purple-700 font-medium w-full sm:w-auto min-h-[44px] sm:min-h-0"
                     disabled={connecting}
                   >
                     {connecting ? "Redirecting..." : "Connect with Stripe"}
@@ -558,13 +583,13 @@ function OwnerDashboard() {
       )}
 
       {/* Notifications Summary Section */}
-      <div className="mb-8 bg-white border rounded-lg p-4">
-        <div className="flex justify-between items-center">
+      <div className="mb-8 bg-white border rounded-lg p-4 sm:p-6">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-4 sm:space-y-0">
           <div>
-            <h3 className="text-lg font-semibold text-gray-800 mb-2">
+            <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-2">
               📋 Notifications & Alerts
             </h3>
-            <div className="flex items-center space-x-6 text-sm">
+            <div className="flex flex-wrap items-center gap-4 sm:gap-6 text-sm">
               <div className="flex items-center space-x-2">
                 <span className="text-gray-600">Total:</span>
                 <span className="font-semibold text-blue-600">{notifications.length}</span>
@@ -584,7 +609,7 @@ function OwnerDashboard() {
               </div>
             </div>
           </div>
-          <div className="flex space-x-3">
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto">
             {unreadCount > 0 && (
               <button
                 onClick={async () => {
@@ -600,14 +625,14 @@ function OwnerDashboard() {
                     toast.error("Failed to mark all notifications as read");
                   }
                 }}
-                className="text-sm bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 transition-colors"
+                className="text-sm bg-green-600 text-white px-4 py-3 sm:py-2 rounded hover:bg-green-700 transition-colors font-medium min-h-[44px] sm:min-h-0"
               >
                 Mark All Read
               </button>
             )}
             <Link 
               to="/owner/notifications"
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+              className="bg-blue-600 text-white px-4 py-3 sm:py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium text-center sm:text-left min-h-[44px] sm:min-h-0 flex items-center justify-center"
             >
               View All Notifications →
             </Link>
@@ -642,52 +667,57 @@ function OwnerDashboard() {
         )}
       </div>
 
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-semibold">Your Dishes</h3>
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 sm:gap-0 mb-4 sm:mb-6">
+        <h3 className="text-lg sm:text-xl font-semibold">Your Dishes</h3>
         <button
-          className="bg-green-600 text-white px-4 py-2 rounded"
+          className="bg-green-600 text-white px-4 py-3 sm:py-2 rounded-lg font-medium min-h-[44px] sm:min-h-0 w-full sm:w-auto"
           onClick={() => navigate("/owner/add-dish")}
         >
           ➕ Add Dish
         </button>
       </div>
 
-      <div className="grid grid-cols-1 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:gap-6">
         {dishes.length === 0 ? (
-          <p>No dishes yet.</p>
+          <div className="text-center py-8 text-gray-500">
+            <p className="text-lg mb-2">No dishes yet</p>
+            <p className="text-sm">Add your first dish to get started!</p>
+          </div>
         ) : (
           dishes.map((dish) => (
             <div
               key={dish.id}
-              className="border p-4 rounded bg-white flex justify-between items-center"
+              className="border p-4 sm:p-6 rounded-lg bg-white shadow-sm"
             >
-              <div className="flex items-center gap-4">
-                {dish.image_url && (
-                  <img
-                    src={`${API_BASE_URL}${dish.image_url.replace(/\\/g, "/")}`}
-                    alt={dish.name}
-                    className="w-24 h-24 object-cover rounded"
-                  />
-                )}
-                <div>
-                  <h4 className="font-semibold text-lg">{dish.name}</h4>
-                  <p className="text-gray-600">${dish.price}</p>
-                  <p className="text-sm text-gray-500">
-                    {dish.is_available ? "✅ Available" : "❌ Not Available"}
-                  </p>
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-4 sm:space-y-0">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                  {dish.image_url && (
+                    <img
+                      src={`${API_BASE_URL}${dish.image_url.replace(/\\/g, "/")}`}
+                      alt={dish.name}
+                      className="w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-lg mx-auto sm:mx-0"
+                    />
+                  )}
+                  <div className="text-center sm:text-left">
+                    <h4 className="font-semibold text-lg sm:text-xl mb-1">{dish.name}</h4>
+                    <p className="text-gray-600 text-lg font-medium mb-1">${dish.price}</p>
+                    <p className="text-sm text-gray-500">
+                      {dish.is_available ? "✅ Available" : "❌ Not Available"}
+                    </p>
+                  </div>
                 </div>
-              </div>
 
-              <div className="flex flex-col items-end">
-                <ToggleSwitch
-                  checked={!!dish.is_available}
-                  onChange={() =>
-                    toggleAvailability(dish.id, !!dish.is_available)
-                  }
-                />
-                <span className="text-xs mt-1 text-gray-500">
-                  {dish.is_available ? "In Stock" : "Out of Stock"}
-                </span>
+                <div className="flex flex-col items-center sm:items-end space-y-2">
+                  <ToggleSwitch
+                    checked={!!dish.is_available}
+                    onChange={() =>
+                      toggleAvailability(dish.id, !!dish.is_available)
+                    }
+                  />
+                  <span className="text-xs text-gray-500 text-center sm:text-right">
+                    {dish.is_available ? "In Stock" : "Out of Stock"}
+                  </span>
+                </div>
               </div>
             </div>
           ))
@@ -695,15 +725,15 @@ function OwnerDashboard() {
       </div>
 
       {/* Orders Summary Section */}
-      <div className="mb-8 bg-white border rounded-lg p-4">
-        <div className="flex justify-between items-center">
+      <div className="mb-8 bg-white border rounded-lg p-4 sm:p-6">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-4 sm:space-y-0">
           <div>
-            <h3 className="text-lg font-semibold text-gray-800 mb-2">
+            <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-2">
               📋 Order Management
             </h3>
-            <div className="flex items-center space-x-6 text-sm">
+            <div className="grid grid-cols-2 sm:flex sm:items-center gap-3 sm:gap-6 text-sm">
               <div className="flex items-center space-x-2">
-                <span className="text-gray-600">Total Orders:</span>
+                <span className="text-gray-600">Total:</span>
                 <span className="font-semibold text-blue-600">{orders.length}</span>
               </div>
               <div className="flex items-center space-x-2">
@@ -714,8 +744,8 @@ function OwnerDashboard() {
                 <span className="text-gray-600">Completed:</span>
                 <span className="font-semibold text-green-600">{getCompletedOrders().length}</span>
               </div>
-              <div className="flex items-center space-x-2">
-                <span className="text-gray-600">Total Earnings:</span>
+              <div className="flex items-center space-x-2 col-span-2 sm:col-span-1">
+                <span className="text-gray-600">Earnings:</span>
                 <span className="font-semibold text-purple-600">
                   ${getTotalEarnings().toFixed(2)}
                 </span>
@@ -724,7 +754,7 @@ function OwnerDashboard() {
           </div>
           <Link 
             to="/owner/orders"
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+            className="bg-blue-600 text-white px-4 py-3 sm:py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium text-center min-h-[44px] sm:min-h-0 flex items-center justify-center"
           >
             Manage All Orders →
           </Link>
@@ -734,11 +764,11 @@ function OwnerDashboard() {
         {getActiveOrders().length > 0 && (
           <div className="mt-4 pt-4 border-t">
             <h4 className="text-sm font-medium text-orange-700 mb-3">🚨 Urgent: Active Orders Requiring Attention</h4>
-            <div className="space-y-2">
+            <div className="space-y-3">
               {getActiveOrders().slice(0, 3).map((order) => (
-                <div key={order.id} className="bg-orange-50 border border-orange-200 rounded-lg p-3">
-                  <div className="flex justify-between items-center">
-                    <div>
+                <div key={order.id} className="bg-orange-50 border border-orange-200 rounded-lg p-3 sm:p-4">
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-3 sm:space-y-0">
+                    <div className="flex-1">
                       <p className="text-sm font-medium text-orange-800">Order #{order.id} - {order.customer_name}</p>
                       <p className="text-xs text-orange-600 mt-1">
                         {order.items.length} item{order.items.length !== 1 ? 's' : ''} • ${(Number(order.total || 0) - Number(order.platform_fee || 0)).toFixed(2)} earnings
@@ -747,17 +777,17 @@ function OwnerDashboard() {
                         Ordered {new Date(order.created_at).toLocaleDateString()} at {new Date(order.created_at).toLocaleTimeString()}
                       </p>
                     </div>
-                    <div className="flex space-x-2">
+                    <div className="flex flex-row sm:flex-col lg:flex-row gap-2">
                       <button
                         onClick={() => printOrder(order)}
-                        className="text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700 transition-colors"
+                        className="text-xs bg-blue-600 text-white px-3 py-2 sm:py-1 rounded hover:bg-blue-700 transition-colors font-medium flex-1 sm:flex-none min-h-[40px] sm:min-h-0"
                       >
                         🖨️ Print
                       </button>
                       {order.status !== 'completed' && (
                         <button
                           onClick={() => showCompleteModal(order.id)}
-                          className="text-xs bg-green-600 text-white px-2 py-1 rounded hover:bg-green-700 transition-colors"
+                          className="text-xs bg-green-600 text-white px-3 py-2 sm:py-1 rounded hover:bg-green-700 transition-colors font-medium flex-1 sm:flex-none min-h-[40px] sm:min-h-0"
                         >
                           ✅ Complete
                         </button>
@@ -794,7 +824,7 @@ function OwnerDashboard() {
                         {order.items.length} item{order.items.length !== 1 ? 's' : ''} • ${(Number(order.total || 0) - Number(order.platform_fee || 0)).toFixed(2)} earnings
                       </p>
                       <p className="text-xs text-green-500">
-                        Completed {order.completed_at ? new Date(order.completed_at).toLocaleDateString() + ' at ' + new Date(order.completed_at).toLocaleTimeString() : 'recently'}
+                        Completed {order.completed_at ? `${new Date(order.completed_at).toLocaleDateString()} at ${new Date(order.completed_at).toLocaleTimeString()}` : 'recently'}
                       </p>
                     </div>
                     <div className="flex space-x-2">
@@ -833,24 +863,24 @@ function OwnerDashboard() {
 
       {/* Complete Order Confirmation Modal */}
       {showCompleteConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold mb-4 text-gray-800">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-4 sm:p-6 max-w-md w-full">
+            <h3 className="text-lg sm:text-xl font-semibold mb-4 text-gray-800">
               Complete Order
             </h3>
-            <p className="text-gray-600 mb-6">
+            <p className="text-gray-600 mb-6 text-sm sm:text-base">
               Mark this order as completed? This will update the order status and notify the customer that their order is ready.
             </p>
-            <div className="flex gap-3 justify-end">
+            <div className="flex flex-col sm:flex-row gap-3 sm:justify-end">
               <button
                 onClick={() => setShowCompleteConfirm(null)}
-                className="px-4 py-2 text-gray-600 bg-gray-200 rounded hover:bg-gray-300 transition-colors"
+                className="px-4 py-3 sm:py-2 text-gray-600 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors font-medium min-h-[44px] sm:min-h-0 order-2 sm:order-1"
               >
                 Cancel
               </button>
               <button
                 onClick={() => completeOrder(showCompleteConfirm)}
-                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                className="px-4 py-3 sm:py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium min-h-[44px] sm:min-h-0 order-1 sm:order-2"
               >
                 ✅ Mark Complete
               </button>
@@ -861,24 +891,24 @@ function OwnerDashboard() {
 
       {/* Remove Order Confirmation Modal */}
       {showRemoveConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold mb-4 text-gray-800">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-4 sm:p-6 max-w-md w-full">
+            <h3 className="text-lg sm:text-xl font-semibold mb-4 text-gray-800">
               Remove Order #{showRemoveConfirm}
             </h3>
-            <p className="text-gray-600 mb-6">
-              Are you sure you want to remove this completed order from your view? This will hide it from your orders list but won't affect the customer's record.
+            <p className="text-gray-600 mb-6 text-sm sm:text-base">
+              Are you sure you want to remove this completed order from your view? This will hide it from your orders list but won&apos;t affect the customer&apos;s record.
             </p>
-            <div className="flex gap-3 justify-end">
+            <div className="flex flex-col sm:flex-row gap-3 sm:justify-end">
               <button
                 onClick={() => setShowRemoveConfirm(null)}
-                className="px-4 py-2 text-gray-600 bg-gray-200 rounded hover:bg-gray-300 transition-colors"
+                className="px-4 py-3 sm:py-2 text-gray-600 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors font-medium min-h-[44px] sm:min-h-0 order-2 sm:order-1"
               >
                 Cancel
               </button>
               <button
                 onClick={() => removeOrder(showRemoveConfirm)}
-                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+                className="px-4 py-3 sm:py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium min-h-[44px] sm:min-h-0 order-1 sm:order-2"
               >
                 🗑️ Remove Order
               </button>
@@ -889,21 +919,22 @@ function OwnerDashboard() {
 
       {/* Logo Upload Modal */}
       {showLogoModal && (
+        // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
         <div 
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
           onClick={(e) => {
             if (e.target === e.currentTarget && !logoUploading) {
               closeLogoModal();
             }
           }}
         >
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold mb-4 text-gray-800">
+          <div className="bg-white rounded-lg p-4 sm:p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg sm:text-xl font-semibold mb-4 text-gray-800">
               {restaurant?.image_url ? 'Change Restaurant Logo' : 'Upload Restaurant Logo'}
             </h3>
             
             <div className="mb-4">
-              <p className="text-gray-600 text-sm mb-4">
+              <p className="text-gray-600 text-sm sm:text-base mb-4">
                 Choose a high-quality image to represent your restaurant. Recommended size: 400x400 pixels or larger.
               </p>
               
@@ -911,15 +942,17 @@ function OwnerDashboard() {
               {restaurant?.image_url && (
                 <div className="mb-4">
                   <p className="text-sm font-medium text-gray-700 mb-2">Current Logo:</p>
-                  <img
-                    src={`${API_BASE_URL}${restaurant.image_url.replace(/\\/g, "/")}`}
-                    alt="Current Logo"
-                    className="w-20 h-20 object-cover rounded-lg border-2 border-gray-200"
-                  />
+                  <div className="flex justify-center sm:justify-start">
+                    <img
+                      src={`${API_BASE_URL}${restaurant.image_url.replace(/\\/g, "/")}`}
+                      alt="Current Logo"
+                      className="w-16 h-16 sm:w-20 sm:h-20 object-cover rounded-lg border-2 border-gray-200"
+                    />
+                  </div>
                 </div>
               )}
               
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-400 transition-colors">
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 sm:p-6 text-center hover:border-blue-400 transition-colors">
                 <input
                   type="file"
                   accept="image/*"
@@ -928,29 +961,29 @@ function OwnerDashboard() {
                   id="logo-upload"
                   disabled={logoUploading}
                 />
-                <label htmlFor="logo-upload" className="cursor-pointer block">
+                <label htmlFor="logo-upload" className="cursor-pointer block min-h-[120px] sm:min-h-[140px] flex items-center justify-center">
                   {logoUploading ? (
                     <div className="flex flex-col items-center">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-2"></div>
-                      <span className="text-blue-600">Uploading...</span>
+                      <span className="text-blue-600 font-medium">Uploading...</span>
                     </div>
                   ) : (
                     <div className="flex flex-col items-center">
-                      <svg className="w-12 h-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-10 h-10 sm:w-12 sm:h-12 text-gray-400 mb-2 sm:mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                       </svg>
-                      <span className="text-blue-600 font-medium">Click to select image</span>
-                      <span className="text-gray-500 text-sm mt-1">PNG, JPG, GIF, WebP (Max 5MB)</span>
+                      <span className="text-blue-600 font-medium text-sm sm:text-base">Click to select image</span>
+                      <span className="text-gray-500 text-xs sm:text-sm mt-1">PNG, JPG, GIF, WebP (Max 5MB)</span>
                     </div>
                   )}
                 </label>
               </div>
             </div>
 
-            <div className="flex gap-3 justify-end">
+            <div className="flex justify-center">
               <button
                 onClick={closeLogoModal}
-                className="px-4 py-2 text-gray-600 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors"
+                className="px-6 py-3 sm:py-2 text-gray-600 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors font-medium min-h-[44px] sm:min-h-0 w-full sm:w-auto"
                 disabled={logoUploading}
               >
                 Cancel
