@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useContext, useCallback } from "react";
+// React import removed as it's not needed in React 17+
+import { useState, useEffect, useContext, useCallback } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
 import { toast } from 'react-toastify';
@@ -101,7 +102,7 @@ function CustomerOrders() {
       toast.success(responseData.message);
       setShowCancelConfirm(null);
     } catch (err) {
-      toast.error("Error cancelling order: " + err.message);
+      toast.error(`Error cancelling order: ${err.message}`);
     }
   };
 
@@ -159,7 +160,7 @@ function CustomerOrders() {
       toast.success(responseData.message);
       setShowRemoveConfirm(null);
     } catch (err) {
-      toast.error("Error removing order: " + err.message);
+      toast.error(`Error removing order: ${err.message}`);
     }
   };
 
@@ -193,7 +194,7 @@ function CustomerOrders() {
 
       toast.success(responseData.message);
     } catch (err) {
-      toast.error("Error updating status: " + err.message);
+      toast.error(`Error updating status: ${err.message}`);
     }
   };
 
@@ -582,10 +583,11 @@ function CustomerOrders() {
             </p>
             
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="cancel-reason" className="block text-sm font-medium text-gray-700 mb-2">
                 Reason for cancellation (optional):
               </label>
               <textarea
+                id="cancel-reason"
                 value={cancelReason}
                 onChange={(e) => setCancelReason(e.target.value)}
                 className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -595,8 +597,9 @@ function CustomerOrders() {
             </div>
 
             <div className="mb-6">
-              <label className="flex items-center">
+              <label htmlFor="request-refund" className="flex items-center">
                 <input
+                  id="request-refund"
                   type="checkbox"
                   checked={requestRefund}
                   onChange={(e) => setRequestRefund(e.target.checked)}

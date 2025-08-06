@@ -1,5 +1,6 @@
-import React from "react";
+// React import removed as it's not needed in React 17+
 import { Link } from "react-router-dom";
+import PropTypes from 'prop-types';
 import { getImageUrl, handleImageError } from "../utils/imageUtils";
 
 function RestaurantCard({ restaurant }) {
@@ -22,5 +23,14 @@ function RestaurantCard({ restaurant }) {
     </Link>
   );
 }
+
+RestaurantCard.propTypes = {
+  restaurant: PropTypes.shape({
+    id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+    name: PropTypes.string.isRequired,
+    address: PropTypes.string.isRequired,
+    image_url: PropTypes.string,
+  }).isRequired,
+};
 
 export default RestaurantCard;

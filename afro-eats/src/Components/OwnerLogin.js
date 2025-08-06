@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useOwnerAuth } from "../context/OwnerAuthContext";
 import { API_BASE_URL } from "../config/api";
@@ -46,8 +46,9 @@ function OwnerLogin() {
 
       <form onSubmit={handleSubmit}>
         <div className="mb-4">
-          <label className="block text-sm font-medium">Email</label>
+          <label htmlFor="email" className="block text-sm font-medium">Email</label>
           <input
+            id="email"
             type="email"
             className="w-full border px-3 py-2 rounded"
             value={email}
@@ -57,8 +58,9 @@ function OwnerLogin() {
         </div>
 
         <div className="mb-6">
-          <label className="block text-sm font-medium">Password</label>
+          <label htmlFor="password" className="block text-sm font-medium">Password</label>
           <input
+            id="password"
             type="password"
             className="w-full border px-3 py-2 rounded"
             value={password}

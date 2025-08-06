@@ -1,4 +1,5 @@
 import React from "react";
+import PropTypes from 'prop-types';
 import { useCart } from "../context/CartContext";
 import { toast } from 'react-toastify';
 import { getImageUrl, handleImageError } from "../utils/imageUtils";
@@ -20,7 +21,7 @@ function DishCard({ dish }) {
       await addToCart(dish);
       toast.success(`${dish.name} added to cart!`);
     } catch (error) {
-      console.error('Add to cart error:', error);
+      // console.error('Add to cart error:', error);
       // More specific error handling for mobile users
       if (error.message.includes('401') || error.message.includes('Unauthorized')) {
         toast.error("Please log in to add items to cart.");
@@ -66,5 +67,17 @@ function DishCard({ dish }) {
     </div>
   );
 }
+
+DishCard.propTypes = {
+  dish: PropTypes.shape({
+    id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+    name: PropTypes.string.isRequired,
+    description: PropTypes.string,
+    price: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+    image_url: PropTypes.string,
+    is_available: PropTypes.bool.isRequired,
+    restaurant_id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+  }).isRequired,
+};
 
 export default DishCard;

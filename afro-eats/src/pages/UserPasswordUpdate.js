@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+// React import removed as it's not needed in React 17+
+import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 
@@ -95,12 +96,13 @@ function UserPasswordUpdate() {
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
             Email Address
           </label>
           <input
             type="email"
             name="email"
+            id="email"
             value={form.email}
             onChange={handleChange}
             className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -109,12 +111,13 @@ function UserPasswordUpdate() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="secret_word" className="block text-sm font-medium text-gray-700 mb-1">
             Secret Word
           </label>
           <input
             type="text"
             name="secret_word"
+            id="secret_word"
             value={form.secret_word}
             onChange={handleChange}
             className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -127,12 +130,13 @@ function UserPasswordUpdate() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="new_password" className="block text-sm font-medium text-gray-700 mb-1">
             New Password
           </label>
           <input
             type="password"
             name="new_password"
+            id="new_password"
             value={form.new_password}
             onChange={handleChange}
             className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -142,12 +146,13 @@ function UserPasswordUpdate() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="confirm_password" className="block text-sm font-medium text-gray-700 mb-1">
             Confirm New Password
           </label>
           <input
             type="password"
             name="confirm_password"
+            id="confirm_password"
             value={form.confirm_password}
             onChange={handleChange}
             className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"

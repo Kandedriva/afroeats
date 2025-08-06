@@ -48,11 +48,14 @@ router.post('/stripe/create-stripe-account', requireOwnerAuth, async (req, res) 
       owner.stripe_account_id = account.id;
     }
 
+    // Get the frontend URL dynamically
+    const frontendUrl = req.headers.origin || req.headers.referer?.replace(/\/$/, '') || 'http://localhost:3000';
+
     // Create account link for onboarding
     const accountLink = await stripe.accountLinks.create({
       account: owner.stripe_account_id,
-      refresh_url: 'http://localhost:3000/owner/dashboard?stripe_refresh=true',
-      return_url: 'http://localhost:3000/owner/dashboard?stripe_return=true',
+      refresh_url: `${frontendUrl}/owner/dashboard?stripe_refresh=true`,
+      return_url: `${frontendUrl}/owner/dashboard?stripe_return=true`,
       type: 'account_onboarding',
     });
 

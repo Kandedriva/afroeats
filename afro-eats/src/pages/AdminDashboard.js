@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+// React import removed as it's not needed in React 17+
+import { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { API_BASE_URL } from '../config/api';
@@ -33,6 +34,7 @@ const AdminDashboard = () => {
       
       return () => clearInterval(interval);
     }
+    return undefined;
   }, [admin]);
 
   const checkAdminAuth = async () => {
@@ -46,7 +48,7 @@ const AdminDashboard = () => {
         setAdmin(data);
       }
     } catch (error) {
-      console.error('Admin auth check failed:', error);
+      // console.error('Admin auth check failed:', error);
     } finally {
       setLoading(false);
     }
@@ -63,7 +65,7 @@ const AdminDashboard = () => {
         setDashboardData(data);
       }
     } catch (error) {
-      console.error('Failed to load dashboard data:', error);
+      // console.error('Failed to load dashboard data:', error);
     }
   };
 
@@ -78,7 +80,7 @@ const AdminDashboard = () => {
         setAnalytics(data);
       }
     } catch (error) {
-      console.error('Failed to load analytics:', error);
+      // console.error('Failed to load analytics:', error);
     }
   };
 
@@ -93,7 +95,7 @@ const AdminDashboard = () => {
         setSystemHealth(data);
       }
     } catch (error) {
-      console.error('Failed to load system health:', error);
+      // console.error('Failed to load system health:', error);
     }
   };
 
@@ -108,7 +110,7 @@ const AdminDashboard = () => {
         setUsers(data.users);
       }
     } catch (error) {
-      console.error('Failed to load users:', error);
+      // console.error('Failed to load users:', error);
     }
   };
 
@@ -123,7 +125,7 @@ const AdminDashboard = () => {
         setRestaurants(data.restaurants);
       }
     } catch (error) {
-      console.error('Failed to load restaurants:', error);
+      // console.error('Failed to load restaurants:', error);
     }
   };
 
@@ -138,7 +140,7 @@ const AdminDashboard = () => {
         setOrders(data.orders);
       }
     } catch (error) {
-      console.error('Failed to load orders:', error);
+      // console.error('Failed to load orders:', error);
     }
   };
 
@@ -148,13 +150,19 @@ const AdminDashboard = () => {
     // Load data for specific tab
     switch (tab) {
       case 'users':
-        if (users.length === 0) loadUsers();
+        if (users.length === 0) {
+          loadUsers();
+        }
         break;
       case 'restaurants':
-        if (restaurants.length === 0) loadRestaurants();
+        if (restaurants.length === 0) {
+          loadRestaurants();
+        }
         break;
       case 'orders':
-        if (orders.length === 0) loadOrders();
+        if (orders.length === 0) {
+          loadOrders();
+        }
         break;
       default:
         break;
@@ -170,7 +178,7 @@ const AdminDashboard = () => {
       setAdmin(null);
       toast.success('Logged out successfully');
     } catch (error) {
-      console.error('Logout failed:', error);
+      // console.error('Logout failed:', error);
     }
   };
 

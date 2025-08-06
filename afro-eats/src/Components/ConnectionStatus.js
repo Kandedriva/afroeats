@@ -19,7 +19,7 @@ const ConnectionStatus = () => {
         if (response.ok) {
           const data = await response.json();
           setStatus('connected');
-          console.log('Backend connection successful:', data);
+          // console.log('Backend connection successful:', data);
         } else {
           setStatus('error');
           setError(`Server responded with ${response.status}`);
@@ -27,7 +27,7 @@ const ConnectionStatus = () => {
       } catch (err) {
         setStatus('error');
         setError(err.message);
-        console.error('Backend connection failed:', err);
+        // console.error('Backend connection failed:', err);
       }
     };
 

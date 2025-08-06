@@ -1,4 +1,5 @@
 import { Navigate } from "react-router-dom";
+import PropTypes from 'prop-types';
 import { useOwnerAuth } from "../context/OwnerAuthContext";
 
 const ProtectedOwnerRoute = ({ children }) => {
@@ -19,6 +20,10 @@ const ProtectedOwnerRoute = ({ children }) => {
   }
 
   return children;
+};
+
+ProtectedOwnerRoute.propTypes = {
+  children: PropTypes.node.isRequired,
 };
 
 export default ProtectedOwnerRoute;

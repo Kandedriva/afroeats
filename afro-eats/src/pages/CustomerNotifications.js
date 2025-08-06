@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useContext, useCallback } from "react";
+// React import removed as it's not needed in React 17+
+import { useState, useEffect, useContext, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
 import { toast } from 'react-toastify';
@@ -90,31 +91,53 @@ function CustomerNotifications() {
         toast.error(errorData.error || "Failed to delete read notifications");
       }
     } catch (err) {
-      console.error('Delete notifications error:', err);
+      // console.error('Delete notifications error:', err);
       toast.error("Failed to delete read notifications");
     }
   };
 
   const getFilteredNotifications = () => {
-    if (filterType === 'all') return notifications;
-    if (filterType === 'refund') return notifications.filter(n => n.type.startsWith('refund_'));
-    if (filterType === 'order_update') return notifications.filter(n => n.type === 'order_update' || n.type === 'order_completed');
+    if (filterType === 'all') {
+      return notifications;
+    }
+    if (filterType === 'refund') {
+      return notifications.filter(n => n.type.startsWith('refund_'));
+    }
+    if (filterType === 'order_update') {
+      return notifications.filter(n => n.type === 'order_update' || n.type === 'order_completed');
+    }
     return notifications;
   };
 
   const getNotificationIcon = (type) => {
-    if (type.startsWith('refund_approve')) return '✅';
-    if (type.startsWith('refund_deny')) return '❌';
-    if (type === 'order_completed') return '🍽️';
-    if (type === 'order_update') return '📋';
+    if (type.startsWith('refund_approve')) {
+      return '✅';
+    }
+    if (type.startsWith('refund_deny')) {
+      return '❌';
+    }
+    if (type === 'order_completed') {
+      return '🍽️';
+    }
+    if (type === 'order_update') {
+      return '📋';
+    }
     return '📢';
   };
 
   const getNotificationColor = (type) => {
-    if (type.startsWith('refund_approve')) return 'bg-green-50 border-green-200';
-    if (type.startsWith('refund_deny')) return 'bg-red-50 border-red-200';
-    if (type === 'order_completed') return 'bg-blue-50 border-blue-200';
-    if (type === 'order_update') return 'bg-yellow-50 border-yellow-200';
+    if (type.startsWith('refund_approve')) {
+      return 'bg-green-50 border-green-200';
+    }
+    if (type.startsWith('refund_deny')) {
+      return 'bg-red-50 border-red-200';
+    }
+    if (type === 'order_completed') {
+      return 'bg-blue-50 border-blue-200';
+    }
+    if (type === 'order_update') {
+      return 'bg-yellow-50 border-yellow-200';
+    }
     return 'bg-gray-50 border-gray-200';
   };
 
@@ -180,8 +203,9 @@ function CustomerNotifications() {
             <div className="flex flex-wrap gap-4">
               {/* Filter */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Filter by Type</label>
+                <label htmlFor="filterType" className="block text-sm font-medium text-gray-700 mb-1">Filter by Type</label>
                 <select
+                  id="filterType"
                   value={filterType}
                   onChange={(e) => setFilterType(e.target.value)}
                   className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
@@ -247,10 +271,19 @@ function CustomerNotifications() {
             return (
               <div 
                 key={notification.id} 
-                className={`border rounded-lg p-6 transition-all hover:shadow-md ${
+                className={`border rounded-lg p-6 transition-all hover:shadow-md cursor-pointer ${
                   !notification.read ? 'bg-blue-50 border-blue-200 shadow-sm' : 'bg-white'
                 } ${getNotificationColor(notification.type)}`}
                 onClick={() => !notification.read && markNotificationRead(notification.id)}
+                onKeyDown={(e) => {
+                  if ((e.key === 'Enter' || e.key === ' ') && !notification.read) {
+                    e.preventDefault();
+                    markNotificationRead(notification.id);
+                  }
+                }}
+                role="button"
+                tabIndex={!notification.read ? 0 : -1}
+                aria-label={!notification.read ? "Mark notification as read" : "Notification already read"}
               >
                 <div className="flex justify-between items-start mb-3">
                   <div className="flex items-center space-x-3">

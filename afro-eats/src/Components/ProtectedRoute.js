@@ -1,5 +1,6 @@
-import React, { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
+import PropTypes from 'prop-types';
 import { AuthContext } from "../context/AuthContext";
 import { toast } from 'react-toastify';
 
@@ -19,6 +20,7 @@ function ProtectedRoute({ children }) {
       return () => clearTimeout(timer);
     } else {
       setShowUnauthorizedError(false);
+      return undefined;
     }
   }, [user, loading, location.pathname]);
 
@@ -56,5 +58,9 @@ function ProtectedRoute({ children }) {
   // Render the protected component
   return children;
 }
+
+ProtectedRoute.propTypes = {
+  children: PropTypes.node.isRequired,
+};
 
 export default ProtectedRoute;

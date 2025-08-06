@@ -1,4 +1,5 @@
-import React, { createContext, useEffect, useState, useContext } from "react";
+import { createContext, useEffect, useState, useContext } from "react";
+import PropTypes from 'prop-types';
 import { API_BASE_URL } from "../config/api";
 
 export const OwnerAuthContext = createContext();
@@ -81,6 +82,10 @@ export function OwnerAuthProvider({ children }) {
     </OwnerAuthContext.Provider>
   );
 }
+
+OwnerAuthProvider.propTypes = {
+  children: PropTypes.node.isRequired,
+};
 
 // Custom hook
 export const useOwnerAuth = () => useContext(OwnerAuthContext);

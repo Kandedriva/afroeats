@@ -1,7 +1,6 @@
 // src/pages/RegisterOwner.jsx
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Link } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useOwnerAuth } from "../context/OwnerAuthContext";
 import { API_BASE_URL } from "../config/api";
 
@@ -108,7 +107,7 @@ const RegisterOwner = () => {
           required
         />
         <p className="text-sm text-gray-600 mb-3 -mt-2">
-          💡 Remember this word - you'll need it to update your password later
+          💡 Remember this word - you&apos;ll need it to update your password later
         </p>
 
         <input
