@@ -940,15 +940,20 @@ router.post("/refunds/:notificationId/process", requireOwnerAuth, async (req, re
 });
 
 // PUT /api/owners/restaurant/logo - Update restaurant logo
-router.put("/restaurant/logo", requireOwnerAuth, uploadLogo.single("logo"), async (req, res) => {
+router.put("/restaurant/logo", requireOwnerAuth, ...uploadRestaurantLogo, async (req, res) => {
   try {
     const ownerId = req.owner.id;
     
-    if (!req.file) {
-      return res.status(400).json({ error: "No logo file provided" });
+    // Handle R2 upload result
+    const uploadResult = handleR2UploadResult(req);
+    
+    if (!uploadResult.success) {
+      return res.status(400).json({ 
+        error: uploadResult.error || "No logo file provided" 
+      });
     }
 
-    const newLogoPath = `/uploads/restaurant_logos/${req.file.filename}`;
+    const newLogoUrl = uploadResult.imageUrl;
 
     // Get current restaurant data to find old logo
     const restaurantResult = await pool.query(
@@ -960,33 +965,31 @@ router.put("/restaurant/logo", requireOwnerAuth, uploadLogo.single("logo"), asyn
       return res.status(404).json({ error: "Restaurant not found" });
     }
 
-    const oldLogoPath = restaurantResult.rows[0].image_url;
+    const oldLogoUrl = restaurantResult.rows[0].image_url;
 
-    // Update restaurant with new logo path
+    // Update restaurant with new logo URL
     await pool.query(
       "UPDATE restaurants SET image_url = $1 WHERE owner_id = $2",
-      [newLogoPath, ownerId]
+      [newLogoUrl, ownerId]
     );
 
-    // Delete old logo file if it exists
-    if (oldLogoPath) {
-      const fullOldPath = path.join(process.cwd(), oldLogoPath.replace(/^\//, ''));
+    // Delete old logo from R2 if it exists
+    if (oldLogoUrl) {
       try {
-        if (fs.existsSync(fullOldPath)) {
-          fs.unlinkSync(fullOldPath);
-        }
+        await deleteOldR2Image(oldLogoUrl);
       } catch (deleteErr) {
-        // Old file deletion failed but continue
+        console.warn('Failed to delete old logo from R2:', deleteErr);
+        // Continue anyway - don't fail the update
       }
     }
 
     res.json({ 
       success: true, 
       message: "Logo updated successfully",
-      image_url: newLogoPath 
+      image_url: newLogoUrl 
     });
   } catch (err) {
-    // Logo update error
+    console.error('Logo update error:', err);
     res.status(500).json({ error: "Failed to update logo" });
   }
 });
