@@ -1,50 +1,37 @@
 import express from "express";
-import multer from "multer";
 import bcryptjs from "bcryptjs";
 import pool from "../db.js";
-import path from "path";
-import fs from "fs";
 import { requireOwnerAuth } from "../middleware/ownerAuth.js";
 import { 
   checkAccountLockout, 
   handleFailedLogin, 
   handleSuccessfulLogin 
 } from "../middleware/accountLockout.js";
+import { 
+  uploadRestaurantLogo, 
+  uploadDishImage, 
+  handleR2UploadResult, 
+  deleteOldR2Image 
+} from "../middleware/r2Upload.js";
 
 const router = express.Router();
 
-// ========= MULTER STORAGE FOR RESTAURANT LOGOS ==========
-const logoStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const dir = "uploads/restaurant_logos";
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    cb(null, dir);
-  },
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    const uniqueName = `logo-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
-    cb(null, uniqueName);
-  },
-});
-const uploadLogo = multer({ 
-  storage: logoStorage,
-  limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB limit
-  },
-  fileFilter: (req, file, cb) => {
-    // Accept only image files
-    if (file.mimetype.startsWith('image/')) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only image files are allowed'), false);
-    }
-  }
-});
+// Note: Image upload configurations now handled by R2 middleware
 
 // ========= OWNER REGISTRATION ==========
-router.post("/register", uploadLogo.single("logo"), async (req, res) => {
+router.post("/register", ...uploadRestaurantLogo, async (req, res) => {
   const { name, email, password, secret_word, restaurant_name, location, phone_number } = req.body;
-  const logoPath = req.file ? `/uploads/restaurant_logos/${req.file.filename}` : null;
+  
+  // Handle R2 upload result
+  const uploadResult = handleR2UploadResult(req);
+  let logoPath = null;
+
+  if (uploadResult.success && uploadResult.imageUrl) {
+    logoPath = uploadResult.imageUrl;
+  } else if (uploadResult.error) {
+    console.warn('Logo upload to R2 failed:', uploadResult.error);
+    // Continue without logo - could implement fallback to local storage here if needed
+  }
 
   try {
     const existing = await pool.query("SELECT * FROM restaurant_owners WHERE email = $1", [email]);
@@ -170,38 +157,21 @@ router.post("/logout", (req, res) => {
 });
 
 
-// ========= MULTER STORAGE FOR DISH IMAGES ==========
-const dishStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const dir = "uploads/dish_images";
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    cb(null, dir);
-  },
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    const uniqueName = `dish-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
-    cb(null, uniqueName);
-  },
-});
-const uploadDish = multer({ 
-  storage: dishStorage,
-  limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB limit
-  },
-  fileFilter: (req, file, cb) => {
-    // Accept only image files
-    if (file.mimetype.startsWith('image/')) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only image files are allowed'), false);
-    }
-  }
-});
 
 // ========= ADD DISH ==========
-router.post("/dishes", requireOwnerAuth, uploadDish.single("image"), async (req, res) => {
+router.post("/dishes", requireOwnerAuth, ...uploadDishImage, async (req, res) => {
   const { name, description = "", price, available } = req.body;
-  const imagePath = req.file ? `/uploads/dish_images/${req.file.filename}` : null;
+  
+  // Handle R2 upload result
+  const uploadResult = handleR2UploadResult(req);
+  let imagePath = null;
+
+  if (uploadResult.success && uploadResult.imageUrl) {
+    imagePath = uploadResult.imageUrl;
+  } else if (uploadResult.error) {
+    console.warn('Dish image upload to R2 failed:', uploadResult.error);
+    // Continue without image - could implement fallback to local storage here if needed
+  }
 
   try {
     const ownerId = req.owner.id;
@@ -450,7 +420,7 @@ router.get("/orders", requireOwnerAuth, async (req, res) => {
       LEFT JOIN restaurant_order_status ros ON (o.id = ros.order_id AND r.id = ros.restaurant_id)
       JOIN users u ON o.user_id = u.id
       WHERE r.owner_id = $1 
-        AND (o.status = 'paid' OR o.status = 'pending' OR o.status = 'completed' OR o.status IS NULL)
+        AND (o.status = 'paid' OR o.status = 'completed')
         AND COALESCE(ros.status, 'active') NOT IN ('cancelled', 'removed')
       ORDER BY o.created_at DESC
     `, [ownerId]);

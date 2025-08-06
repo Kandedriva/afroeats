@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+// React import removed as it's not needed in React 17+
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from 'react-toastify';
 import { API_BASE_URL } from "../config/api";
@@ -86,7 +87,7 @@ export default function Register() {
           required
         />
         <p className="text-sm text-gray-600 -mt-2">
-          💡 Remember this word - you'll need it to update your password later
+          💡 Remember this word - you&apos;ll need it to update your password later
         </p>
         <input
           type="text"

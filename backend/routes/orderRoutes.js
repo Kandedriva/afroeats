@@ -25,10 +25,10 @@ router.post("/", async (req, res) => {
       // Column creation check handled silently
     }
 
-    // 3. Insert order
+    // 3. Insert order (demo mode - mark as paid immediately)
     const result = await pool.query(
-      "INSERT INTO orders (user_id, total, order_details, delivery_address, delivery_phone) VALUES ($1, $2, $3, $4, $5) RETURNING id",
-      [userId, total, orderDetails, deliveryAddress, deliveryPhone]
+      "INSERT INTO orders (user_id, total, order_details, delivery_address, delivery_phone, status, paid_at) VALUES ($1, $2, $3, $4, $5, $6, NOW()) RETURNING id",
+      [userId, total, orderDetails, deliveryAddress, deliveryPhone, 'paid']
     );
     const orderId = result.rows[0].id;
 
@@ -203,8 +203,11 @@ router.post("/checkout-session", requireAuth, async (req, res) => {
         
         console.log("13. Demo mode order creation completed successfully");
 
+        // Get the frontend URL dynamically
+        const frontendUrl = req.headers.origin || req.headers.referer?.replace(/\/$/, '') || 'http://localhost:3000';
+        
         const responseData = { 
-          url: `http://localhost:3000/order-success?order_id=${orderId}&demo=true`,
+          url: `${frontendUrl}/order-success?order_id=${orderId}&demo=true`,
           demo_mode: true,
           order_id: orderId
         };
@@ -309,22 +312,25 @@ router.post("/checkout-session", requireAuth, async (req, res) => {
       combinedOrderDetails = orderDetails || '';
     }
 
-    // Create order in database first
-    const orderResult = await pool.query(
-      "INSERT INTO orders (user_id, total, order_details, delivery_address, delivery_phone, delivery_type, restaurant_instructions, status, platform_fee) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id",
-      [userId, total, combinedOrderDetails, finalDeliveryAddress, finalDeliveryPhone, finalDeliveryType, JSON.stringify(restaurantInstructions || null), 'pending', platformFee]
-    );
-    const orderId = orderResult.rows[0].id;
-
-    // Insert order items with restaurant_id
-    const itemPromises = items.map(item => {
-      const restaurantId = item.restaurantId || item.restaurant_id || null;
-      return pool.query(
-        "INSERT INTO order_items (order_id, dish_id, name, price, quantity, restaurant_id) VALUES ($1, $2, $3, $4, $5, $6)",
-        [orderId, item.id, item.name, item.price, item.quantity, restaurantId]
-      );
-    });
-    await Promise.all(itemPromises);
+    // Store order data for creation after payment success
+    // Don't create order in database yet - wait for payment confirmation
+    const orderData = {
+      userId,
+      total,
+      orderDetails: combinedOrderDetails,
+      deliveryAddress: finalDeliveryAddress,
+      deliveryPhone: finalDeliveryPhone,
+      deliveryType: finalDeliveryType,
+      restaurantInstructions: restaurantInstructions || null,
+      platformFee,
+      items: items.map(item => ({
+        dishId: item.id,
+        name: item.name,
+        price: item.price,
+        quantity: item.quantity,
+        restaurantId: item.restaurantId || item.restaurant_id || null
+      }))
+    };
 
     // Group items by restaurant for payment splitting
     const restaurantTotals = {};
@@ -377,36 +383,26 @@ router.post("/checkout-session", requireAuth, async (req, res) => {
       quantity: 1,
     });
 
+    // Get the frontend URL dynamically
+    const frontendUrl = req.headers.origin || req.headers.referer?.replace(/\/$/, '') || 'http://localhost:3000';
+    
     // Create Stripe checkout session (customer pays the full amount)
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       mode: 'payment',
       line_items: lineItems,
-      success_url: `http://localhost:3000/order-success?session_id={CHECKOUT_SESSION_ID}&order_id=${orderId}`,
-      cancel_url: `http://localhost:3000/cart?canceled=true`,
+      success_url: `${frontendUrl}/order-success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${frontendUrl}/cart?canceled=true`,
       metadata: {
-        orderId: orderId.toString(),
+        orderData: JSON.stringify(orderData),
         userId: userId.toString(),
         platformFee: platformFee.toString(),
-        restaurantCount: Object.keys(restaurantTotals).length.toString()
+        restaurantCount: Object.keys(restaurantTotals).length.toString(),
+        restaurantTotals: JSON.stringify(restaurantTotals)
       },
     });
 
-    // Update order with session ID and restaurant payment data
-    await pool.query(
-      "UPDATE orders SET stripe_session_id = $1 WHERE id = $2",
-      [session.id, orderId]
-    );
-
-    // Store restaurant payment info for later processing
-    for (const [restaurantId, data] of Object.entries(restaurantTotals)) {
-      const status = data.restaurant.stripe_account_id ? 'pending' : 'no_connect_account';
-      await pool.query(
-        `INSERT INTO restaurant_payments (order_id, restaurant_id, amount, stripe_account_id, status) 
-         VALUES ($1, $2, $3, $4, $5)`,
-        [orderId, restaurantId, data.total, data.restaurant.stripe_account_id, status]
-      );
-    }
+    // No order created yet - it will be created in payment success handler
 
     res.json({ url: session.url });
 
@@ -467,44 +463,82 @@ router.get("/:id", requireAuth, async (req, res) => {
 // GET /api/orders/success - Handle successful payment
 router.get("/success", async (req, res) => {
   try {
-    const { session_id, order_id } = req.query;
+    const { session_id } = req.query;
 
-    if (!session_id || !order_id) {
-      return res.status(400).json({ error: "Missing session ID or order ID" });
+    if (!session_id) {
+      return res.status(400).json({ error: "Missing session ID" });
     }
 
     if (!stripe) {
-      // Demo mode - just mark order as paid
-      await pool.query(
-        "UPDATE orders SET status = $1, paid_at = NOW() WHERE id = $2",
-        ['paid', order_id]
-      );
-      return res.json({ success: true, message: "Order confirmed (demo mode)" });
+      return res.status(400).json({ error: "Stripe not configured" });
     }
 
     // Retrieve the session from Stripe
     const session = await stripe.checkout.sessions.retrieve(session_id);
     
     if (session.payment_status === 'paid') {
-      // Update order status
-      await pool.query(
-        "UPDATE orders SET status = $1, paid_at = NOW() WHERE id = $2",
-        ['paid', order_id]
-      );
+      // Parse order data from session metadata
+      const orderData = JSON.parse(session.metadata.orderData);
+      const restaurantTotals = JSON.parse(session.metadata.restaurantTotals);
       
-      // Clear user's cart after successful payment
-      const orderResult = await pool.query("SELECT user_id FROM orders WHERE id = $1", [order_id]);
-      if (orderResult.rows.length > 0) {
-        const userId = orderResult.rows[0].user_id;
-        await pool.query("DELETE FROM carts WHERE user_id = $1", [userId]);
+      console.log("Creating order after successful payment:", {
+        sessionId: session_id,
+        userId: orderData.userId,
+        total: orderData.total
+      });
+
+      // Now create the order in database since payment is confirmed
+      const orderResult = await pool.query(
+        "INSERT INTO orders (user_id, total, order_details, delivery_address, delivery_phone, delivery_type, restaurant_instructions, status, platform_fee, stripe_session_id, paid_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW()) RETURNING id",
+        [
+          orderData.userId,
+          orderData.total,
+          orderData.orderDetails,
+          orderData.deliveryAddress,
+          orderData.deliveryPhone,
+          orderData.deliveryType,
+          JSON.stringify(orderData.restaurantInstructions),
+          'paid', // Start with 'paid' status since payment is confirmed
+          orderData.platformFee,
+          session_id
+        ]
+      );
+      const orderId = orderResult.rows[0].id;
+
+      // Insert order items with restaurant_id
+      const itemPromises = orderData.items.map(item => {
+        return pool.query(
+          "INSERT INTO order_items (order_id, dish_id, name, price, quantity, restaurant_id) VALUES ($1, $2, $3, $4, $5, $6)",
+          [orderId, item.dishId, item.name, item.price, item.quantity, item.restaurantId]
+        );
+      });
+      await Promise.all(itemPromises);
+
+      // Store restaurant payment info
+      for (const [restaurantId, data] of Object.entries(restaurantTotals)) {
+        const status = data.restaurant.stripe_account_id ? 'pending' : 'no_connect_account';
+        await pool.query(
+          `INSERT INTO restaurant_payments (order_id, restaurant_id, amount, stripe_account_id, status) 
+           VALUES ($1, $2, $3, $4, $5)`,
+          [orderId, restaurantId, data.total, data.restaurant.stripe_account_id, status]
+        );
       }
       
-      res.json({ success: true, message: "Order confirmed and payment processed" });
+      // Clear user's cart after successful payment
+      await pool.query("DELETE FROM carts WHERE user_id = $1", [orderData.userId]);
+      
+      console.log("Order created successfully after payment:", orderId);
+      
+      res.json({ 
+        success: true, 
+        message: "Order confirmed and payment processed",
+        orderId: orderId
+      });
     } else {
       res.status(400).json({ error: "Payment not completed" });
     }
   } catch (err) {
-    // Order success handler error
+    console.error("Order success handler error:", err);
     res.status(500).json({ error: "Failed to process order success" });
   }
 });
@@ -565,8 +599,11 @@ router.post("/checkout-session-ORIGINAL", requireAuth, async (req, res) => {
       // Clear the user's cart after creating the order
       await pool.query("DELETE FROM carts WHERE user_id = $1", [userId]);
 
+      // Get the frontend URL dynamically
+      const frontendUrl = req.headers.origin || req.headers.referer?.replace(/\/$/, '') || 'http://localhost:3000';
+      
       return res.json({ 
-        url: `http://localhost:3000/demo-order-checkout?order_id=${orderId}`,
+        url: `${frontendUrl}/demo-order-checkout?order_id=${orderId}`,
         demo_mode: true,
         order_id: orderId
       });
@@ -680,14 +717,17 @@ router.post("/checkout-session-ORIGINAL", requireAuth, async (req, res) => {
     // Clear the user's cart after creating the order
     await pool.query("DELETE FROM carts WHERE user_id = $1", [userId]);
 
+    // Get the frontend URL dynamically
+    const frontendUrl = req.headers.origin || req.headers.referer?.replace(/\/$/, '') || 'http://localhost:3000';
+
     // For multi-restaurant orders, we'll collect payment to our platform account
     // and then distribute to restaurant owners via transfers after payment succeeds
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       mode: 'payment',
       line_items: lineItems,
-      success_url: `http://localhost:3000/order-success?session_id={CHECKOUT_SESSION_ID}&order_id=${orderId}`,
-      cancel_url: `http://localhost:3000/cart?canceled=true`,
+      success_url: `${frontendUrl}/order-success?session_id={CHECKOUT_SESSION_ID}&order_id=${orderId}`,
+      cancel_url: `${frontendUrl}/cart?canceled=true`,
       metadata: {
         orderId: orderId.toString(),
         userId: userId.toString(),

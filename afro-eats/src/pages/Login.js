@@ -1,7 +1,7 @@
-import React, { useState } from "react";
+// React import removed as it's not needed in React 17+
+import { useState, useContext } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
-import { useContext } from "react";
 import { API_BASE_URL } from "../config/api";
 
 export default function Login() {

@@ -31,13 +31,9 @@ import { OwnerAuthProvider } from "./context/OwnerAuthContext";
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import './utils/networkTest';
+import ErrorBoundary from "./Components/ErrorBoundary";
+import AsyncErrorBoundary from "./Components/AsyncErrorBoundary";
 
-// Debug environment variables
-console.log('🔧 Environment Debug:', {
-  NODE_ENV: process.env.NODE_ENV,
-  REACT_APP_API_BASE_URL: process.env.REACT_APP_API_BASE_URL,
-  API_BASE_URL_FROM_CONFIG: require('./config/api').API_BASE_URL
-});
 
 function AppContent() {
   const { user } = useContext(AuthContext);
@@ -58,7 +54,9 @@ function AppContent() {
           path="/my-orders" 
           element={
             <ProtectedRoute>
-              <CustomerOrders />
+              <ErrorBoundary>
+                <CustomerOrders />
+              </ErrorBoundary>
             </ProtectedRoute>
           } 
         />
@@ -86,7 +84,11 @@ function AppContent() {
             </ProtectedRoute>
           } 
         />
-        <Route path="/cart" element={<CartPage />} />
+        <Route path="/cart" element={
+          <ErrorBoundary>
+            <CartPage />
+          </ErrorBoundary>
+        } />
         <Route 
           path="/delivery-options" 
           element={
@@ -156,15 +158,17 @@ function AppContent() {
 
 function App() {
   return (
-    <div className="min-h-screen bg-gray-100">
-      <AuthProvider>
-        <OwnerAuthProvider>
-          <CartProvider>
-            <AppContent />
-            <ToastContainer
-              position="top-right"
-              autoClose={5000}
-              hideProgressBar={false}
+    <AsyncErrorBoundary>
+      <ErrorBoundary level="app">
+        <div className="min-h-screen bg-gray-100">
+          <AuthProvider>
+            <OwnerAuthProvider>
+              <CartProvider>
+                <AppContent />
+                <ToastContainer
+                  position="top-right"
+                  autoClose={5000}
+                  hideProgressBar={false}
               newestOnTop={false}
               closeOnClick
               rtl={false}
@@ -176,7 +180,9 @@ function App() {
           </CartProvider>
         </OwnerAuthProvider>
       </AuthProvider>
-    </div>
+        </div>
+      </ErrorBoundary>
+    </AsyncErrorBoundary>
   );
 }
 

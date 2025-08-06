@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+// React import removed as it's not needed in React 17+
+import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
@@ -101,7 +102,7 @@ export default function DeliveryOptions() {
       const { url } = await res.json();
       window.location.href = url; // Redirect to Stripe checkout
     } catch (err) {
-      toast.error("Failed to proceed to checkout: " + err.message);
+      toast.error(`Failed to proceed to checkout: ${err.message}`);
     }
   };
 
@@ -132,7 +133,7 @@ export default function DeliveryOptions() {
               instructions.trim() && (
                 <div key={restaurant} className="mb-2">
                   <p className="text-sm font-medium text-gray-600">🏪 {restaurant}:</p>
-                  <p className="text-sm text-gray-500 ml-4 italic">"{instructions}"</p>
+                  <p className="text-sm text-gray-500 ml-4 italic">&quot;{instructions}&quot;</p>
                 </div>
               )
             )}
@@ -153,6 +154,15 @@ export default function DeliveryOptions() {
                 : "border-gray-300 hover:border-gray-400"
             }`}
             onClick={() => setDeliveryType("delivery")}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                setDeliveryType("delivery");
+              }
+            }}
+            role="button"
+            tabIndex="0"
+            aria-label="Select delivery option"
           >
             <div className="flex items-center">
               <input
@@ -178,6 +188,15 @@ export default function DeliveryOptions() {
                 : "border-gray-300 hover:border-gray-400"
             }`}
             onClick={() => setDeliveryType("pickup")}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                setDeliveryType("pickup");
+              }
+            }}
+            role="button"
+            tabIndex="0"
+            aria-label="Select pickup option"
           >
             <div className="flex items-center">
               <input
@@ -211,6 +230,15 @@ export default function DeliveryOptions() {
                   : "border-gray-300 hover:border-gray-400"
               }`}
               onClick={() => setUseRegisteredAddress(true)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setUseRegisteredAddress(true);
+                }
+              }}
+              role="button"
+              tabIndex="0"
+              aria-label="Use registered address"
             >
               <div className="flex items-start">
                 <input
@@ -240,6 +268,15 @@ export default function DeliveryOptions() {
                   : "border-gray-300 hover:border-gray-400"
               }`}
               onClick={() => setUseRegisteredAddress(false)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setUseRegisteredAddress(false);
+                }
+              }}
+              role="button"
+              tabIndex="0"
+              aria-label="Enter different address"
             >
               <div className="flex items-start">
                 <input
@@ -255,10 +292,11 @@ export default function DeliveryOptions() {
                   {!useRegisteredAddress && (
                     <div className="mt-3 space-y-3">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label htmlFor="delivery-address" className="block text-sm font-medium text-gray-700 mb-1">
                           Delivery Address
                         </label>
                         <textarea
+                          id="delivery-address"
                           value={customAddress}
                           onChange={(e) => setCustomAddress(e.target.value)}
                           className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
@@ -269,10 +307,11 @@ export default function DeliveryOptions() {
                       </div>
                       
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label htmlFor="delivery-phone" className="block text-sm font-medium text-gray-700 mb-1">
                           Phone Number
                         </label>
                         <input
+                          id="delivery-phone"
                           type="tel"
                           value={customPhone}
                           onChange={(e) => setCustomPhone(e.target.value)}
@@ -313,7 +352,7 @@ export default function DeliveryOptions() {
         <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
           <h4 className="font-medium text-yellow-800">📋 Pickup Instructions</h4>
           <p className="text-sm text-yellow-700 mt-1">
-            After payment, you'll receive order confirmation with pickup details. 
+            After payment, you&apos;ll receive order confirmation with pickup details. 
             Please bring a valid ID when picking up your order.
           </p>
         </div>

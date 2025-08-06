@@ -1,0 +1,82 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+echo "🔍 Running pre-commit checks..."
+
+# Check if we're in the right directory
+if [ ! -f "package.json" ]; then
+    echo "❌ Not in project root directory"
+    exit 1
+fi
+
+# Backend checks
+if [ -d "backend" ]; then
+    echo "🔧 Checking backend code..."
+    cd backend
+    
+    # Run ESLint
+    if command -v npx >/dev/null 2>&1; then
+        echo "  Running ESLint..."
+        npx eslint . --ext .js --max-warnings 0
+        if [ $? -ne 0 ]; then
+            echo "❌ Backend ESLint failed"
+            exit 1
+        fi
+        
+        # Run Prettier check
+        echo "  Checking code formatting..."
+        npx prettier --check "**/*.js"
+        if [ $? -ne 0 ]; then
+            echo "❌ Backend code formatting issues found. Run 'npm run format' to fix."
+            exit 1
+        fi
+    fi
+    
+    cd ..
+fi
+
+# Frontend checks
+if [ -d "afro-eats" ]; then
+    echo "🎨 Checking frontend code..."
+    cd afro-eats
+    
+    if command -v npx >/dev/null 2>&1; then
+        echo "  Running ESLint..."
+        npx eslint src --ext .js,.jsx --max-warnings 0
+        if [ $? -ne 0 ]; then
+            echo "❌ Frontend ESLint failed"
+            exit 1
+        fi
+        
+        # Run Prettier check
+        echo "  Checking code formatting..."
+        npx prettier --check "src/**/*.{js,jsx,css}"
+        if [ $? -ne 0 ]; then
+            echo "❌ Frontend code formatting issues found. Run 'npm run format' to fix."
+            exit 1
+        fi
+    fi
+    
+    cd ..
+fi
+
+# Check for secrets or sensitive data
+echo "🔒 Scanning for potential secrets..."
+if grep -r -i --exclude-dir=node_modules --exclude-dir=.git --exclude="*.log" \
+    -E "(password|secret|key|token|api_key).*=.*['\"][^'\"]{8,}" . | grep -v ".example" | grep -v "test" | grep -v ".md"; then
+    echo "❌ Potential secrets found in code. Please review and remove sensitive data."
+    exit 1
+fi
+
+# Check for large files
+echo "📁 Checking for large files..."
+find . -name "*.js" -o -name "*.jsx" -o -name "*.json" | while read file; do
+    if [ -f "$file" ]; then
+        size=$(wc -c < "$file")
+        if [ $size -gt 100000 ]; then  # 100KB
+            echo "⚠️  Large file detected: $file (${size} bytes)"
+        fi
+    fi
+done
+
+echo "✅ Pre-commit checks passed!"

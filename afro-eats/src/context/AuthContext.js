@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import PropTypes from 'prop-types';
 import { API_BASE_URL } from "../config/api";
 
 export const AuthContext = createContext();
@@ -18,23 +19,14 @@ export const AuthProvider = ({ children }) => {
         setError(null);
         
         // First, test basic connectivity
-        console.log(`🔄 Attempting to connect to backend (attempt ${retryCount + 1}):`, API_BASE_URL);
-        console.log('🌐 Testing basic fetch capabilities...');
         
         // Test basic fetch first
         try {
           // Test with minimal fetch options first
-          const testResponse = await fetch(`${API_BASE_URL}/api/health`, {
+          const _testResponse = await fetch(`${API_BASE_URL}/api/health`, {
             method: 'GET'
           });
-          console.log('✅ Basic connectivity test passed:', testResponse.status);
         } catch (testError) {
-          console.error('❌ Basic connectivity test failed:', testError);
-          console.error('testError details:', {
-            name: testError.name,
-            message: testError.message,
-            stack: testError.stack
-          });
           throw new Error(`Cannot reach backend server at ${API_BASE_URL}: ${testError.message}`);
         }
         
@@ -42,7 +34,6 @@ export const AuthProvider = ({ children }) => {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
         
-        console.log('🔐 Testing auth endpoint...');
         const res = await fetch(`${API_BASE_URL}/api/auth/me`, {
           credentials: "include",
           signal: controller.signal,
@@ -63,7 +54,6 @@ export const AuthProvider = ({ children }) => {
         if (!res.ok) {
           // Retry once for mobile network issues
           if (retryCount < 2) {
-            console.log(`Auth check failed (attempt ${retryCount + 1}), retrying...`);
             setTimeout(() => fetchUser(retryCount + 1), 2000);
             return;
           }
@@ -71,17 +61,13 @@ export const AuthProvider = ({ children }) => {
         }
 
         const data = await res.json();
-        console.log('✅ Backend connection successful, user authenticated:', data);
         setUser(data);
       } catch (err) {
-        console.error('Auth check error:', err);
         
         // Handle specific error types
         if (err.name === 'AbortError') {
-          console.error('Auth request timed out');
           setError('Connection timeout - please check your internet connection');
         } else if (err.message.includes('Failed to fetch')) {
-          console.error('Network connection failed - backend server may be down');
           setError('Unable to connect to server - please try again later');
           // Try one more time after a longer delay for network issues
           if (retryCount < 1) {
@@ -119,13 +105,19 @@ export const AuthProvider = ({ children }) => {
             return res.json();
           } else if (res.status === 401) {
             setUser(null);
+            return null;
           }
+          return null;
         }).then(data => {
           if (data) {
             setUser(data);
           }
         }).catch(err => {
-          console.error('Visibility auth check failed:', err);
+          // Log auth refresh errors for debugging but don't disrupt user experience
+          if (process.env.NODE_ENV === 'development') {
+            // eslint-disable-next-line no-console
+            console.warn('Auth refresh failed during visibility change:', err.message);
+          }
         });
       }
     };
@@ -148,7 +140,9 @@ export const AuthProvider = ({ children }) => {
       setUser(null);
       
       if (res.ok) {
+        // Logout successful
       } else {
+        // Logout failed but we still clear local state
       }
       
       // Navigate to login page
@@ -165,6 +159,10 @@ export const AuthProvider = ({ children }) => {
       {children}
     </AuthContext.Provider>
   );
+};
+
+AuthProvider.propTypes = {
+  children: PropTypes.node.isRequired,
 };
 
 export const useAuth = () => useContext(AuthContext);
