@@ -5,6 +5,7 @@ import { Navigate, useNavigate, Link } from "react-router-dom";
 import ToggleSwitch from "../Components/ToggleSwitch";
 import { toast } from 'react-toastify';
 import { API_BASE_URL } from "../config/api";
+import { getImageUrl, handleImageError } from "../utils/imageUtils";
 
 function OwnerDashboard() {
   const { owner, loading: authLoading } = useContext(OwnerAuthContext);
@@ -152,24 +153,53 @@ function OwnerDashboard() {
   const handleConnectStripe = async () => {
     try {
       setConnecting(true);
+      
       const res = await fetch(`${API_BASE_URL}/api/stripe/create-stripe-account`, {
         method: "POST",
         credentials: "include",
+        headers: {
+          "Content-Type": "application/json"
+        }
       });
       
       if (!res.ok) {
         const error = await res.json();
+        
+        // Handle specific activation required error
+        if (error.activation_required) {
+          toast.error(
+            <div>
+              <p><strong>Stripe Account Activation Required</strong></p>
+              <p>{error.details}</p>
+              <p>
+                <a 
+                  href={error.activation_url} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-blue-600 underline"
+                >
+                  Activate your Stripe account →
+                </a>
+              </p>
+            </div>,
+            { autoClose: false }
+          );
+          return;
+        }
+        
         throw new Error(error.error || "Failed to create Stripe account");
       }
       
       const data = await res.json();
+      
       if (data.url) {
         window.location.href = data.url;
+      } else if (data.development) {
+        toast.info("Development mode: Stripe is not configured with real API keys");
       } else {
         throw new Error("No redirect URL received");
       }
     } catch (err) {
-      // Stripe connect error
       toast.error(`Failed to connect to Stripe: ${err.message}`);
     } finally {
       setConnecting(false);
@@ -370,10 +400,9 @@ function OwnerDashboard() {
       return;
     }
 
-    // Validate file type
-    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-    if (!allowedTypes.includes(file.type)) {
-      toast.error("Please upload a valid image file (JPEG, PNG, GIF, WebP)");
+    // Validate file type - match backend validation
+    if (!file.type.startsWith('image/')) {
+      toast.error("Please upload a valid image file (JPEG, PNG, GIF, WebP, AVIF)");
       return;
     }
 
@@ -476,12 +505,13 @@ function OwnerDashboard() {
                     aria-label="Change restaurant logo"
                   >
                     <img
-                      src={`${API_BASE_URL}${restaurant.image_url.replace(/\\/g, "/")}?t=${logoTimestamp}`}
+                      src={`${getImageUrl(restaurant.image_url, "Logo")}?t=${logoTimestamp}`}
                       alt="Restaurant Logo"
                       className="w-full h-full object-cover"
                       onError={(e) => {
-                        e.target.style.display = 'none';
+                        handleImageError(e, "Logo");
                         e.target.parentNode.nextSibling.style.display = 'block';
+                        e.target.style.display = 'none';
                       }}
                     />
                   </button>
@@ -693,9 +723,10 @@ function OwnerDashboard() {
                 <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                   {dish.image_url && (
                     <img
-                      src={`${API_BASE_URL}${dish.image_url.replace(/\\/g, "/")}`}
+                      src={getImageUrl(dish.image_url, dish.name)}
                       alt={dish.name}
                       className="w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-lg mx-auto sm:mx-0"
+                      onError={(e) => handleImageError(e, dish.name)}
                     />
                   )}
                   <div className="text-center sm:text-left">
@@ -944,9 +975,10 @@ function OwnerDashboard() {
                   <p className="text-sm font-medium text-gray-700 mb-2">Current Logo:</p>
                   <div className="flex justify-center sm:justify-start">
                     <img
-                      src={`${API_BASE_URL}${restaurant.image_url.replace(/\\/g, "/")}`}
+                      src={getImageUrl(restaurant.image_url, "Current Logo")}
                       alt="Current Logo"
                       className="w-16 h-16 sm:w-20 sm:h-20 object-cover rounded-lg border-2 border-gray-200"
+                      onError={(e) => handleImageError(e, "Current Logo")}
                     />
                   </div>
                 </div>

@@ -17,10 +17,12 @@ export const getImageUrl = (imageUrl, fallbackText = "No Image") => {
     return createPlaceholderImage(fallbackText);
   }
   
+  // If it's already a full URL (R2 or other CDN), return as-is
   if (imageUrl.startsWith('http')) {
     return imageUrl;
   }
   
+  // For relative paths, construct with API base URL
   const cleanPath = imageUrl.replace(/\\/g, "/");
   const url = `${API_BASE_URL}${cleanPath.startsWith('/') ? '' : '/'}${cleanPath}`;
   return url;

@@ -133,10 +133,12 @@ class R2StorageService {
    * Get public URL for an image
    */
   getPublicUrl(key) {
-    if (!this.publicUrl) {
-      return `${process.env.R2_ENDPOINT}/${this.bucketName}/${key}`;
-    }
-    return `${this.publicUrl}/${key}`;
+    // Use our backend proxy endpoint to serve R2 images
+    const baseUrl = process.env.NODE_ENV === 'production' 
+      ? process.env.BACKEND_URL || 'https://your-backend.com'
+      : `http://localhost:${process.env.PORT || 5001}`;
+    
+    return `${baseUrl}/api/r2-images/${key}`;
   }
 
   /**
@@ -146,13 +148,23 @@ class R2StorageService {
     if (!url) return null;
 
     try {
-      // Handle both custom domain and direct R2 URLs
+      // Handle our backend proxy URLs
+      if (url.includes('/api/r2-images/')) {
+        const parts = url.split('/api/r2-images/');
+        return parts[1];
+      }
+      
+      // Handle custom domain URLs (if R2_PUBLIC_URL is used)
       if (this.publicUrl && url.startsWith(this.publicUrl)) {
         return url.replace(`${this.publicUrl}/`, '');
-      } else if (url.includes(this.bucketName)) {
+      } 
+      
+      // Handle direct R2 URLs
+      if (url.includes(this.bucketName)) {
         const urlParts = url.split(`${this.bucketName}/`);
         return urlParts[1];
       }
+      
       return null;
     } catch (error) {
       logger.error('Error extracting key from URL:', error);

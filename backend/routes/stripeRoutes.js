@@ -6,14 +6,52 @@ import { requireOwnerAuth } from "../middleware/ownerAuth.js";
 
 const router = express.Router();
 
-// POST /api/stripe/create-stripe-account
-router.post('/stripe/create-stripe-account', requireOwnerAuth, async (req, res) => {
+// Add logging middleware to see if requests reach this router
+router.use((req, res, next) => {
+  console.log('🚀 STRIPE ROUTER - Request received:', req.method, req.path);
+  console.log('🚀 Full URL:', req.url);
+  next();
+});
+
+// POST /stripe/create-stripe-account (note: no /api prefix since it's handled by server.js mounting)
+router.post('/create-stripe-account', requireOwnerAuth, async (req, res) => {
+  console.log('🔗 Stripe Connect request received');
+  console.log('👤 Owner ID:', req.owner?.id || 'undefined');
+  console.log('📧 Owner email:', req.owner?.email || 'undefined');
+  console.log('🔒 Session ID:', req.session?.id || 'no session');
+  console.log('📍 Request headers origin:', req.headers.origin);
+  console.log('🌍 Environment:', process.env.NODE_ENV);
+  
   try {
+    // Check if owner object exists
+    if (!req.owner || !req.owner.id) {
+      console.log('❌ Owner object missing or invalid');
+      return res.status(401).json({ error: 'Owner authentication failed' });
+    }
+
     if (!stripe) {
-      return res.status(503).json({ error: 'Stripe not configured - development mode' });
+      console.log('❌ Stripe not configured - running in development mode');
+      console.log('🔑 STRIPE_SECRET_KEY exists:', !!process.env.STRIPE_SECRET_KEY);
+      return res.status(503).json({ 
+        error: 'Stripe not configured - development mode',
+        development: true 
+      });
     }
     
     const ownerId = req.owner.id;
+    console.log('🔍 Looking up owner:', ownerId);
+    
+    // Test database connection first
+    try {
+      await pool.query('SELECT NOW()');
+      console.log('✅ Database connection working');
+    } catch (dbErr) {
+      console.error('❌ Database connection failed:', dbErr.message);
+      return res.status(500).json({ 
+        error: 'Database connection failed',
+        details: dbErr.message 
+      });
+    }
     
     // Get current owner data from database
     const ownerResult = await pool.query(
@@ -22,51 +60,96 @@ router.post('/stripe/create-stripe-account', requireOwnerAuth, async (req, res) 
     );
     
     if (ownerResult.rows.length === 0) {
+      console.log('❌ Owner not found in database:', ownerId);
       return res.status(404).json({ error: 'Owner not found' });
     }
     
     const owner = ownerResult.rows[0];
+    console.log('✅ Owner found:', { id: owner.id, email: owner.email, existing_stripe: !!owner.stripe_account_id });
 
     // Create Stripe account if not already created
     if (!owner.stripe_account_id) {
-      const account = await stripe.accounts.create({
-        type: 'express',
-        email: owner.email,
-        business_type: 'individual',
-        capabilities: {
-          card_payments: { requested: true },
-          transfers: { requested: true },
-        },
-      });
+      console.log('🆕 Creating new Stripe account for owner:', owner.email);
+      try {
+        const account = await stripe.accounts.create({
+          type: 'express',
+          email: owner.email,
+          business_type: 'individual',
+          capabilities: {
+            card_payments: { requested: true },
+            transfers: { requested: true },
+          },
+        });
+        console.log('✅ Stripe account created:', account.id);
 
-      // Save the account ID to the database
-      await pool.query(
-        "UPDATE restaurant_owners SET stripe_account_id = $1 WHERE id = $2",
-        [account.id, ownerId]
-      );
-      
-      owner.stripe_account_id = account.id;
+        // Save the account ID to the database
+        await pool.query(
+          "UPDATE restaurant_owners SET stripe_account_id = $1 WHERE id = $2",
+          [account.id, ownerId]
+        );
+        console.log('💾 Stripe account ID saved to database');
+        
+        owner.stripe_account_id = account.id;
+      } catch (stripeErr) {
+        console.error('❌ Stripe account creation failed:', stripeErr.message);
+        console.error('❌ Error type:', stripeErr.type);
+        
+        // Handle account activation error specifically
+        if (stripeErr.message.includes('account must be activated')) {
+          return res.status(400).json({ 
+            error: 'Stripe account activation required',
+            details: 'Your main Stripe account needs to be activated before you can create connected accounts. Please complete the account activation at https://dashboard.stripe.com/account/onboarding',
+            activation_required: true,
+            activation_url: 'https://dashboard.stripe.com/account/onboarding'
+          });
+        }
+        
+        return res.status(500).json({ 
+          error: 'Failed to create Stripe account',
+          details: stripeErr.message,
+          type: stripeErr.type 
+        });
+      }
+    } else {
+      console.log('♻️ Using existing Stripe account:', owner.stripe_account_id);
     }
 
     // Get the frontend URL dynamically
     const frontendUrl = req.headers.origin || req.headers.referer?.replace(/\/$/, '') || 'http://localhost:3000';
+    console.log('🌐 Frontend URL detected:', frontendUrl);
 
     // Create account link for onboarding
-    const accountLink = await stripe.accountLinks.create({
-      account: owner.stripe_account_id,
-      refresh_url: `${frontendUrl}/owner/dashboard?stripe_refresh=true`,
-      return_url: `${frontendUrl}/owner/dashboard?stripe_return=true`,
-      type: 'account_onboarding',
-    });
+    console.log('🔗 Creating Stripe account link...');
+    try {
+      const accountLink = await stripe.accountLinks.create({
+        account: owner.stripe_account_id,
+        refresh_url: `${frontendUrl}/owner/dashboard?stripe_refresh=true`,
+        return_url: `${frontendUrl}/owner/dashboard?stripe_return=true`,
+        type: 'account_onboarding',
+      });
+      console.log('✅ Account link created:', accountLink.url);
 
-    res.json({ url: accountLink.url });
+      res.json({ url: accountLink.url });
+    } catch (linkErr) {
+      console.error('❌ Stripe account link creation failed:', linkErr.message);
+      return res.status(500).json({ 
+        error: 'Failed to create Stripe onboarding link',
+        details: linkErr.message 
+      });
+    }
   } catch (err) {
-    res.status(500).json({ error: 'Stripe onboarding failed' });
+    console.error('❌ Unexpected Stripe Connect error:', err);
+    console.error('❌ Full error stack:', err.stack);
+    res.status(500).json({ 
+      error: 'Stripe onboarding failed',
+      details: err.message,
+      type: err.name || 'UnknownError'
+    });
   }
 });
 
-// GET /api/stripe/connect-status
-router.get('/stripe/connect-status', requireOwnerAuth, async (req, res) => {
+// GET /stripe/connect-status
+router.get('/connect-status', requireOwnerAuth, async (req, res) => {
   try {
     if (!stripe) {
       return res.json({ 
@@ -115,8 +198,8 @@ router.get('/stripe/connect-status', requireOwnerAuth, async (req, res) => {
   }
 });
 
-// POST /api/stripe/create-order-payment-intent - For splitting payments to connected accounts
-router.post('/stripe/create-order-payment-intent', async (req, res) => {
+// POST /stripe/create-order-payment-intent - For splitting payments to connected accounts
+router.post('/create-order-payment-intent', async (req, res) => {
   try {
     if (!stripe) {
       return res.json({ 
