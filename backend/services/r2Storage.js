@@ -59,7 +59,7 @@ class R2StorageService {
   /**
    * Upload image to R2 bucket
    */
-  async uploadImage(buffer, originalName, imageType = 'general', mimeType = 'image/jpeg') {
+  async uploadImage(buffer, originalName, imageType = 'general', mimeType = 'image/jpeg', req = null) {
     if (!this.client) {
       throw new Error('R2 client not initialized. Check your R2 credentials.');
     }
@@ -86,7 +86,7 @@ class R2StorageService {
 
       await upload.done();
 
-      const imageUrl = this.getPublicUrl(key);
+      const imageUrl = this.getPublicUrl(key, req);
       
       logger.info(`Image uploaded successfully to R2: ${key}`);
       
@@ -131,12 +131,29 @@ class R2StorageService {
 
   /**
    * Get public URL for an image
+   * @param {string} key - The R2 object key
+   * @param {Object} req - Optional request object to get the base URL from
    */
-  getPublicUrl(key) {
+  getPublicUrl(key, req = null) {
     // Use our backend proxy endpoint to serve R2 images
-    const baseUrl = process.env.NODE_ENV === 'production' 
-      ? process.env.BACKEND_URL || 'https://your-backend.com'
-      : `http://localhost:${process.env.PORT || 5001}`;
+    let baseUrl;
+    
+    if (req && req.headers) {
+      // Get base URL from request headers (works in both dev and production)
+      const protocol = req.headers['x-forwarded-proto'] || (req.connection.encrypted ? 'https' : 'http');
+      const host = req.headers['x-forwarded-host'] || req.headers.host;
+      baseUrl = `${protocol}://${host}`;
+    } else if (process.env.NODE_ENV === 'production') {
+      // Production fallbacks - try multiple environment variables
+      baseUrl = process.env.BACKEND_URL || 
+                process.env.RENDER_EXTERNAL_URL || 
+                process.env.RAILWAY_STATIC_URL || 
+                (process.env.HEROKU_APP_NAME ? `https://${process.env.HEROKU_APP_NAME}.herokuapp.com` : null) ||
+                'https://afro-restaurant-backend.onrender.com'; // Known production URL fallback
+    } else {
+      // Development
+      baseUrl = `http://localhost:${process.env.PORT || 5001}`;
+    }
     
     return `${baseUrl}/api/r2-images/${key}`;
   }

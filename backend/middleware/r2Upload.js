@@ -85,7 +85,8 @@ export const uploadToR2 = (imageType = 'general', fieldName = 'image', optimize 
           imageBuffer,
           req.file.originalname,
           imageType,
-          mimeType
+          mimeType,
+          req
         );
 
         if (uploadResult.success) {
