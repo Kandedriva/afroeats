@@ -19,6 +19,7 @@ import stripeRoutes from "./routes/stripeRoutes.js";
 import webhookRoutes from "./routes/webhook.js";
 import adminRoutes from "./routes/adminRoutes.js";
 import imageProxyRoutes from "./routes/imageProxy.js";
+import debugRoutes from "./routes/debugRoutes.js";
 
 // Import security and analytics
 import { 
@@ -205,6 +206,7 @@ app.use("/api/stripe", stripeRoutes);
 app.use("/api", webhookRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api", imageProxyRoutes);
+app.use("/api/debug", debugRoutes);
 
 // Root route for deployment health checks
 app.get('/', (req, res) => {
