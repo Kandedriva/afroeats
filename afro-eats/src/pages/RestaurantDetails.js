@@ -4,6 +4,7 @@ import { useParams } from "react-router-dom";
 import { useCart } from "../context/CartContext";
 import { toast } from 'react-toastify';
 import { API_BASE_URL } from "../config/api";
+import { getImageUrl, handleImageError } from "../utils/imageUtils";
 
 export default function RestaurantDetails() {
   const { id } = useParams();
@@ -87,12 +88,10 @@ export default function RestaurantDetails() {
               }`}
             >
               <img
-                src={`${API_BASE_URL}${dish.image_url}`}
+                src={getImageUrl(dish.image_url, dish.name)}
                 alt={dish.name}
                 className="w-full h-40 sm:h-48 object-cover rounded-lg mb-3"
-                onError={(e) => {
-                  e.target.src = '/placeholder-dish.jpg';
-                }}
+                onError={(e) => handleImageError(e, dish.name)}
               />
               <h4 className="text-lg sm:text-xl font-semibold text-gray-800 mb-2 line-clamp-2">{dish.name}</h4>
               <p className="text-gray-600 text-sm sm:text-base mb-3 line-clamp-2">{dish.description}</p>

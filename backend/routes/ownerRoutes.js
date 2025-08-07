@@ -949,7 +949,7 @@ router.put("/restaurant/logo", requireOwnerAuth, ...uploadRestaurantLogo, async 
     
     if (!uploadResult.success) {
       return res.status(400).json({ 
-        error: uploadResult.error || "No logo file provided" 
+        error: uploadResult.error || "Failed to upload logo. Please check that you selected a valid image file." 
       });
     }
 

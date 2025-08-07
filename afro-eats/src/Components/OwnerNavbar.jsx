@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useOwnerAuth } from "../context/OwnerAuthContext";
 import { API_BASE_URL } from "../config/api";
+import { getImageUrl, handleImageError } from "../utils/imageUtils";
 
 const OwnerNavbar = () => {
   const { owner, logout } = useOwnerAuth();
@@ -108,12 +109,10 @@ const OwnerNavbar = () => {
           <div className="flex items-center space-x-3">
             {restaurant.image_url && (
               <img
-                src={`${API_BASE_URL}/${restaurant.image_url.replace(/\\/g, "/")}`}
+                src={getImageUrl(restaurant.image_url, restaurant.name)}
                 alt={restaurant.name}
                 className="w-8 h-8 sm:w-10 sm:h-10 rounded-full object-cover border-2 border-gray-300"
-                onError={(e) => {
-                  e.target.style.display = 'none';
-                }}
+                onError={(e) => handleImageError(e, restaurant.name)}
               />
             )}
             <Link to="/owner/dashboard" className="text-lg sm:text-xl font-bold truncate max-w-32 sm:max-w-none">
