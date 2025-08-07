@@ -18,6 +18,7 @@ import ownerAuthRoutes from "./routes/ownerAuthRoutes.js";
 import stripeRoutes from "./routes/stripeRoutes.js";
 import webhookRoutes from "./routes/webhook.js";
 import adminRoutes from "./routes/adminRoutes.js";
+import imageProxyRoutes from "./routes/imageProxy.js";
 
 // Import security and analytics
 import { 
@@ -187,6 +188,12 @@ app.use(session(sessionConfig));
 // Visitor tracking middleware (for frontend pages)
 app.use(trackVisitorMiddleware);
 
+// Add comprehensive request logging for all API requests
+app.use('/api', (req, res, next) => {
+  console.log('🌍 ALL API REQUESTS - Method:', req.method, 'Path:', req.path, 'Full URL:', req.originalUrl);
+  next();
+});
+
 // API Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/orders", orderRoutes);
@@ -194,9 +201,10 @@ app.use("/api/cart", cartRoutes);
 app.use("/api", restaurantRoutes);
 app.use("/api/owners", ownerRoutes);
 app.use("/api/auth", ownerAuthRoutes);
-app.use("/api", stripeRoutes);
+app.use("/api/stripe", stripeRoutes);
 app.use("/api", webhookRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api", imageProxyRoutes);
 
 // Root route for deployment health checks
 app.get('/', (req, res) => {

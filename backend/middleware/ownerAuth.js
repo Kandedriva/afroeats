@@ -17,7 +17,12 @@ export default function ownerAuth(req, res, next) {
     next();
   }
   export const requireOwnerAuth = (req, res, next) => {
+    console.log('🔐 OWNER AUTH MIDDLEWARE - Session check');
+    console.log('🔐 Session exists:', !!req.session);
+    console.log('🔐 Owner ID in session:', req.session?.ownerId || 'none');
+    
     if (!req.session || !req.session.ownerId) {
+      console.log('❌ OWNER AUTH FAILED - No session or owner ID');
       return res.status(401).json({ error: "Unauthorized: Owner not logged in" });
     }
     
@@ -30,6 +35,7 @@ export default function ownerAuth(req, res, next) {
       stripe_customer_id: req.session.stripeCustomerId || null,
     };
     
+    console.log('✅ OWNER AUTH SUCCESS - Owner:', req.owner.id);
     next();
   };
   

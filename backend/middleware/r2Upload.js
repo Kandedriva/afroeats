@@ -16,7 +16,7 @@ const upload = multer({
     if (file.mimetype.startsWith('image/')) {
       cb(null, true);
     } else {
-      cb(new Error('Only image files are allowed'), false);
+      cb(new Error('Please upload a valid image file (JPEG, PNG, GIF, WebP, AVIF)'), false);
     }
   }
 });
@@ -40,7 +40,7 @@ export const uploadToR2 = (imageType = 'general', fieldName = 'image', optimize 
         // Check if R2 is configured
         if (!r2Storage.isConfigured()) {
           // Fallback to indicate R2 not configured
-          req.r2UploadError = 'R2 storage not configured';
+          req.r2UploadError = 'R2 storage not configured. Please check R2_ACCESS_KEY, R2_SECRET_KEY, R2_ENDPOINT, and R2_BUCKET environment variables.';
           logger.warn('R2 storage not configured, skipping upload');
           return next();
         }
@@ -100,7 +100,7 @@ export const uploadToR2 = (imageType = 'general', fieldName = 'image', optimize 
 
       } catch (error) {
         logger.error('R2 upload middleware error:', error);
-        req.r2UploadError = error.message;
+        req.r2UploadError = `Upload failed: ${error.message}`;
         
         // Don't fail the request, let the route handler decide
         // This allows graceful degradation if R2 is not available
