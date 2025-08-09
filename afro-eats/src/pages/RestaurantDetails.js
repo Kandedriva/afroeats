@@ -11,6 +11,7 @@ export default function RestaurantDetails() {
   const [restaurant, setRestaurant] = useState(null);
   const [dishes, setDishes] = useState([]);
   const [error, setError] = useState("");
+  const [showImageModal, setShowImageModal] = useState(null);
 
   const { addToCart } = useCart();
 
@@ -83,16 +84,37 @@ export default function RestaurantDetails() {
           {dishes.map((dish) => (
             <div
               key={dish.id}
-              className={`border rounded-xl p-4 sm:p-6 shadow-md hover:shadow-lg transition-shadow duration-200 bg-white ${
-                !dish.is_available ? "opacity-50 pointer-events-none" : ""
+              className={`border rounded-xl p-4 sm:p-6 shadow-md transition-all duration-200 bg-white relative ${
+                !dish.is_available 
+                  ? "opacity-75 border-gray-300 bg-gray-50" 
+                  : "hover:shadow-lg border-gray-200"
               }`}
             >
-              <img
-                src={getImageUrl(dish.image_url, dish.name)}
-                alt={dish.name}
-                className="w-full h-40 sm:h-48 object-cover rounded-lg mb-3"
-                onError={(e) => handleImageError(e, dish.name)}
-              />
+              {!dish.is_available && (
+                <div className="absolute top-3 right-3 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full z-10">
+                  UNAVAILABLE
+                </div>
+              )}
+              <div className={`relative overflow-hidden rounded-lg mb-3 cursor-pointer group ${!dish.is_available ? 'grayscale-[50%]' : ''}`} onClick={() => setShowImageModal(dish)}>
+                <img
+                  src={getImageUrl(dish.image_url, dish.name)}
+                  alt={dish.name}
+                  className={`w-full h-40 sm:h-48 object-cover transition-transform duration-300 ease-in-out ${dish.is_available ? 'group-hover:scale-110' : 'group-hover:scale-105'}`}
+                  onError={(e) => handleImageError(e, dish.name)}
+                />
+                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-opacity duration-300 flex items-center justify-center">
+                  <div className="text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 text-sm font-medium px-3 py-1 bg-black bg-opacity-50 rounded-full">
+                    Click to view
+                  </div>
+                </div>
+                {!dish.is_available && (
+                  <div className="absolute inset-0 bg-gray-900 bg-opacity-40 flex items-center justify-center">
+                    <div className="text-white text-sm font-medium px-3 py-1 bg-red-600 rounded-full">
+                      Currently Unavailable
+                    </div>
+                  </div>
+                )}
+              </div>
               <h4 className="text-lg sm:text-xl font-semibold text-gray-800 mb-2 line-clamp-2">{dish.name}</h4>
               <p className="text-gray-600 text-sm sm:text-base mb-3 line-clamp-2">{dish.description}</p>
               <div className="flex justify-between items-center mb-3">
@@ -120,6 +142,43 @@ export default function RestaurantDetails() {
               </button>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Full-size Image Modal */}
+      {showImageModal && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4"
+          onClick={() => setShowImageModal(null)}
+        >
+          <div className="relative max-w-4xl max-h-full">
+            <div onClick={(e) => e.stopPropagation()}>
+              <img
+                src={getImageUrl(showImageModal.image_url, showImageModal.name)}
+                alt={showImageModal.name}
+                className="max-w-full max-h-full object-contain rounded-lg"
+                onError={(e) => handleImageError(e, showImageModal.name)}
+              />
+            </div>
+            <button
+              onClick={() => setShowImageModal(null)}
+              className="absolute top-4 right-4 text-white bg-black bg-opacity-50 rounded-full p-2 hover:bg-opacity-75 transition-colors"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            <div className="absolute bottom-4 left-4 right-4 text-white bg-black bg-opacity-50 rounded-lg p-3">
+              <h3 className="text-lg font-semibold mb-1">{showImageModal.name}</h3>
+              <p className="text-sm opacity-90">{showImageModal.description}</p>
+              <div className="flex justify-between items-center mt-2">
+                <p className="text-green-400 font-bold text-lg">${Number(showImageModal.price).toFixed(2)}</p>
+                <p className="text-xs px-2 py-1 rounded-full bg-gray-700">
+                  {showImageModal.is_available ? "✅ Available" : "❌ Not Available"}
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
