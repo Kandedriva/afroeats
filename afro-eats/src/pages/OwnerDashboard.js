@@ -160,6 +160,8 @@ function OwnerDashboard() {
     try {
       setConnecting(true);
       
+      console.log('🔗 Attempting Stripe Connect to:', `${API_BASE_URL}/api/stripe/create-stripe-account`);
+      
       const res = await fetch(`${API_BASE_URL}/api/stripe/create-stripe-account`, {
         method: "POST",
         credentials: "include",
@@ -168,8 +170,18 @@ function OwnerDashboard() {
         }
       });
       
+      console.log('📡 Response status:', res.status);
+      console.log('📡 Response headers:', res.headers);
+      
       if (!res.ok) {
-        const error = await res.json();
+        let error;
+        try {
+          error = await res.json();
+        } catch (parseErr) {
+          throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        }
+        
+        console.error('❌ Stripe Connect error:', error);
         
         // Handle specific activation required error
         if (error.activation_required) {
@@ -193,19 +205,34 @@ function OwnerDashboard() {
           return;
         }
         
-        throw new Error(error.error || "Failed to create Stripe account");
+        // Handle authentication errors specifically
+        if (res.status === 401) {
+          toast.error("Authentication failed. Please log in again.");
+          return;
+        }
+        
+        // Handle server errors with more detail
+        if (res.status >= 500) {
+          toast.error(`Server error (${res.status}): ${error.error || error.details || "Internal server error"}`);
+          return;
+        }
+        
+        throw new Error(error.error || error.details || `HTTP ${res.status}: ${res.statusText}`);
       }
       
       const data = await res.json();
+      console.log('✅ Stripe Connect response:', data);
       
       if (data.url) {
+        console.log('🚀 Redirecting to Stripe onboarding:', data.url);
         window.location.href = data.url;
       } else if (data.development) {
         toast.info("Development mode: Stripe is not configured with real API keys");
       } else {
-        throw new Error("No redirect URL received");
+        throw new Error("No redirect URL received from Stripe");
       }
     } catch (err) {
+      console.error('❌ Stripe Connect failed:', err);
       toast.error(`Failed to connect to Stripe: ${err.message}`);
     } finally {
       setConnecting(false);
