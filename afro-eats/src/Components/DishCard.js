@@ -105,6 +105,7 @@ function DishCard({ dish }) {
 
       {/* Full-size Image Modal */}
       {showImageModal && (
+        // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
         <div 
           className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4"
           role="dialog"
