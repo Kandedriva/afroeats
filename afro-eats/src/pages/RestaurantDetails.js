@@ -95,7 +95,19 @@ export default function RestaurantDetails() {
                   UNAVAILABLE
                 </div>
               )}
-              <div className={`relative overflow-hidden rounded-lg mb-3 cursor-pointer group ${!dish.is_available ? 'grayscale-[50%]' : ''}`} onClick={() => setShowImageModal(dish)}>
+              <div 
+                className={`relative overflow-hidden rounded-lg mb-3 cursor-pointer group ${!dish.is_available ? 'grayscale-[50%]' : ''}`} 
+                role="button"
+                tabIndex={0}
+                aria-label={`View full size image of ${dish.name}`}
+                onClick={() => setShowImageModal(dish)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setShowImageModal(dish);
+                  }
+                }}
+              >
                 <img
                   src={getImageUrl(dish.image_url, dish.name)}
                   alt={dish.name}
@@ -149,10 +161,24 @@ export default function RestaurantDetails() {
       {showImageModal && (
         <div 
           className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="dish-image-title"
           onClick={() => setShowImageModal(null)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              setShowImageModal(null);
+            }
+          }}
+          tabIndex={-1}
         >
           <div className="relative max-w-4xl max-h-full">
-            <div onClick={(e) => e.stopPropagation()}>
+            <div 
+              role="button"
+              tabIndex={0}
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => e.stopPropagation()}
+            >
               <img
                 src={getImageUrl(showImageModal.image_url, showImageModal.name)}
                 alt={showImageModal.name}
@@ -169,7 +195,7 @@ export default function RestaurantDetails() {
               </svg>
             </button>
             <div className="absolute bottom-4 left-4 right-4 text-white bg-black bg-opacity-50 rounded-lg p-3">
-              <h3 className="text-lg font-semibold mb-1">{showImageModal.name}</h3>
+              <h3 id="dish-image-title" className="text-lg font-semibold mb-1">{showImageModal.name}</h3>
               <p className="text-sm opacity-90">{showImageModal.description}</p>
               <div className="flex justify-between items-center mt-2">
                 <p className="text-green-400 font-bold text-lg">${Number(showImageModal.price).toFixed(2)}</p>
