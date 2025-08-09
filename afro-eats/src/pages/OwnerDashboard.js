@@ -205,6 +205,28 @@ function OwnerDashboard() {
           return;
         }
         
+        // Handle platform profile setup required error
+        if (error.platform_setup_required) {
+          toast.error(
+            <div>
+              <p><strong>Platform Profile Setup Required</strong></p>
+              <p>{error.details}</p>
+              <p>
+                <a 
+                  href={error.setup_url} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-blue-600 underline"
+                >
+                  Complete Platform Setup →
+                </a>
+              </p>
+            </div>,
+            { autoClose: false }
+          );
+          return;
+        }
+        
         // Handle authentication errors specifically
         if (res.status === 401) {
           toast.error("Authentication failed. Please log in again.");
