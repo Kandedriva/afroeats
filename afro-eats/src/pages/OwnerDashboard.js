@@ -1183,14 +1183,23 @@ function OwnerDashboard() {
       {showEditModal && editingDish && (
         <div 
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="edit-dish-title"
           onClick={(e) => {
             if (e.target === e.currentTarget && !editImageUploading) {
               closeEditModal();
             }
           }}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape' && !editImageUploading) {
+              closeEditModal();
+            }
+          }}
+          tabIndex={-1}
         >
           <div className="bg-white rounded-lg p-4 sm:p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
-            <h3 className="text-lg sm:text-xl font-semibold mb-4 text-gray-800">
+            <h3 id="edit-dish-title" className="text-lg sm:text-xl font-semibold mb-4 text-gray-800">
               Edit Dish: {editingDish.name}
             </h3>
             
