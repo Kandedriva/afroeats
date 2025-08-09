@@ -116,6 +116,16 @@ router.post('/create-stripe-account', requireOwnerAuth, async (req, res) => {
           });
         }
         
+        // Handle platform profile completion requirement
+        if (stripeErr.message.includes('complete your platform profile') || stripeErr.message.includes('questionnaire')) {
+          return res.status(400).json({ 
+            error: 'Platform profile completion required',
+            details: 'You must complete your Stripe platform profile before creating connected accounts. Please go to your Stripe Dashboard → Connect → Accounts → Overview and complete the platform questionnaire.',
+            platform_setup_required: true,
+            setup_url: 'https://dashboard.stripe.com/connect/accounts/overview'
+          });
+        }
+        
         return res.status(500).json({ 
           error: 'Failed to create Stripe account',
           details: stripeErr.message,
