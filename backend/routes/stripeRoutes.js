@@ -13,6 +13,16 @@ router.use((req, res, next) => {
   next();
 });
 
+// Simple test endpoint to verify connectivity
+router.get('/test', (req, res) => {
+  res.json({
+    message: 'Stripe routes are working',
+    stripe_configured: !!stripe,
+    database_configured: !!pool,
+    timestamp: new Date().toISOString()
+  });
+});
+
 // POST /stripe/create-stripe-account (note: no /api prefix since it's handled by server.js mounting)
 router.post('/create-stripe-account', requireOwnerAuth, async (req, res) => {
   console.log('🔗 Stripe Connect request received');
@@ -21,6 +31,8 @@ router.post('/create-stripe-account', requireOwnerAuth, async (req, res) => {
   console.log('🔒 Session ID:', req.session?.id || 'no session');
   console.log('📍 Request headers origin:', req.headers.origin);
   console.log('🌍 Environment:', process.env.NODE_ENV);
+  console.log('🔑 Stripe configured:', !!stripe);
+  console.log('💾 Database pool exists:', !!pool);
   
   try {
     // Check if owner object exists
