@@ -24,7 +24,7 @@ router.get("/restaurants/:id", async (req, res) => {
     }
 
     const dishesRes = await pool.query(
-      "SELECT * FROM dishes WHERE restaurant_id = $1 AND is_available = true",
+      "SELECT * FROM dishes WHERE restaurant_id = $1 ORDER BY is_available DESC, name ASC",
       [id]
     );
 

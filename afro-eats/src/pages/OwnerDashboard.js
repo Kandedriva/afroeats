@@ -22,6 +22,12 @@ function OwnerDashboard() {
   const [logoUploading, setLogoUploading] = useState(false);
   const [showLogoModal, setShowLogoModal] = useState(false);
   const [logoTimestamp, setLogoTimestamp] = useState(Date.now());
+  const [editingDish, setEditingDish] = useState(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editFormData, setEditFormData] = useState({ name: '', description: '', price: '', image: null });
+  const [editImageUploading, setEditImageUploading] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
+  const [deletingDish, setDeletingDish] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -468,6 +474,138 @@ function OwnerDashboard() {
     }
   };
 
+  const openEditModal = (dish) => {
+    setEditingDish(dish);
+    setEditFormData({
+      name: dish.name,
+      description: dish.description || '',
+      price: dish.price,
+      image: null
+    });
+    setShowEditModal(true);
+  };
+
+  const closeEditModal = () => {
+    setShowEditModal(false);
+    setEditingDish(null);
+    setEditFormData({ name: '', description: '', price: '', image: null });
+    setEditImageUploading(false);
+    // Reset file input
+    const fileInput = document.getElementById('edit-dish-image');
+    if (fileInput) {
+      fileInput.value = '';
+    }
+  };
+
+  const handleEditInputChange = (e) => {
+    const { name, value, files } = e.target;
+    if (name === 'image') {
+      const file = files[0];
+      if (file) {
+        // Validate file type
+        if (!file.type.startsWith('image/')) {
+          toast.error("Please upload a valid image file (JPEG, PNG, GIF, WebP, AVIF)");
+          return;
+        }
+        // Validate file size (max 5MB)
+        if (file.size > 5 * 1024 * 1024) {
+          toast.error("Image file size must be less than 5MB");
+          return;
+        }
+      }
+      setEditFormData(prev => ({ ...prev, image: file }));
+    } else {
+      setEditFormData(prev => ({ ...prev, [name]: value }));
+    }
+  };
+
+  const handleUpdateDish = async (e) => {
+    e.preventDefault();
+    
+    if (!editingDish) {
+      return;
+    }
+
+    try {
+      setEditImageUploading(true);
+      
+      const formData = new FormData();
+      formData.append('name', editFormData.name);
+      formData.append('description', editFormData.description);
+      formData.append('price', editFormData.price);
+      
+      if (editFormData.image) {
+        formData.append('image', editFormData.image);
+      }
+
+      const res = await fetch(`${API_BASE_URL}/api/owners/dishes/${editingDish.id}`, {
+        method: "PUT",
+        credentials: "include",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to update dish");
+      }
+
+      const updatedDish = await res.json();
+
+      // Update dishes state with the updated dish
+      setDishes(prev => prev.map(dish => 
+        dish.id === editingDish.id 
+          ? { ...dish, ...updatedDish.dish }
+          : dish
+      ));
+
+      toast.success("Dish updated successfully!");
+      closeEditModal();
+    } catch (err) {
+      toast.error(`Error updating dish: ${err.message}`);
+    } finally {
+      setEditImageUploading(false);
+    }
+  };
+
+  const showDeleteModal = (dish) => {
+    setShowDeleteConfirm(dish);
+  };
+
+  const closeDeleteModal = () => {
+    setShowDeleteConfirm(null);
+    setDeletingDish(false);
+  };
+
+  const handleDeleteDish = async () => {
+    if (!showDeleteConfirm) {
+      return;
+    }
+
+    try {
+      setDeletingDish(true);
+
+      const res = await fetch(`${API_BASE_URL}/api/owners/dishes/${showDeleteConfirm.id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to delete dish");
+      }
+
+      // Remove the dish from local state
+      setDishes(prev => prev.filter(dish => dish.id !== showDeleteConfirm.id));
+
+      toast.success("Dish deleted successfully!");
+      closeDeleteModal();
+    } catch (err) {
+      toast.error(`Error deleting dish: ${err.message}`);
+    } finally {
+      setDeletingDish(false);
+    }
+  };
+
   if (authLoading || loading) {
     return <div className="text-center p-6">Loading dashboard...</div>;
   }
@@ -739,12 +877,28 @@ function OwnerDashboard() {
                 </div>
 
                 <div className="flex flex-col items-center sm:items-end space-y-2">
-                  <ToggleSwitch
-                    checked={!!dish.is_available}
-                    onChange={() =>
-                      toggleAvailability(dish.id, !!dish.is_available)
-                    }
-                  />
+                  <div className="flex flex-col sm:flex-row gap-2 items-center">
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => openEditModal(dish)}
+                        className="bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium min-h-[40px] sm:min-h-0 flex items-center gap-1"
+                      >
+                        ✏️ Edit
+                      </button>
+                      <button
+                        onClick={() => showDeleteModal(dish)}
+                        className="bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 transition-colors text-sm font-medium min-h-[40px] sm:min-h-0 flex items-center gap-1"
+                      >
+                        🗑️ Delete
+                      </button>
+                    </div>
+                    <ToggleSwitch
+                      checked={!!dish.is_available}
+                      onChange={() =>
+                        toggleAvailability(dish.id, !!dish.is_available)
+                      }
+                    />
+                  </div>
                   <span className="text-xs text-gray-500 text-center sm:text-right">
                     {dish.is_available ? "In Stock" : "Out of Stock"}
                   </span>
@@ -1019,6 +1173,219 @@ function OwnerDashboard() {
                 disabled={logoUploading}
               >
                 Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Dish Modal */}
+      {showEditModal && editingDish && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !editImageUploading) {
+              closeEditModal();
+            }
+          }}
+        >
+          <div className="bg-white rounded-lg p-4 sm:p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg sm:text-xl font-semibold mb-4 text-gray-800">
+              Edit Dish: {editingDish.name}
+            </h3>
+            
+            <form onSubmit={handleUpdateDish} className="space-y-4">
+              {/* Current Image Display */}
+              {editingDish.image_url && (
+                <div className="mb-4">
+                  <p className="text-sm font-medium text-gray-700 mb-2">Current Image:</p>
+                  <div className="flex justify-center">
+                    <img
+                      src={getImageUrl(editingDish.image_url, editingDish.name)}
+                      alt={editingDish.name}
+                      className="w-20 h-20 object-cover rounded-lg border-2 border-gray-200"
+                      onError={(e) => handleImageError(e, editingDish.name)}
+                    />
+                  </div>
+                </div>
+              )}
+              
+              {/* Dish Name */}
+              <div>
+                <label htmlFor="edit-name" className="block text-sm font-medium text-gray-700 mb-2">
+                  Dish Name
+                </label>
+                <input
+                  type="text"
+                  id="edit-name"
+                  name="name"
+                  value={editFormData.name}
+                  onChange={handleEditInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  required
+                  disabled={editImageUploading}
+                />
+              </div>
+
+              {/* Description */}
+              <div>
+                <label htmlFor="edit-description" className="block text-sm font-medium text-gray-700 mb-2">
+                  Description
+                </label>
+                <textarea
+                  id="edit-description"
+                  name="description"
+                  value={editFormData.description}
+                  onChange={handleEditInputChange}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+                  disabled={editImageUploading}
+                />
+              </div>
+
+              {/* Price */}
+              <div>
+                <label htmlFor="edit-price" className="block text-sm font-medium text-gray-700 mb-2">
+                  Price ($)
+                </label>
+                <input
+                  type="number"
+                  id="edit-price"
+                  name="price"
+                  value={editFormData.price}
+                  onChange={handleEditInputChange}
+                  step="0.01"
+                  min="0"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  required
+                  disabled={editImageUploading}
+                />
+              </div>
+
+              {/* Image Upload */}
+              <div>
+                <label htmlFor="edit-dish-image" className="block text-sm font-medium text-gray-700 mb-2">
+                  Update Image (optional)
+                </label>
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-blue-400 transition-colors">
+                  <input
+                    type="file"
+                    id="edit-dish-image"
+                    name="image"
+                    accept="image/*"
+                    onChange={handleEditInputChange}
+                    className="hidden"
+                    disabled={editImageUploading}
+                  />
+                  <label htmlFor="edit-dish-image" className="cursor-pointer block">
+                    {editImageUploading ? (
+                      <div className="flex flex-col items-center">
+                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mb-2"></div>
+                        <span className="text-blue-600 font-medium text-sm">Uploading...</span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center">
+                        <svg className="w-8 h-8 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                        </svg>
+                        <span className="text-blue-600 font-medium text-sm">Click to select new image</span>
+                        <span className="text-gray-500 text-xs mt-1">PNG, JPG, GIF, WebP (Max 5MB)</span>
+                        {editFormData.image && (
+                          <span className="text-green-600 text-xs mt-1">✓ New image selected: {editFormData.image.name}</span>
+                        )}
+                      </div>
+                    )}
+                  </label>
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex flex-col sm:flex-row gap-3 sm:justify-end pt-4">
+                <button
+                  type="button"
+                  onClick={closeEditModal}
+                  className="px-4 py-3 sm:py-2 text-gray-600 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors font-medium min-h-[44px] sm:min-h-0 order-2 sm:order-1"
+                  disabled={editImageUploading}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-3 sm:py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium min-h-[44px] sm:min-h-0 order-1 sm:order-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={editImageUploading || !editFormData.name.trim() || !editFormData.price}
+                >
+                  {editImageUploading ? (
+                    <div className="flex items-center justify-center gap-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Updating...
+                    </div>
+                  ) : (
+                    '✅ Update Dish'
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Dish Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-4 sm:p-6 max-w-md w-full">
+            <h3 className="text-lg sm:text-xl font-semibold mb-4 text-gray-800">
+              Delete Dish
+            </h3>
+            <div className="mb-4">
+              {showDeleteConfirm.image_url && (
+                <div className="flex justify-center mb-3">
+                  <img
+                    src={getImageUrl(showDeleteConfirm.image_url, showDeleteConfirm.name)}
+                    alt={showDeleteConfirm.name}
+                    className="w-16 h-16 object-cover rounded-lg border-2 border-gray-200"
+                    onError={(e) => handleImageError(e, showDeleteConfirm.name)}
+                  />
+                </div>
+              )}
+              <p className="text-gray-600 mb-4 text-sm sm:text-base">
+                Are you sure you want to delete <strong>&ldquo;{showDeleteConfirm.name}&rdquo;</strong>?
+              </p>
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+                <div className="flex items-start">
+                  <div className="flex-shrink-0">
+                    <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm text-red-800">
+                      <strong>Warning:</strong> This action cannot be undone. The dish will be permanently removed from your restaurant menu.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3 sm:justify-end">
+              <button
+                onClick={closeDeleteModal}
+                className="px-4 py-3 sm:py-2 text-gray-600 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors font-medium min-h-[44px] sm:min-h-0 order-2 sm:order-1"
+                disabled={deletingDish}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteDish}
+                className="px-4 py-3 sm:py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium min-h-[44px] sm:min-h-0 order-1 sm:order-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={deletingDish}
+              >
+                {deletingDish ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Deleting...
+                  </div>
+                ) : (
+                  '🗑️ Delete Dish'
+                )}
               </button>
             </div>
           </div>

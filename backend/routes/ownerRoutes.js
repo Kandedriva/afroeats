@@ -288,6 +288,125 @@ router.patch("/dishes/:id/availability", requireOwnerAuth, async (req, res) => {
   }
 });
 
+// ========= UPDATE DISH ==========
+router.put("/dishes/:id", requireOwnerAuth, ...uploadDishImage, async (req, res) => {
+  const ownerId = req.owner.id;
+  const dishId = req.params.id;
+  const { name, description = "", price } = req.body;
+
+  try {
+    // Verify ownership
+    const ownershipCheck = await pool.query(
+      `SELECT d.id, d.image_url FROM dishes d
+       JOIN restaurants r ON d.restaurant_id = r.id
+       WHERE d.id = $1 AND r.owner_id = $2`,
+      [dishId, ownerId]
+    );
+
+    if (ownershipCheck.rows.length === 0) {
+      return res.status(403).json({ error: "Not authorized to update this dish" });
+    }
+
+    const existingDish = ownershipCheck.rows[0];
+    
+    // Handle R2 upload result for new image
+    const uploadResult = handleR2UploadResult(req);
+    let imagePath = existingDish.image_url; // Keep existing image by default
+
+    if (uploadResult.success && uploadResult.imageUrl) {
+      // New image uploaded successfully
+      imagePath = uploadResult.imageUrl;
+      
+      // Delete old image from R2 if it exists and is different
+      if (existingDish.image_url && existingDish.image_url !== imagePath) {
+        try {
+          await deleteOldR2Image(existingDish.image_url);
+        } catch (deleteErr) {
+          console.warn('Failed to delete old dish image from R2:', deleteErr);
+          // Continue anyway - don't fail the update
+        }
+      }
+    } else if (uploadResult.error) {
+      // If there was an upload attempt but it failed, return error
+      return res.status(400).json({ error: uploadResult.error });
+    }
+
+    // Update the dish
+    const updatedDish = await pool.query(
+      `UPDATE dishes SET name = $1, description = $2, price = $3, image_url = $4
+       WHERE id = $5 RETURNING *`,
+      [name, description, price, imagePath, dishId]
+    );
+
+    const formattedDish = {
+      ...updatedDish.rows[0],
+      image_url: updatedDish.rows[0].image_url ? updatedDish.rows[0].image_url.replace(/\\/g, "/") : null
+    };
+
+    res.json({ dish: formattedDish });
+  } catch (err) {
+    console.error('Update dish error:', err);
+    res.status(500).json({ error: "Server error while updating dish" });
+  }
+});
+
+// ========= DELETE DISH ==========
+router.delete("/dishes/:id", requireOwnerAuth, async (req, res) => {
+  const ownerId = req.owner.id;
+  const dishId = req.params.id;
+
+  try {
+    // Verify ownership and get dish info
+    const ownershipCheck = await pool.query(
+      `SELECT d.id, d.name, d.image_url FROM dishes d
+       JOIN restaurants r ON d.restaurant_id = r.id
+       WHERE d.id = $1 AND r.owner_id = $2`,
+      [dishId, ownerId]
+    );
+
+    if (ownershipCheck.rows.length === 0) {
+      return res.status(403).json({ error: "Not authorized to delete this dish" });
+    }
+
+    const dish = ownershipCheck.rows[0];
+
+    // Check if dish is in any pending/active orders
+    const activeOrdersCheck = await pool.query(
+      `SELECT COUNT(*) as order_count FROM order_items oi
+       JOIN orders o ON oi.order_id = o.id
+       WHERE oi.dish_id = $1 AND o.status IN ('pending', 'paid')`,
+      [dishId]
+    );
+
+    if (parseInt(activeOrdersCheck.rows[0].order_count) > 0) {
+      return res.status(400).json({ 
+        error: "Cannot delete dish with pending orders. Please wait for all orders to be completed first." 
+      });
+    }
+
+    // Delete the dish
+    await pool.query("DELETE FROM dishes WHERE id = $1", [dishId]);
+
+    // Delete associated image from R2 if it exists
+    if (dish.image_url) {
+      try {
+        await deleteOldR2Image(dish.image_url);
+      } catch (deleteErr) {
+        console.warn('Failed to delete dish image from R2:', deleteErr);
+        // Continue anyway - dish is already deleted from database
+      }
+    }
+
+    res.json({ 
+      success: true, 
+      message: `Dish "${dish.name}" has been deleted successfully` 
+    });
+  } catch (err) {
+    console.error('Delete dish error:', err);
+    res.status(500).json({ error: "Server error while deleting dish" });
+  }
+});
+
 // GET /api/owners/check-session
 router.get("/check-session", (req, res) => {
   if (req.session.ownerId) {
