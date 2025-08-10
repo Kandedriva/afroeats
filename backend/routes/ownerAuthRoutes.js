@@ -31,6 +31,7 @@ router.post("/owners/login", async (req, res) => {
     // Save owner info to session
     req.session.ownerId = owner.id;
     req.session.ownerName = owner.name;
+    req.session.ownerEmail = owner.email;
 
     res.json({
       message: "Login successful",
