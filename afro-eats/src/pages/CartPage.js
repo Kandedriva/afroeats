@@ -2,12 +2,14 @@
 import { useState, useEffect } from "react";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useGuest } from "../context/GuestContext";
+import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { toast } from 'react-toastify';
 
 export default function CartPage() {
   const { cart, loading, updateQuantity, removeFromCart, clearCart, total } = useCart();
   const { user } = useAuth();
+  const { startGuestSession } = useGuest();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [restaurantInstructions, setRestaurantInstructions] = useState({});
@@ -40,16 +42,29 @@ export default function CartPage() {
   }, {});
 
   const handleCheckout = () => {
-    if (!user) {
-      toast.warning("Please log in to checkout");
-      navigate("/login");
-      return;
+    if (user) {
+      // Authenticated user - normal checkout flow
+      navigate("/delivery-options", {
+        state: { restaurantInstructions }
+      });
+    } else {
+      // Guest checkout - show options
+      const guestCheckoutConfirm = window.confirm(
+        "You can checkout as a guest or create an account. Would you like to continue as guest? (Click OK for guest checkout, Cancel to login/register)"
+      );
+      
+      if (guestCheckoutConfirm) {
+        startGuestSession();
+        navigate("/guest-checkout");
+      } else {
+        navigate("/login");
+      }
     }
+  };
 
-    // Navigate to delivery options page with restaurant-specific instructions
-    navigate("/delivery-options", {
-      state: { restaurantInstructions }
-    });
+  const handleGuestCheckout = () => {
+    startGuestSession();
+    navigate("/guest-checkout");
   };
 
   return (
@@ -158,7 +173,7 @@ export default function CartPage() {
         <p className="text-sm text-gray-600 mt-1">
           Platform fee ($1.20) will be added at checkout
         </p>
-        <div className="mt-4 flex flex-col sm:flex-row gap-3 sm:justify-end">
+        <div className="mt-4 flex flex-col gap-3">
           <button
             onClick={clearCart}
             className="px-4 py-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors touch-manipulation font-medium"
@@ -166,13 +181,56 @@ export default function CartPage() {
           >
             Clear Cart
           </button>
-          <button
-            onClick={handleCheckout}
-            className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold transition-colors touch-manipulation"
-            style={{ WebkitTapHighlightColor: 'transparent', minHeight: '44px' }}
-          >
-            Proceed to Checkout
-          </button>
+          
+          {user ? (
+            <button
+              onClick={handleCheckout}
+              className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold transition-colors touch-manipulation"
+              style={{ WebkitTapHighlightColor: 'transparent', minHeight: '44px' }}
+            >
+              Proceed to Checkout
+            </button>
+          ) : (
+            <div className="space-y-3">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-start">
+                  <div className="flex-shrink-0">
+                    <span className="text-blue-600 text-xl">🛒</span>
+                  </div>
+                  <div className="ml-3">
+                    <h3 className="text-sm font-medium text-blue-800">Ready to Checkout?</h3>
+                    <p className="text-sm text-blue-700 mt-1">
+                      You can checkout as a guest or create an account for faster future orders.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button
+                  onClick={handleGuestCheckout}
+                  className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold transition-colors touch-manipulation"
+                  style={{ WebkitTapHighlightColor: 'transparent', minHeight: '44px' }}
+                >
+                  Checkout as Guest
+                </button>
+                <Link 
+                  to="/login"
+                  className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold transition-colors touch-manipulation text-center"
+                  style={{ WebkitTapHighlightColor: 'transparent', minHeight: '44px' }}
+                >
+                  Login & Checkout
+                </Link>
+              </div>
+              
+              <p className="text-xs text-gray-500 text-center">
+                New customer? 
+                <Link to="/register" className="text-green-600 hover:text-green-700 font-medium ml-1">
+                  Create an account
+                </Link>
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>

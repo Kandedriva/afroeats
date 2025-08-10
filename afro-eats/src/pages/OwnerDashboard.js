@@ -1,5 +1,5 @@
 // React import removed as it's not needed in React 17+
-import { useEffect, useState, useContext } from "react";
+import { useEffect, useState, useContext, useRef } from "react";
 import { OwnerAuthContext } from "../context/OwnerAuthContext";
 import { Navigate, useNavigate, Link } from "react-router-dom";
 import ToggleSwitch from "../Components/ToggleSwitch";
@@ -28,6 +28,10 @@ function OwnerDashboard() {
   const [editImageUploading, setEditImageUploading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
   const [deletingDish, setDeletingDish] = useState(false);
+  const [editingRestaurantName, setEditingRestaurantName] = useState(false);
+  const [restaurantNameForm, setRestaurantNameForm] = useState('');
+  const [updatingRestaurantName, setUpdatingRestaurantName] = useState(false);
+  const restaurantNameInputRef = useRef(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -160,6 +164,7 @@ function OwnerDashboard() {
     try {
       setConnecting(true);
       
+      // eslint-disable-next-line no-console
       console.log('🔗 Attempting Stripe Connect to:', `${API_BASE_URL}/api/stripe/create-stripe-account`);
       
       const res = await fetch(`${API_BASE_URL}/api/stripe/create-stripe-account`, {
@@ -170,7 +175,9 @@ function OwnerDashboard() {
         }
       });
       
+      // eslint-disable-next-line no-console
       console.log('📡 Response status:', res.status);
+      // eslint-disable-next-line no-console
       console.log('📡 Response headers:', res.headers);
       
       if (!res.ok) {
@@ -181,6 +188,7 @@ function OwnerDashboard() {
           throw new Error(`HTTP ${res.status}: ${res.statusText}`);
         }
         
+        // eslint-disable-next-line no-console
         console.error('❌ Stripe Connect error:', error);
         
         // Handle specific activation required error
@@ -243,9 +251,11 @@ function OwnerDashboard() {
       }
       
       const data = await res.json();
+      // eslint-disable-next-line no-console
       console.log('✅ Stripe Connect response:', data);
       
       if (data.url) {
+        // eslint-disable-next-line no-console
         console.log('🚀 Redirecting to Stripe onboarding:', data.url);
         window.location.href = data.url;
       } else if (data.development) {
@@ -254,6 +264,7 @@ function OwnerDashboard() {
         throw new Error("No redirect URL received from Stripe");
       }
     } catch (err) {
+      // eslint-disable-next-line no-console
       console.error('❌ Stripe Connect failed:', err);
       toast.error(`Failed to connect to Stripe: ${err.message}`);
     } finally {
@@ -655,6 +666,68 @@ function OwnerDashboard() {
     }
   };
 
+  const handleEditRestaurantName = () => {
+    setRestaurantNameForm(restaurant.name);
+    setEditingRestaurantName(true);
+  };
+
+  // Focus the input when entering edit mode
+  useEffect(() => {
+    if (editingRestaurantName && restaurantNameInputRef.current) {
+      restaurantNameInputRef.current.focus();
+    }
+  }, [editingRestaurantName]);
+
+  const handleCancelEditRestaurantName = () => {
+    setEditingRestaurantName(false);
+    setRestaurantNameForm('');
+  };
+
+  const handleUpdateRestaurantName = async () => {
+    if (!restaurantNameForm.trim()) {
+      toast.warning("Please enter a valid restaurant name.");
+      return;
+    }
+
+    if (restaurantNameForm.trim() === restaurant.name) {
+      setEditingRestaurantName(false);
+      return;
+    }
+
+    setUpdatingRestaurantName(true);
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/owners/restaurant/name`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: restaurantNameForm.trim(),
+        }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to update restaurant name");
+      }
+
+      // Update local state
+      setRestaurant(prev => ({
+        ...prev,
+        name: restaurantNameForm.trim()
+      }));
+
+      toast.success("Restaurant name updated successfully!");
+      setEditingRestaurantName(false);
+    } catch (err) {
+      toast.error(`Error updating restaurant name: ${err.message}`);
+    } finally {
+      setUpdatingRestaurantName(false);
+    }
+  };
+
   if (authLoading || loading) {
     return <div className="text-center p-6">Loading dashboard...</div>;
   }
@@ -674,8 +747,65 @@ function OwnerDashboard() {
       {restaurant && (
         <div className="mb-6 p-4 sm:p-6 border rounded-lg bg-white shadow-sm">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4">
-            <div>
-              <h2 className="text-lg sm:text-xl font-semibold mb-1">{restaurant.name}</h2>
+            <div className="flex-1">
+              {editingRestaurantName ? (
+                <div className="space-y-3">
+                  <div className="flex items-center space-x-2">
+                    <input
+                      ref={restaurantNameInputRef}
+                      type="text"
+                      value={restaurantNameForm}
+                      onChange={(e) => setRestaurantNameForm(e.target.value)}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                          handleUpdateRestaurantName();
+                        } else if (e.key === 'Escape') {
+                          handleCancelEditRestaurantName();
+                        }
+                      }}
+                      className="text-lg sm:text-xl font-semibold bg-white border-2 border-blue-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Enter restaurant name"
+                      maxLength={100}
+                    />
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={handleUpdateRestaurantName}
+                      disabled={updatingRestaurantName}
+                      className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                        updatingRestaurantName
+                          ? 'bg-gray-400 text-gray-700 cursor-not-allowed'
+                          : 'bg-green-600 text-white hover:bg-green-700'
+                      }`}
+                    >
+                      {updatingRestaurantName ? 'Saving...' : 'Save'}
+                    </button>
+                    <button
+                      onClick={handleCancelEditRestaurantName}
+                      disabled={updatingRestaurantName}
+                      className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    {restaurantNameForm.length}/100 characters
+                  </p>
+                </div>
+              ) : (
+                <div className="flex items-center space-x-2">
+                  <h2 className="text-lg sm:text-xl font-semibold mb-1">{restaurant.name}</h2>
+                  <button
+                    onClick={handleEditRestaurantName}
+                    className="text-blue-600 hover:text-blue-800 transition-colors p-1"
+                    title="Edit restaurant name"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  </button>
+                </div>
+              )}
               <p className="text-gray-600 text-sm sm:text-base">📍 {restaurant.address}</p>
             </div>
           </div>

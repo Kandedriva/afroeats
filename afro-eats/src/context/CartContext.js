@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
 import PropTypes from 'prop-types';
 import { useAuth } from "./AuthContext";
+import { useGuest } from "./GuestContext";
 import { API_BASE_URL } from "../config/api";
 
 export const CartContext = createContext();
@@ -9,6 +10,7 @@ export const CartProvider = ({ children }) => {
   const [cart, setCart] = useState([]);
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
+  const { guestCart, guestTotal, isGuestMode, addToGuestCart, updateGuestQuantity, removeFromGuestCart, clearGuestCart } = useGuest();
 
   const fetchCart = useCallback(async (retryCount = 0) => {
     try {
@@ -63,10 +65,18 @@ export const CartProvider = ({ children }) => {
       fetchCart();
     } else {
       setCart([]);
+      setLoading(false); // Set loading to false for guest users
     }
   }, [user, fetchCart]);
 
-  const addToCart = async (dish) => {
+  const addToCart = async (dish, asGuest = false) => {
+    // If user is not authenticated or explicitly wants to add as guest
+    if (!user || asGuest) {
+      addToGuestCart(dish);
+      return;
+    }
+
+    // Authenticated user - add to server cart
     const res = await fetch(`${API_BASE_URL}/api/cart`, {
       method: "POST",
       headers: { 
@@ -176,19 +186,28 @@ export const CartProvider = ({ children }) => {
 
   const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
+  // Combined cart for display - use guest cart if in guest mode or no user
+  const displayCart = isGuestMode || !user ? guestCart : cart;
+  const displayTotal = isGuestMode || !user ? guestTotal : total;
+  const displayLoading = isGuestMode || !user ? false : loading; // Never show loading for guest cart
+
   return (
     <CartContext.Provider
       value={{
-        cart,
-        loading,
+        cart: displayCart,
+        loading: displayLoading,
         addToCart,
-        updateQuantity,
-        removeFromCart,
-        clearCart,
-        total,
+        updateQuantity: isGuestMode || !user ? updateGuestQuantity : updateQuantity,
+        removeFromCart: isGuestMode || !user ? removeFromGuestCart : removeFromCart,
+        clearCart: isGuestMode || !user ? clearGuestCart : clearCart,
+        total: displayTotal,
         fetchCart,
         forceRefreshCart,
         setCart,
+        // Guest-specific functions
+        isGuestMode,
+        guestCart,
+        guestTotal,
       }}
     >
       {children}
