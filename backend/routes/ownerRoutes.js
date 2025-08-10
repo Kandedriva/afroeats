@@ -1113,4 +1113,59 @@ router.put("/restaurant/logo", requireOwnerAuth, ...uploadRestaurantLogo, async 
   }
 });
 
+// PATCH /api/owners/restaurant/name - Update restaurant name
+router.patch("/restaurant/name", requireOwnerAuth, async (req, res) => {
+  try {
+    const { name } = req.body;
+    const ownerId = req.session.ownerId;
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: "Restaurant name is required" });
+    }
+
+    const trimmedName = name.trim();
+    
+    if (trimmedName.length > 100) {
+      return res.status(400).json({ error: "Restaurant name must be 100 characters or less" });
+    }
+
+    // Check if owner owns a restaurant
+    const restaurantResult = await pool.query(
+      "SELECT id, name FROM restaurants WHERE owner_id = $1",
+      [ownerId]
+    );
+
+    if (restaurantResult.rows.length === 0) {
+      return res.status(404).json({ error: "No restaurant found for this owner" });
+    }
+
+    const restaurant = restaurantResult.rows[0];
+
+    // Check if the name is actually changing
+    if (restaurant.name === trimmedName) {
+      return res.json({ 
+        success: true, 
+        message: "Restaurant name is already up to date",
+        name: trimmedName 
+      });
+    }
+
+    // Update restaurant name
+    await pool.query(
+      "UPDATE restaurants SET name = $1 WHERE owner_id = $2",
+      [trimmedName, ownerId]
+    );
+
+    res.json({ 
+      success: true, 
+      message: "Restaurant name updated successfully",
+      name: trimmedName 
+    });
+
+  } catch (err) {
+    console.error('Restaurant name update error:', err);
+    res.status(500).json({ error: "Failed to update restaurant name" });
+  }
+});
+
 export default router;

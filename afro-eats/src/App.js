@@ -25,9 +25,11 @@ import CustomerProfile from "./pages/CustomerProfile";
 import CustomerNotifications from "./pages/CustomerNotifications";
 import OrderDetails from "./pages/OrderDetails";
 import OrderSuccess from "./pages/OrderSuccess";
+import GuestCheckout from "./pages/GuestCheckout";
 import ProtectedOwnerRoute from "./Components/ProtectedOwnerRoute";
 import ProtectedRoute from "./Components/ProtectedRoute";
 import { OwnerAuthProvider } from "./context/OwnerAuthContext";
+import { GuestProvider } from "./context/GuestContext";
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import './utils/networkTest';
@@ -98,16 +100,13 @@ function AppContent() {
           } 
         />
         <Route path="/checkout" element={<Checkout user={user} />} />
+        <Route path="/guest-checkout" element={<GuestCheckout />} />
         <Route path="/register-owner" element={<RegisterOwner />} />
         <Route path="/owner/login" element={<OwnerLogin />} />
         <Route path="/owner/password-update" element={<OwnerPasswordUpdate />} />
         <Route 
           path="/order-success" 
-          element={
-            <ProtectedRoute>
-              <OrderSuccess />
-            </ProtectedRoute>
-          } 
+          element={<OrderSuccess />} 
         />
 
         {/* ✅ Protected Owner Routes */}
@@ -163,21 +162,23 @@ function App() {
         <div className="min-h-screen bg-gray-100">
           <AuthProvider>
             <OwnerAuthProvider>
-              <CartProvider>
-                <AppContent />
-                <ToastContainer
-                  position="top-right"
-                  autoClose={5000}
-                  hideProgressBar={false}
-              newestOnTop={false}
-              closeOnClick
-              rtl={false}
-              pauseOnFocusLoss
-              draggable
-              pauseOnHover
-              theme="light"
-            />
-          </CartProvider>
+              <GuestProvider>
+                <CartProvider>
+                  <AppContent />
+                  <ToastContainer
+                    position="top-right"
+                    autoClose={5000}
+                    hideProgressBar={false}
+                newestOnTop={false}
+                closeOnClick
+                rtl={false}
+                pauseOnFocusLoss
+                draggable
+                pauseOnHover
+                theme="light"
+              />
+            </CartProvider>
+          </GuestProvider>
         </OwnerAuthProvider>
       </AuthProvider>
         </div>
