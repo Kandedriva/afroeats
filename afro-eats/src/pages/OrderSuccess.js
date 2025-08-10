@@ -1,18 +1,27 @@
 // React import removed as it's not needed in React 17+
 import { useEffect, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { useCart } from "../context/CartContext";
+import { useAuth } from "../context/AuthContext";
+import { useGuest } from "../context/GuestContext";
 import { API_BASE_URL } from "../config/api";
 
 function OrderSuccess() {
   const [orderDetails, setOrderDetails] = useState(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const { forceRefreshCart, clearCart } = useCart();
+  const { user } = useAuth();
+  const { clearGuestCart } = useGuest();
   const orderId = searchParams.get('order_id');
   const sessionId = searchParams.get('session_id');
   const isDemo = searchParams.get('demo');
+  const isGuestFromStripe = searchParams.get('guest') === 'true';
+  
+  // Check if this is a guest order from navigation state
+  const guestOrderInfo = location.state;
 
   useEffect(() => {
     const handleOrderSuccess = async () => {
@@ -39,21 +48,37 @@ function OrderSuccess() {
           return;
         }
 
-        // Get order details
-        const orderRes = await fetch(`${API_BASE_URL}/api/orders/${finalOrderId}`, {
-          credentials: "include",
-        });
+        // Get order details (skip for guest orders since they don't have access to protected endpoint)
+        if (!guestOrderInfo?.guestOrder && !isGuestFromStripe && user) {
+          const orderRes = await fetch(`${API_BASE_URL}/api/orders/${finalOrderId}`, {
+            credentials: "include",
+          });
 
-        if (orderRes.ok) {
-          const orderData = await orderRes.json();
-          setOrderDetails(orderData);
+          if (orderRes.ok) {
+            const orderData = await orderRes.json();
+            setOrderDetails(orderData);
+          }
+        } else if (guestOrderInfo?.guestOrder || isGuestFromStripe) {
+          // For guest orders, we can set basic order info from what we have
+          setOrderDetails({
+            id: finalOrderId,
+            total: 0, // We don't have this info for guest orders
+            platform_fee: 0,
+            status: 'paid',
+            guest_email: guestOrderInfo?.email || 'guest'
+          });
         }
 
-        // Clear cart immediately and then refresh to ensure consistency
-        await clearCart();
-        // Add a small delay to ensure backend processing is complete
-        await new Promise(resolve => setTimeout(resolve, 500));
-        await forceRefreshCart();
+        // Clear appropriate cart based on user type
+        if (user && !isGuestFromStripe) {
+          // Authenticated user - clear server cart
+          await clearCart();
+          await new Promise(resolve => setTimeout(resolve, 500));
+          await forceRefreshCart();
+        } else if (isGuestFromStripe || guestOrderInfo?.guestOrder) {
+          // Guest user - clear guest cart
+          clearGuestCart();
+        }
       } catch (err) {
         // Don't block the success page if we can't fetch details
         // The order was still successful
@@ -63,7 +88,7 @@ function OrderSuccess() {
     };
 
     handleOrderSuccess();
-  }, [orderId, sessionId, isDemo, navigate, forceRefreshCart, clearCart]);
+  }, [orderId, sessionId, isDemo, isGuestFromStripe, guestOrderInfo?.guestOrder, guestOrderInfo?.email, navigate, forceRefreshCart, clearCart, clearGuestCart, user]);
 
   if (loading) {
     return (
@@ -85,6 +110,11 @@ function OrderSuccess() {
         <p className="text-gray-600">
           Thank you for your order. Your food is being prepared!
         </p>
+        {(guestOrderInfo?.guestOrder || isGuestFromStripe) && (
+          <div className="mt-4 inline-block bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm">
+            Guest Order - Updates will be sent to your email
+          </div>
+        )}
         {isDemo && (
           <div className="mt-4 inline-block bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm">
             Demo Mode - No actual payment processed
@@ -183,12 +213,21 @@ function OrderSuccess() {
         >
           Browse More Restaurants
         </button>
-        <button
-          onClick={() => navigate('/my-orders')}
-          className="flex-1 bg-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-700 transition-colors"
-        >
-          View My Orders
-        </button>
+        {(guestOrderInfo?.guestOrder || isGuestFromStripe) ? (
+          <button
+            onClick={() => navigate('/register')}
+            className="flex-1 bg-green-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-green-700 transition-colors"
+          >
+            Create Account for Future Orders
+          </button>
+        ) : (
+          <button
+            onClick={() => navigate('/my-orders')}
+            className="flex-1 bg-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+          >
+            View My Orders
+          </button>
+        )}
       </div>
     </div>
   );

@@ -479,33 +479,91 @@ router.get("/success", async (req, res) => {
     if (session.payment_status === 'paid') {
       // Parse order data from session metadata
       const orderData = JSON.parse(session.metadata.orderData);
-      const restaurantTotals = JSON.parse(session.metadata.restaurantTotals);
+      const isGuestOrder = session.metadata.isGuestOrder === 'true';
       
       console.log("Creating order after successful payment:", {
         sessionId: session_id,
+        isGuestOrder,
         userId: orderData.userId,
+        guestEmail: isGuestOrder ? orderData.guestInfo?.email : null,
         total: orderData.total
       });
 
-      // Now create the order in database since payment is confirmed
-      const orderResult = await pool.query(
-        "INSERT INTO orders (user_id, total, order_details, delivery_address, delivery_phone, delivery_type, restaurant_instructions, status, platform_fee, stripe_session_id, paid_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW()) RETURNING id",
-        [
-          orderData.userId,
-          orderData.total,
-          orderData.orderDetails,
-          orderData.deliveryAddress,
-          orderData.deliveryPhone,
-          orderData.deliveryType,
-          JSON.stringify(orderData.restaurantInstructions),
-          'paid', // Start with 'paid' status since payment is confirmed
-          orderData.platformFee,
-          session_id
-        ]
-      );
-      const orderId = orderResult.rows[0].id;
+      let orderId;
 
-      // Insert order items with restaurant_id
+      if (isGuestOrder) {
+        // Handle guest order
+        console.log("Processing guest order after payment");
+        
+        // Ensure necessary columns exist for guest orders
+        try {
+          await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS guest_name VARCHAR(255)");
+          await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS guest_email VARCHAR(255)");
+          await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS is_guest_order BOOLEAN DEFAULT FALSE");
+        } catch (err) {
+          // Column creation check handled silently
+        }
+
+        // Create guest order
+        const orderResult = await pool.query(
+          `INSERT INTO orders (
+            user_id, total, order_details, delivery_address, delivery_phone, 
+            guest_name, guest_email, is_guest_order, status, platform_fee, stripe_session_id, paid_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW()) RETURNING id`,
+          [
+            null, // No user_id for guest orders
+            orderData.total,
+            orderData.orderDetails,
+            orderData.guestInfo.address,
+            orderData.guestInfo.phone,
+            orderData.guestInfo.name,
+            orderData.guestInfo.email,
+            true, // is_guest_order = true
+            'paid',
+            orderData.platformFee,
+            session_id
+          ]
+        );
+        orderId = orderResult.rows[0].id;
+
+      } else {
+        // Handle authenticated user order
+        console.log("Processing authenticated user order after payment");
+        
+        const restaurantTotals = JSON.parse(session.metadata.restaurantTotals || '{}');
+
+        const orderResult = await pool.query(
+          "INSERT INTO orders (user_id, total, order_details, delivery_address, delivery_phone, delivery_type, restaurant_instructions, status, platform_fee, stripe_session_id, paid_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW()) RETURNING id",
+          [
+            orderData.userId,
+            orderData.total,
+            orderData.orderDetails,
+            orderData.deliveryAddress,
+            orderData.deliveryPhone,
+            orderData.deliveryType,
+            JSON.stringify(orderData.restaurantInstructions),
+            'paid',
+            orderData.platformFee,
+            session_id
+          ]
+        );
+        orderId = orderResult.rows[0].id;
+
+        // Store restaurant payment info for authenticated users
+        for (const [restaurantId, data] of Object.entries(restaurantTotals)) {
+          const status = data.restaurant.stripe_account_id ? 'pending' : 'no_connect_account';
+          await pool.query(
+            `INSERT INTO restaurant_payments (order_id, restaurant_id, amount, stripe_account_id, status) 
+             VALUES ($1, $2, $3, $4, $5)`,
+            [orderId, restaurantId, data.total, data.restaurant.stripe_account_id, status]
+          );
+        }
+
+        // Clear user's cart after successful payment
+        await pool.query("DELETE FROM carts WHERE user_id = $1", [orderData.userId]);
+      }
+
+      // Insert order items (same for both guest and authenticated users)
       const itemPromises = orderData.items.map(item => {
         return pool.query(
           "INSERT INTO order_items (order_id, dish_id, name, price, quantity, restaurant_id) VALUES ($1, $2, $3, $4, $5, $6)",
@@ -513,26 +571,14 @@ router.get("/success", async (req, res) => {
         );
       });
       await Promise.all(itemPromises);
-
-      // Store restaurant payment info
-      for (const [restaurantId, data] of Object.entries(restaurantTotals)) {
-        const status = data.restaurant.stripe_account_id ? 'pending' : 'no_connect_account';
-        await pool.query(
-          `INSERT INTO restaurant_payments (order_id, restaurant_id, amount, stripe_account_id, status) 
-           VALUES ($1, $2, $3, $4, $5)`,
-          [orderId, restaurantId, data.total, data.restaurant.stripe_account_id, status]
-        );
-      }
       
-      // Clear user's cart after successful payment
-      await pool.query("DELETE FROM carts WHERE user_id = $1", [orderData.userId]);
-      
-      console.log("Order created successfully after payment:", orderId);
+      console.log(`Order created successfully after payment: ${orderId} (Guest: ${isGuestOrder})`);
       
       res.json({ 
         success: true, 
         message: "Order confirmed and payment processed",
-        orderId: orderId
+        orderId: orderId,
+        isGuestOrder
       });
     } else {
       res.status(400).json({ error: "Payment not completed" });
@@ -820,5 +866,279 @@ router.get("/:id", async (req, res) => {
   }
 });
 */
+
+// POST /api/orders/guest-checkout-session - Create Stripe checkout session for guest orders
+router.post("/guest-checkout-session", async (req, res) => {
+  console.log("=== GUEST CHECKOUT SESSION START ===");
+  
+  try {
+    const { guestInfo, items, orderDetails } = req.body;
+
+    console.log("Guest checkout session request data:", {
+      guestInfo: guestInfo ? { name: guestInfo.name, email: guestInfo.email } : null,
+      itemsCount: items?.length,
+      itemsSample: items?.slice(0, 2)
+    });
+
+    // Validate required guest information
+    if (!guestInfo || !guestInfo.name || !guestInfo.email || !guestInfo.phone || !guestInfo.address) {
+      return res.status(400).json({ error: "Missing guest information (name, email, phone, address required)." });
+    }
+
+    if (!items || items.length === 0) {
+      return res.status(400).json({ error: "Cart is empty" });
+    }
+
+    // Basic email validation
+    const emailRegex = /\S+@\S+\.\S+/;
+    if (!emailRegex.test(guestInfo.email)) {
+      return res.status(400).json({ error: "Invalid email address format." });
+    }
+
+    console.log("Guest validation passed");
+
+    // Quick database connectivity test
+    try {
+      console.log("Testing database connectivity...");
+      await pool.query("SELECT 1");
+      console.log("Database connection OK");
+    } catch (dbErr) {
+      console.error("ERROR: Database connection failed:", dbErr);
+      return res.status(500).json({ error: "Database connection failed" });
+    }
+
+    // Check if Stripe is configured - if not, fall back to demo mode
+    if (!stripe) {
+      console.log("Entering demo mode for guest order (Stripe not configured)");
+      
+      try {
+        // Calculate totals
+        const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+        const platformFee = 1.20;
+        const total = subtotal + platformFee;
+
+        // Ensure necessary columns exist
+        try {
+          await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS order_details TEXT");
+          await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_address TEXT");
+          await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_phone VARCHAR(20)");
+          await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS guest_name VARCHAR(255)");
+          await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS guest_email VARCHAR(255)");
+          await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS is_guest_order BOOLEAN DEFAULT FALSE");
+        } catch (err) {
+          console.error("ERROR: Database column creation failed:", err);
+          throw err;
+        }
+
+        // Insert guest order (mark as paid immediately for demo mode)
+        const result = await pool.query(
+          `INSERT INTO orders (
+            user_id, total, order_details, delivery_address, delivery_phone, 
+            guest_name, guest_email, is_guest_order, status, paid_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW()) RETURNING id`,
+          [
+            null, // No user_id for guest orders
+            total, 
+            orderDetails, 
+            guestInfo.address, 
+            guestInfo.phone,
+            guestInfo.name,
+            guestInfo.email,
+            true, // is_guest_order = true
+            'paid' // Demo mode - mark as paid immediately
+          ]
+        );
+        const orderId = result.rows[0].id;
+
+        // Insert order items with restaurant_id
+        const itemPromises = items.map(item => {
+          return pool.query(
+            "INSERT INTO order_items (order_id, dish_id, name, price, quantity, restaurant_id) VALUES ($1, $2, $3, $4, $5, $6)",
+            [orderId, item.id, item.name, item.price, item.quantity, item.restaurantId || item.restaurant_id]
+          );
+        });
+
+        await Promise.all(itemPromises);
+
+        console.log(`Demo guest order created: ${orderId} for ${guestInfo.name} (${guestInfo.email})`);
+
+        // Get the frontend URL dynamically
+        const frontendUrl = req.headers.origin || req.headers.referer?.replace(/\/$/, '') || 'http://localhost:3000';
+        
+        return res.json({ 
+          url: `${frontendUrl}/demo-order-checkout?order_id=${orderId}`,
+          demo_mode: true,
+          order_id: orderId
+        });
+      } catch (err) {
+        console.error("Demo guest order creation error:", err);
+        return res.status(500).json({ error: "Failed to create demo guest order" });
+      }
+    }
+
+    // Real Stripe checkout flow
+    console.log("Creating real Stripe checkout session for guest");
+
+    // Calculate totals
+    const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    const platformFee = 1.20;
+    const total = subtotal + platformFee;
+
+    // Create line items for Stripe
+    const lineItems = items.map(item => ({
+      price_data: {
+        currency: 'usd',
+        product_data: {
+          name: item.name,
+          description: `From ${item.restaurantName || item.restaurant_name}`,
+        },
+        unit_amount: Math.round(item.price * 100), // Convert to cents
+      },
+      quantity: item.quantity,
+    }));
+
+    // Add platform fee as a line item
+    lineItems.push({
+      price_data: {
+        currency: 'usd',
+        product_data: {
+          name: 'Platform Fee',
+          description: 'Service fee for using our platform',
+        },
+        unit_amount: Math.round(platformFee * 100), // $1.20 in cents
+      },
+      quantity: 1,
+    });
+
+    // Get the frontend URL dynamically
+    const frontendUrl = req.headers.origin || req.headers.referer?.replace(/\/$/, '') || 'http://localhost:3000';
+
+    // Prepare order data for metadata
+    const orderData = {
+      guestInfo,
+      items: items.map(item => ({
+        dishId: item.id,
+        name: item.name,
+        price: item.price,
+        quantity: item.quantity,
+        restaurantId: item.restaurantId || item.restaurant_id
+      })),
+      orderDetails,
+      total,
+      platformFee,
+      isGuestOrder: true
+    };
+
+    // Create Stripe checkout session
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      mode: 'payment',
+      line_items: lineItems,
+      success_url: `${frontendUrl}/order-success?session_id={CHECKOUT_SESSION_ID}&guest=true`,
+      cancel_url: `${frontendUrl}/cart?canceled=true`,
+      customer_email: guestInfo.email,
+      metadata: {
+        orderData: JSON.stringify(orderData),
+        isGuestOrder: 'true'
+      },
+    });
+
+    console.log("Stripe checkout session created for guest:", session.id);
+
+    res.json({ url: session.url });
+
+  } catch (err) {
+    console.error("=== GUEST CHECKOUT SESSION ERROR ===");
+    console.error("Error details:", {
+      message: err.message,
+      stack: err.stack,
+      name: err.name
+    });
+    console.error("=== END ERROR ===");
+    res.status(500).json({ 
+      error: "Failed to create guest checkout session", 
+      details: err.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// POST /api/orders/guest - Create guest order (no authentication required)
+router.post("/guest", async (req, res) => {
+  const { guestInfo, items, orderDetails } = req.body;
+
+  // Validate required guest information
+  if (!guestInfo || !guestInfo.name || !guestInfo.email || !guestInfo.phone || !guestInfo.address) {
+    return res.status(400).json({ error: "Missing guest information (name, email, phone, address required)." });
+  }
+
+  if (!items || items.length === 0) {
+    return res.status(400).json({ error: "Missing cart items." });
+  }
+
+  // Basic email validation
+  const emailRegex = /\S+@\S+\.\S+/;
+  if (!emailRegex.test(guestInfo.email)) {
+    return res.status(400).json({ error: "Invalid email address format." });
+  }
+
+  try {
+    // Calculate total
+    const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+
+    // Ensure necessary columns exist
+    try {
+      await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS order_details TEXT");
+      await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_address TEXT");
+      await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_phone VARCHAR(20)");
+      await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS guest_name VARCHAR(255)");
+      await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS guest_email VARCHAR(255)");
+      await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS is_guest_order BOOLEAN DEFAULT FALSE");
+    } catch (err) {
+      // Column creation check handled silently
+    }
+
+    // Insert guest order (mark as paid immediately for demo mode)
+    const result = await pool.query(
+      `INSERT INTO orders (
+        user_id, total, order_details, delivery_address, delivery_phone, 
+        guest_name, guest_email, is_guest_order, status, paid_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW()) RETURNING id`,
+      [
+        null, // No user_id for guest orders
+        total, 
+        orderDetails, 
+        guestInfo.address, 
+        guestInfo.phone,
+        guestInfo.name,
+        guestInfo.email,
+        true, // is_guest_order = true
+        'paid' // Demo mode - mark as paid immediately
+      ]
+    );
+    const orderId = result.rows[0].id;
+
+    // Insert order items with restaurant_id
+    const itemPromises = items.map(item => {
+      return pool.query(
+        "INSERT INTO order_items (order_id, dish_id, name, price, quantity, restaurant_id) VALUES ($1, $2, $3, $4, $5, $6)",
+        [orderId, item.id, item.name, item.price, item.quantity, item.restaurantId || item.restaurant_id]
+      );
+    });
+
+    await Promise.all(itemPromises);
+
+    console.log(`Guest order created successfully: ${orderId} for ${guestInfo.name} (${guestInfo.email})`);
+
+    res.status(201).json({ 
+      message: "Guest order placed successfully", 
+      orderId,
+      guestEmail: guestInfo.email
+    });
+  } catch (err) {
+    console.error('Guest order creation error:', err);
+    res.status(500).json({ error: "Failed to place guest order" });
+  }
+});
 
 export default router;
