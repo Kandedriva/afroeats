@@ -117,12 +117,15 @@ router.post('/create-stripe-account', requireOwnerAuth, async (req, res) => {
         }
         
         // Handle platform profile completion requirement
-        if (stripeErr.message.includes('complete your platform profile') || stripeErr.message.includes('questionnaire')) {
+        if (stripeErr.message.includes('complete your platform profile') || 
+            stripeErr.message.includes('questionnaire') ||
+            stripeErr.message.includes('review the responsibilities of managing losses') ||
+            stripeErr.message.includes('platform-profile')) {
           return res.status(400).json({ 
             error: 'Platform profile completion required',
-            details: 'You must complete your Stripe platform profile before creating connected accounts. Please go to your Stripe Dashboard → Connect → Accounts → Overview and complete the platform questionnaire.',
+            details: 'You must complete your Stripe platform profile before creating connected accounts. Please go to your Stripe Dashboard → Connect → Platform Profile and complete the required forms.',
             platform_setup_required: true,
-            setup_url: 'https://dashboard.stripe.com/connect/accounts/overview'
+            setup_url: 'https://dashboard.stripe.com/settings/connect/platform-profile'
           });
         }
         
@@ -287,5 +290,118 @@ router.post('/create-order-payment-intent', async (req, res) => {
   }
 });
 
+
+// GET /stripe/oauth-connect - Generate OAuth authorization URL
+router.get('/oauth-connect', requireOwnerAuth, async (req, res) => {
+  console.log('🔗 OAuth Connect request received');
+  console.log('👤 Owner ID:', req.owner?.id || 'undefined');
+  
+  try {
+    if (!stripe) {
+      return res.status(503).json({ 
+        error: 'Stripe not configured - development mode',
+        development: true 
+      });
+    }
+
+    // Get the frontend URL dynamically
+    const frontendUrl = req.headers.origin || req.headers.referer?.replace(/\/$/, '') || 'http://localhost:3000';
+    console.log('🌐 Frontend URL detected:', frontendUrl);
+
+    // Generate state parameter for security (optional but recommended)
+    const state = Buffer.from(JSON.stringify({
+      ownerId: req.owner.id,
+      timestamp: Date.now()
+    })).toString('base64');
+
+    // Create OAuth authorization URL
+    const oauthUrl = new URL('https://connect.stripe.com/oauth/authorize');
+    oauthUrl.searchParams.append('response_type', 'code');
+    oauthUrl.searchParams.append('client_id', process.env.STRIPE_CLIENT_ID || 'ca_your_client_id'); // You need to add this to .env
+    oauthUrl.searchParams.append('scope', 'read_write');
+    oauthUrl.searchParams.append('redirect_uri', `${frontendUrl}/api/stripe/oauth-callback`);
+    oauthUrl.searchParams.append('state', state);
+
+    console.log('✅ OAuth URL generated:', oauthUrl.toString());
+    
+    res.json({ 
+      url: oauthUrl.toString(),
+      state: state 
+    });
+  } catch (err) {
+    console.error('❌ OAuth URL generation failed:', err);
+    res.status(500).json({ 
+      error: 'Failed to generate OAuth URL',
+      details: err.message 
+    });
+  }
+});
+
+// GET /stripe/oauth-callback - Handle OAuth callback
+router.get('/oauth-callback', async (req, res) => {
+  console.log('🔄 OAuth callback received');
+  console.log('📝 Query params:', req.query);
+  
+  const { code, state, error, error_description } = req.query;
+  
+  try {
+    // Handle OAuth errors
+    if (error) {
+      console.error('❌ OAuth error:', error, error_description);
+      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/owner/dashboard?error=${encodeURIComponent(error)}&error_description=${encodeURIComponent(error_description)}`);
+    }
+
+    if (!code) {
+      console.error('❌ No authorization code received');
+      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/owner/dashboard?error=no_code`);
+    }
+
+    // Decode state to get owner info (if you're using state)
+    let ownerId = null;
+    if (state) {
+      try {
+        const stateData = JSON.parse(Buffer.from(state, 'base64').toString());
+        ownerId = stateData.ownerId;
+        console.log('📋 Owner ID from state:', ownerId);
+      } catch (stateErr) {
+        console.warn('⚠️ Failed to decode state:', stateErr.message);
+      }
+    }
+
+    if (!stripe) {
+      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/owner/dashboard?error=stripe_not_configured`);
+    }
+
+    // Exchange authorization code for access token
+    console.log('🔄 Exchanging code for access token...');
+    const tokenResponse = await stripe.oauth.token({
+      grant_type: 'authorization_code',
+      code: code,
+    });
+
+    console.log('✅ OAuth token received:', {
+      stripe_user_id: tokenResponse.stripe_user_id,
+      scope: tokenResponse.scope
+    });
+
+    // Update owner in database with Stripe account ID
+    if (ownerId) {
+      await pool.query(
+        "UPDATE restaurant_owners SET stripe_account_id = $1 WHERE id = $2",
+        [tokenResponse.stripe_user_id, ownerId]
+      );
+      console.log('💾 Owner updated with Stripe account ID');
+    }
+
+    // Redirect back to frontend with success
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    res.redirect(`${frontendUrl}/owner/dashboard?stripe_connected=true&account_id=${tokenResponse.stripe_user_id}`);
+    
+  } catch (err) {
+    console.error('❌ OAuth callback error:', err);
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    res.redirect(`${frontendUrl}/owner/dashboard?error=oauth_failed&details=${encodeURIComponent(err.message)}`);
+  }
+});
 
 export default router;
