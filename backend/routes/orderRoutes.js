@@ -500,6 +500,7 @@ router.get("/success", async (req, res) => {
           await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS guest_name VARCHAR(255)");
           await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS guest_email VARCHAR(255)");
           await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS is_guest_order BOOLEAN DEFAULT FALSE");
+          await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_type VARCHAR(20) DEFAULT 'delivery'");
         } catch (err) {
           // Column creation check handled silently
         }
@@ -508,17 +509,18 @@ router.get("/success", async (req, res) => {
         const orderResult = await pool.query(
           `INSERT INTO orders (
             user_id, total, order_details, delivery_address, delivery_phone, 
-            guest_name, guest_email, is_guest_order, status, platform_fee, stripe_session_id, paid_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW()) RETURNING id`,
+            guest_name, guest_email, is_guest_order, delivery_type, status, platform_fee, stripe_session_id, paid_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW()) RETURNING id`,
           [
             null, // No user_id for guest orders
             orderData.total,
             orderData.orderDetails,
-            orderData.guestInfo.address,
+            orderData.deliveryType === "delivery" ? orderData.guestInfo.address : null,
             orderData.guestInfo.phone,
             orderData.guestInfo.name,
             orderData.guestInfo.email,
             true, // is_guest_order = true
+            orderData.deliveryType || "delivery",
             'paid',
             orderData.platformFee,
             session_id
@@ -872,17 +874,23 @@ router.post("/guest-checkout-session", async (req, res) => {
   console.log("=== GUEST CHECKOUT SESSION START ===");
   
   try {
-    const { guestInfo, items, orderDetails } = req.body;
+    const { guestInfo, items, orderDetails, deliveryType = "delivery" } = req.body;
 
     console.log("Guest checkout session request data:", {
       guestInfo: guestInfo ? { name: guestInfo.name, email: guestInfo.email } : null,
       itemsCount: items?.length,
-      itemsSample: items?.slice(0, 2)
+      itemsSample: items?.slice(0, 2),
+      deliveryType
     });
 
     // Validate required guest information
-    if (!guestInfo || !guestInfo.name || !guestInfo.email || !guestInfo.phone || !guestInfo.address) {
-      return res.status(400).json({ error: "Missing guest information (name, email, phone, address required)." });
+    if (!guestInfo || !guestInfo.name || !guestInfo.email || !guestInfo.phone) {
+      return res.status(400).json({ error: "Missing guest information (name, email, phone required)." });
+    }
+    
+    // For delivery orders, address is required
+    if (deliveryType === "delivery" && !guestInfo.address) {
+      return res.status(400).json({ error: "Delivery address is required for delivery orders." });
     }
 
     if (!items || items.length === 0) {
@@ -925,6 +933,7 @@ router.post("/guest-checkout-session", async (req, res) => {
           await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS guest_name VARCHAR(255)");
           await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS guest_email VARCHAR(255)");
           await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS is_guest_order BOOLEAN DEFAULT FALSE");
+          await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_type VARCHAR(20) DEFAULT 'delivery'");
         } catch (err) {
           console.error("ERROR: Database column creation failed:", err);
           throw err;
@@ -934,17 +943,18 @@ router.post("/guest-checkout-session", async (req, res) => {
         const result = await pool.query(
           `INSERT INTO orders (
             user_id, total, order_details, delivery_address, delivery_phone, 
-            guest_name, guest_email, is_guest_order, status, paid_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW()) RETURNING id`,
+            guest_name, guest_email, is_guest_order, delivery_type, status, paid_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW()) RETURNING id`,
           [
             null, // No user_id for guest orders
             total, 
             orderDetails, 
-            guestInfo.address, 
+            deliveryType === "delivery" ? guestInfo.address : null, 
             guestInfo.phone,
             guestInfo.name,
             guestInfo.email,
             true, // is_guest_order = true
+            deliveryType,
             'paid' // Demo mode - mark as paid immediately
           ]
         );
@@ -1024,6 +1034,7 @@ router.post("/guest-checkout-session", async (req, res) => {
         restaurantId: item.restaurantId || item.restaurant_id
       })),
       orderDetails,
+      deliveryType,
       total,
       platformFee,
       isGuestOrder: true

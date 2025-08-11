@@ -14,6 +14,7 @@ export default function GuestCheckout() {
     phone: "",
     address: ""
   });
+  const [deliveryType, setDeliveryType] = useState("delivery"); // "delivery" or "pickup"
   const [orderDetails, setOrderDetails] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -52,7 +53,7 @@ export default function GuestCheckout() {
       return;
     }
     
-    if (!guestInfo.address.trim()) {
+    if (deliveryType === "delivery" && !guestInfo.address.trim()) {
       toast.warning("Please enter your delivery address.");
       return;
     }
@@ -74,6 +75,7 @@ export default function GuestCheckout() {
           guestInfo,
           items: cartWithRestaurantId,
           orderDetails: orderDetails.trim() || null,
+          deliveryType,
         }),
       });
 
@@ -174,24 +176,69 @@ export default function GuestCheckout() {
           />
         </div>
         
+        {/* Delivery/Pickup Selection */}
         <div className="mb-6">
-          <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-2">
-            Delivery Address *
-          </label>
-          <textarea
-            id="address"
-            value={guestInfo.address}
-            onChange={(e) => handleInputChange('address', e.target.value)}
-            className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
-            rows="3"
-            placeholder="Enter your full delivery address (street, city, state, zip code)"
-            required
-            maxLength={300}
-          />
-          <div className="text-right text-xs text-gray-500 mt-1">
-            {guestInfo.address.length}/300 characters
+          <h3 className="text-lg font-medium text-gray-800 mb-4">Order Type</h3>
+          <div className="grid grid-cols-2 gap-4">
+            <button
+              type="button"
+              onClick={() => setDeliveryType("delivery")}
+              className={`p-4 border-2 rounded-lg text-left transition-all ${
+                deliveryType === "delivery"
+                  ? "border-green-500 bg-green-50 text-green-800"
+                  : "border-gray-200 hover:border-gray-300"
+              }`}
+            >
+              <div className="flex items-center">
+                <span className="text-2xl mr-3">🚚</span>
+                <div>
+                  <div className="font-medium">Delivery</div>
+                  <div className="text-sm text-gray-600">Get your order delivered to your address</div>
+                </div>
+              </div>
+            </button>
+            
+            <button
+              type="button"
+              onClick={() => setDeliveryType("pickup")}
+              className={`p-4 border-2 rounded-lg text-left transition-all ${
+                deliveryType === "pickup"
+                  ? "border-green-500 bg-green-50 text-green-800"
+                  : "border-gray-200 hover:border-gray-300"
+              }`}
+            >
+              <div className="flex items-center">
+                <span className="text-2xl mr-3">🏪</span>
+                <div>
+                  <div className="font-medium">Pickup</div>
+                  <div className="text-sm text-gray-600">Pick up your order from the restaurant</div>
+                </div>
+              </div>
+            </button>
           </div>
         </div>
+        
+        {/* Delivery Address - Only show if delivery is selected */}
+        {deliveryType === "delivery" && (
+          <div className="mb-6">
+            <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-2">
+              Delivery Address *
+            </label>
+            <textarea
+              id="address"
+              value={guestInfo.address}
+              onChange={(e) => handleInputChange('address', e.target.value)}
+              className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
+              rows="3"
+              placeholder="Enter your full delivery address (street, city, state, zip code)"
+              required
+              maxLength={300}
+            />
+            <div className="text-right text-xs text-gray-500 mt-1">
+              {guestInfo.address.length}/300 characters
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Order Summary */}
