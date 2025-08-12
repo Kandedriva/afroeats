@@ -91,6 +91,21 @@ router.post('/login', rateLimits.auth, [
   }
 });
 
+// Get current admin info
+router.get('/me', requireAdminAuth, async (req, res) => {
+  try {
+    res.json({
+      id: req.admin.id,
+      username: req.admin.username,
+      email: req.admin.email || 'No email',
+      role: req.admin.role
+    });
+  } catch (error) {
+    console.error('Get admin info error:', error);
+    res.status(500).json({ error: 'Failed to get admin info' });
+  }
+});
+
 // Admin logout
 router.post('/logout', requireAdminAuth, (req, res) => {
   req.session.destroy((err) => {
