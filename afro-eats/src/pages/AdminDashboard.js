@@ -32,7 +32,15 @@ const AdminDashboard = () => {
         loadDashboardData();
       }, 30000);
       
-      return () => clearInterval(interval);
+      // Check authentication every 5 minutes
+      const authCheckInterval = setInterval(() => {
+        checkAdminAuth();
+      }, 300000); // 5 minutes
+      
+      return () => {
+        clearInterval(interval);
+        clearInterval(authCheckInterval);
+      };
     }
     return undefined;
   }, [admin]);
@@ -46,9 +54,25 @@ const AdminDashboard = () => {
       if (res.ok) {
         const data = await res.json();
         setAdmin(data);
+      } else {
+        // Authentication failed - clear any existing admin state
+        setAdmin(null);
+        setDashboardData(null);
+        setAnalytics(null);
+        setUsers([]);
+        setRestaurants([]);
+        setOrders([]);
+        setSystemHealth(null);
+        
+        // If response is 401 (unauthorized), show message
+        if (res.status === 401) {
+          toast.warn('Session expired. Please log in again.');
+        }
       }
     } catch (error) {
-      // console.error('Admin auth check failed:', error);
+      console.error('Admin auth check failed:', error);
+      // Clear admin state on network error
+      setAdmin(null);
     } finally {
       setLoading(false);
     }
@@ -63,9 +87,13 @@ const AdminDashboard = () => {
       if (res.ok) {
         const data = await res.json();
         setDashboardData(data);
+      } else if (res.status === 401) {
+        // Session expired during data loading
+        setAdmin(null);
+        toast.warn('Session expired. Please log in again.');
       }
     } catch (error) {
-      // console.error('Failed to load dashboard data:', error);
+      console.error('Failed to load dashboard data:', error);
     }
   };
 
@@ -171,14 +199,39 @@ const AdminDashboard = () => {
 
   const logout = async () => {
     try {
-      await fetch(`${API_BASE_URL}/api/admin/logout`, {
+      const response = await fetch(`${API_BASE_URL}/api/admin/logout`, {
         method: 'POST',
         credentials: 'include'
       });
-      setAdmin(null);
-      toast.success('Logged out successfully');
+      
+      if (response.ok) {
+        // Clear admin state
+        setAdmin(null);
+        
+        // Clear all dashboard data
+        setDashboardData(null);
+        setAnalytics(null);
+        setUsers([]);
+        setRestaurants([]);
+        setOrders([]);
+        setSystemHealth(null);
+        
+        // Reset to overview tab
+        setActiveTab('overview');
+        
+        // Show success message
+        toast.success('Logged out successfully');
+        
+        // Force page reload to clear any cached data
+        setTimeout(() => {
+          window.location.href = '/admin/login';
+        }, 1000);
+      } else {
+        toast.error('Logout failed. Please try again.');
+      }
     } catch (error) {
-      // console.error('Logout failed:', error);
+      console.error('Logout failed:', error);
+      toast.error('Logout failed. Please try again.');
     }
   };
 
