@@ -35,9 +35,6 @@ function OwnerLogin() {
     }
   };
 
-  const handleSubscribe = () => {
-    navigate("/owner/subscribe");
-  };
 
   return (
     <div className="max-w-md mx-auto mt-10 p-6 bg-white shadow rounded">
@@ -83,14 +80,6 @@ function OwnerLogin() {
         </Link>
       </div>
 
-      <hr className="my-4" />
-
-      <button
-        onClick={handleSubscribe}
-        className="bg-green-600 text-white px-4 py-2 rounded w-full"
-      >
-        Subscribe to Access Dashboard
-      </button>
     </div>
   );
 }

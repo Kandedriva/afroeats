@@ -115,13 +115,6 @@ const AdminLogin = () => {
               </button>
             </div>
 
-            <div className="text-center">
-              <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded-lg text-sm">
-                <p className="font-medium">Demo Credentials:</p>
-                <p>Email: admin@afoodzone.com</p>
-                <p>Password: Admin123!</p>
-              </div>
-            </div>
           </form>
         </div>
 
