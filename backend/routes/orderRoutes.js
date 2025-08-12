@@ -387,6 +387,16 @@ router.post("/checkout-session", requireAuth, async (req, res) => {
     const frontendUrl = req.headers.origin || req.headers.referer?.replace(/\/$/, '') || 'http://localhost:3000';
     
     // Create Stripe checkout session (customer pays the full amount)
+    // Store only essential info in metadata to avoid 500-character limit
+    const essentialOrderData = {
+      userId: userId.toString(),
+      itemCount: items.length,
+      deliveryType: finalDeliveryType,
+      platformFee,
+      restaurantCount: Object.keys(restaurantTotals).length,
+      total: subtotal + platformFee
+    };
+
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       mode: 'payment',
@@ -394,13 +404,29 @@ router.post("/checkout-session", requireAuth, async (req, res) => {
       success_url: `${frontendUrl}/order-success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${frontendUrl}/cart?canceled=true`,
       metadata: {
-        orderData: JSON.stringify(orderData),
+        orderData: JSON.stringify(essentialOrderData),
         userId: userId.toString(),
-        platformFee: platformFee.toString(),
-        restaurantCount: Object.keys(restaurantTotals).length.toString(),
-        restaurantTotals: JSON.stringify(restaurantTotals)
+        platformFee: platformFee.toString()
       },
     });
+
+    // Store the full order data temporarily in database for webhook processing
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS temp_order_data (
+          session_id VARCHAR(255) PRIMARY KEY,
+          order_data JSONB NOT NULL,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+      
+      await pool.query(
+        "INSERT INTO temp_order_data (session_id, order_data, created_at) VALUES ($1, $2, NOW()) ON CONFLICT (session_id) DO UPDATE SET order_data = $2",
+        [session.id, JSON.stringify(orderData)]
+      );
+    } catch (tempStorageError) {
+      console.warn("Failed to store temporary order data:", tempStorageError.message);
+    }
 
     // No order created yet - it will be created in payment success handler
 
@@ -770,6 +796,14 @@ router.post("/checkout-session-ORIGINAL", requireAuth, async (req, res) => {
 
     // For multi-restaurant orders, we'll collect payment to our platform account
     // and then distribute to restaurant owners via transfers after payment succeeds
+    // Store only essential info in metadata to avoid 500-character limit
+    const essentialSessionData = {
+      orderId: orderId.toString(),
+      userId: userId.toString(),
+      restaurantCount: Object.keys(restaurantGroups).length,
+      totalAmount: total
+    };
+
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       mode: 'payment',
@@ -777,11 +811,29 @@ router.post("/checkout-session-ORIGINAL", requireAuth, async (req, res) => {
       success_url: `${frontendUrl}/order-success?session_id={CHECKOUT_SESSION_ID}&order_id=${orderId}`,
       cancel_url: `${frontendUrl}/cart?canceled=true`,
       metadata: {
+        sessionData: JSON.stringify(essentialSessionData),
         orderId: orderId.toString(),
-        userId: userId.toString(),
-        restaurantGroups: JSON.stringify(restaurantGroups), // Store restaurant distribution for webhooks
+        userId: userId.toString()
       },
     });
+
+    // Store the full restaurant groups data temporarily in database for webhook processing
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS temp_order_data (
+          session_id VARCHAR(255) PRIMARY KEY,
+          order_data JSONB NOT NULL,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+      
+      await pool.query(
+        "INSERT INTO temp_order_data (session_id, order_data, created_at) VALUES ($1, $2, NOW()) ON CONFLICT (session_id) DO UPDATE SET order_data = $2",
+        [session.id, JSON.stringify({ orderId, restaurantGroups, userId })]
+      );
+    } catch (tempStorageError) {
+      console.warn("Failed to store temporary restaurant groups data:", tempStorageError.message);
+    }
 
     res.json({ url: session.url });
   } catch (err) {
