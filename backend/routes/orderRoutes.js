@@ -1041,6 +1041,18 @@ router.post("/guest-checkout-session", async (req, res) => {
     };
 
     // Create Stripe checkout session
+    // Store only essential info in metadata to avoid 500-character limit
+    const essentialOrderData = {
+      guestEmail: guestInfo.email,
+      guestName: guestInfo.name,
+      guestPhone: guestInfo.phone,
+      itemCount: items.length,
+      deliveryType,
+      total,
+      platformFee,
+      isGuestOrder: true
+    };
+
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       mode: 'payment',
@@ -1049,10 +1061,28 @@ router.post("/guest-checkout-session", async (req, res) => {
       cancel_url: `${frontendUrl}/cart?canceled=true`,
       customer_email: guestInfo.email,
       metadata: {
-        orderData: JSON.stringify(orderData),
+        orderData: JSON.stringify(essentialOrderData),
         isGuestOrder: 'true'
       },
     });
+
+    // Store the full order data temporarily in database for webhook processing
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS temp_order_data (
+          session_id VARCHAR(255) PRIMARY KEY,
+          order_data JSONB NOT NULL,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+      
+      await pool.query(
+        "INSERT INTO temp_order_data (session_id, order_data, created_at) VALUES ($1, $2, NOW()) ON CONFLICT (session_id) DO UPDATE SET order_data = $2",
+        [session.id, JSON.stringify(orderData)]
+      );
+    } catch (tempStorageError) {
+      console.warn("Failed to store temporary order data:", tempStorageError.message);
+    }
 
     console.log("Stripe checkout session created for guest:", session.id);
 
