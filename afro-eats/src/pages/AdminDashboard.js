@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
+import PropTypes from 'prop-types';
 import { API_BASE_URL } from '../config/api';
 
 const AdminDashboard = () => {
@@ -70,6 +71,7 @@ const AdminDashboard = () => {
         }
       }
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Admin auth check failed:', error);
       // Clear admin state on network error
       setAdmin(null);
@@ -93,6 +95,7 @@ const AdminDashboard = () => {
         toast.warn('Session expired. Please log in again.');
       }
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Failed to load dashboard data:', error);
     }
   };
@@ -230,6 +233,7 @@ const AdminDashboard = () => {
         toast.error('Logout failed. Please try again.');
       }
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Logout failed:', error);
       toast.error('Logout failed. Please try again.');
     }
@@ -579,5 +583,91 @@ const SystemTab = ({ systemHealth }) => (
     )}
   </div>
 );
+
+// PropTypes validation
+OverviewTab.propTypes = {
+  dashboardData: PropTypes.shape({
+    overview: PropTypes.shape({
+      total_users: PropTypes.number,
+      users_today: PropTypes.number,
+      total_restaurants: PropTypes.number,
+      restaurants_today: PropTypes.number,
+      total_orders: PropTypes.number,
+      orders_today: PropTypes.number,
+      total_revenue: PropTypes.number,
+      platform_fees_today: PropTypes.number,
+    }),
+    realtime: PropTypes.shape({
+      current_online: PropTypes.number,
+      visitor_growth: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+      visitors_today: PropTypes.number,
+      orders_today: PropTypes.number,
+      revenue_today: PropTypes.number,
+    }),
+    top_restaurants: PropTypes.arrayOf(PropTypes.shape({
+      id: PropTypes.number,
+      name: PropTypes.string,
+      total_orders: PropTypes.number,
+      total_revenue: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+      unique_customers: PropTypes.number,
+    })),
+    system: PropTypes.shape({
+      queues: PropTypes.object,
+    }),
+  }),
+};
+
+MetricCard.propTypes = {
+  title: PropTypes.string.isRequired,
+  value: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+  change: PropTypes.string.isRequired,
+  color: PropTypes.oneOf(['blue', 'green', 'purple', 'yellow']).isRequired,
+  icon: PropTypes.string.isRequired,
+};
+
+AnalyticsTab.propTypes = {
+  analytics: PropTypes.object,
+};
+
+UsersTab.propTypes = {
+  users: PropTypes.arrayOf(PropTypes.object),
+};
+
+RestaurantsTab.propTypes = {
+  restaurants: PropTypes.arrayOf(PropTypes.object),
+};
+
+OrdersTab.propTypes = {
+  orders: PropTypes.arrayOf(PropTypes.object),
+};
+
+SystemTab.propTypes = {
+  systemHealth: PropTypes.object,
+};
+
+// Default props
+OverviewTab.defaultProps = {
+  dashboardData: null,
+};
+
+AnalyticsTab.defaultProps = {
+  analytics: null,
+};
+
+UsersTab.defaultProps = {
+  users: [],
+};
+
+RestaurantsTab.defaultProps = {
+  restaurants: [],
+};
+
+OrdersTab.defaultProps = {
+  orders: [],
+};
+
+SystemTab.defaultProps = {
+  systemHealth: null,
+};
 
 export default AdminDashboard;
