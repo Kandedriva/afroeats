@@ -35,17 +35,21 @@ import 'react-toastify/dist/ReactToastify.css';
 import './utils/networkTest';
 import ErrorBoundary from "./Components/ErrorBoundary";
 import AsyncErrorBoundary from "./Components/AsyncErrorBoundary";
+import AdminLogin from "./pages/AdminLogin";
+import AdminDashboard from "./pages/AdminDashboard";
 
 
 function AppContent() {
   const { user } = useContext(AuthContext);
   const location = useLocation();
   const isOwnerRoute = location.pathname.startsWith("/owner");
+  const isAdminRoute = location.pathname.startsWith("/admin");
 
   return (
     <>
-      {!isOwnerRoute && <Navbar />}
+      {!isOwnerRoute && !isAdminRoute && <Navbar />}
       {isOwnerRoute && <OwnerNavbar />}
+      {/* Admin routes don't show any navbar */}
       <Routes>
         <Route path="/" element={<RestaurantList />} />
         <Route path="/restaurants/:id" element={<RestaurantDetails />} />
@@ -150,6 +154,10 @@ function AppContent() {
             </ProtectedOwnerRoute>
           }
         />
+
+        {/* Admin Routes */}
+        <Route path="/admin/login" element={<AdminLogin />} />
+        <Route path="/admin/dashboard" element={<AdminDashboard />} />
       </Routes>
     </>
   );
