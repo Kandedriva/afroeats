@@ -58,10 +58,42 @@ export default function RestaurantList() {
   }
 
   return (
-    <main className="max-w-6xl mx-auto mt-10 p-4 grid gap-8 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
-      {restaurants.map((restaurant) => (
-        <RestaurantCard key={restaurant.id} restaurant={restaurant} />
-      ))}
-    </main>
+    <div className="max-w-6xl mx-auto mt-4 p-4">
+      {/* Coming Soon Notice */}
+      <div className="mb-8 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg shadow-lg overflow-hidden">
+        <div className="px-6 py-8 text-center">
+          <div className="text-4xl mb-4">🚀</div>
+          <h2 className="text-2xl sm:text-3xl font-bold mb-3">Coming Soon!</h2>
+          <p className="text-lg sm:text-xl mb-2 opacity-90">
+            Our platform is currently in development
+          </p>
+          <p className="text-sm sm:text-base opacity-80">
+            We&apos;re working hard to bring you the best food delivery experience. 
+            Stay tuned for our official launch!
+          </p>
+          <p className="text-xs sm:text-sm opacity-70 mt-2 italic">
+            Note: The restaurants shown below are for testing purposes only and are not real establishments.
+          </p>
+          <div className="mt-6 flex flex-col sm:flex-row gap-4 justify-center">
+            <div className="bg-white/20 rounded-lg px-4 py-2 backdrop-blur-sm">
+              <span className="text-sm font-medium">🍽️ Delicious Cuisine</span>
+            </div>
+            <div className="bg-white/20 rounded-lg px-4 py-2 backdrop-blur-sm">
+              <span className="text-sm font-medium">🚚 Fast Delivery</span>
+            </div>
+            <div className="bg-white/20 rounded-lg px-4 py-2 backdrop-blur-sm">
+              <span className="text-sm font-medium">💳 Secure Payment</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Restaurant Grid */}
+      <main className="grid gap-8 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
+        {restaurants.map((restaurant) => (
+          <RestaurantCard key={restaurant.id} restaurant={restaurant} />
+        ))}
+      </main>
+    </div>
   );
 }
