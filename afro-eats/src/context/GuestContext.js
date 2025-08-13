@@ -24,10 +24,8 @@ export const GuestProvider = ({ children }) => {
 
   // Save guest cart to localStorage whenever it changes
   useEffect(() => {
-    if (isGuestMode) {
-      localStorage.setItem('afro-guest-cart', JSON.stringify(guestCart));
-    }
-  }, [guestCart, isGuestMode]);
+    localStorage.setItem('afro-guest-cart', JSON.stringify(guestCart));
+  }, [guestCart]);
 
   const startGuestSession = () => {
     setIsGuestMode(true);
