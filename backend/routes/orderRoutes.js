@@ -89,136 +89,30 @@ router.post("/checkout-session", requireAuth, async (req, res) => {
       return res.status(500).json({ error: "Database connection failed" });
     }
 
-    // Check if Stripe is configured - if not, fall back to demo mode
+    // Check if Stripe is configured - REQUIRED for production
+    console.log("3. Stripe configuration check:", {
+      stripeExists: !!stripe,
+      stripeType: typeof stripe,
+      stripeConstructor: stripe?.constructor?.name
+    });
+    
     if (!stripe) {
-      console.log("3. Entering demo mode (Stripe not configured)");
-      
-      try {
-        // Calculate totals
-        console.log("4. Calculating totals...");
-        const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-        const platformFee = 1.20;
-        const total = subtotal + platformFee;
-        console.log("Totals calculated:", { subtotal, platformFee, total });
-
-        // Ensure order_details, delivery_address, delivery_phone, delivery_type, and restaurant_instructions columns exist
-        console.log("5. Adding database columns if needed...");
-        try {
-          await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS order_details TEXT");
-          await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_address TEXT");
-          await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_phone VARCHAR(20)");
-          await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_type VARCHAR(20) DEFAULT 'delivery'");
-          await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS restaurant_instructions JSONB");
-          console.log("6. Database columns checked/added successfully");
-        } catch (err) {
-          console.error("ERROR: Database column creation failed:", err);
-          throw err;
-        }
-
-        // Extract delivery information from deliveryPreferences or fallback to legacy parameters
-        console.log("7. Processing delivery preferences...");
-        const finalDeliveryType = deliveryPreferences?.type || 'delivery';
-        const finalDeliveryAddress = deliveryPreferences?.address || deliveryAddress;
-        const finalDeliveryPhone = deliveryPreferences?.phone || deliveryPhone;
-
-        console.log("Demo mode order data:", {
-          finalDeliveryType,
-          finalDeliveryAddress,
-          finalDeliveryPhone,
-          restaurantInstructions
-        });
-
-        // Combine restaurant instructions into a single string for legacy support
-        console.log("8. Processing restaurant instructions...");
-        let combinedOrderDetails = orderDetails || '';
-        
-        try {
-          if (restaurantInstructions && typeof restaurantInstructions === 'object') {
-            const instructionEntries = Object.entries(restaurantInstructions)
-              .filter(([restaurant, instructions]) => instructions && typeof instructions === 'string' && instructions.trim())
-              .map(([restaurant, instructions]) => `${restaurant}: ${instructions.trim()}`);
-            
-            if (instructionEntries.length > 0) {
-              combinedOrderDetails = instructionEntries.join(' | ');
-            }
-          }
-          console.log("Combined order details:", combinedOrderDetails);
-        } catch (err) {
-          console.error("ERROR: Error processing restaurant instructions:", err);
-          combinedOrderDetails = orderDetails || '';
-        }
-
-        // Create order in database
-        console.log("9. Creating order in database...");
-        console.log("Order params:", {
-          userId,
-          total,
-          combinedOrderDetails,
-          finalDeliveryAddress,
-          finalDeliveryPhone,
-          finalDeliveryType,
-          restaurantInstructionsJSON: JSON.stringify(restaurantInstructions || null)
-        });
-
-        const orderResult = await pool.query(
-          "INSERT INTO orders (user_id, total, order_details, delivery_address, delivery_phone, delivery_type, restaurant_instructions) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id",
-          [userId, total, combinedOrderDetails, finalDeliveryAddress, finalDeliveryPhone, finalDeliveryType, JSON.stringify(restaurantInstructions || null)]
-        );
-        const orderId = orderResult.rows[0].id;
-        console.log("10. Order created successfully with ID:", orderId);
-
-        // Insert order items with restaurant_id for proper owner dashboard display
-        console.log("11. Processing order items...");
-        console.log("Demo mode - Processing items:", items.map(item => ({
-          id: item.id,
-          name: item.name,
-          restaurantId: item.restaurantId,
-          restaurant_id: item.restaurant_id
-        })));
-
-        const itemPromises = items.map((item, index) => {
-          const restaurantId = item.restaurantId || item.restaurant_id || null;
-          console.log(`Inserting item ${index + 1}/${items.length}: ${item.name} with restaurant_id: ${restaurantId}`);
-          
-          return pool.query(
-            "INSERT INTO order_items (order_id, dish_id, name, price, quantity, restaurant_id) VALUES ($1, $2, $3, $4, $5, $6)",
-            [orderId, item.id || null, item.name, item.price, item.quantity, restaurantId]
-          ).catch(err => {
-            console.error(`ERROR inserting item ${item.name}:`, err);
-            throw err;
-          });
-        });
-        
-        await Promise.all(itemPromises);
-        console.log("12. All order items inserted successfully");
-
-        // Mark order as paid immediately in demo mode
-        await pool.query(
-          "UPDATE orders SET status = $1, paid_at = NOW() WHERE id = $2",
-          ['paid', orderId]
-        );
-
-        // Clear the cart since payment is completed
-        await pool.query("DELETE FROM carts WHERE user_id = $1", [userId]);
-        
-        console.log("13. Demo mode order creation completed successfully");
-
-        // Get the frontend URL dynamically
-        const frontendUrl = req.headers.origin || req.headers.referer?.replace(/\/$/, '') || 'http://localhost:3000';
-        
-        const responseData = { 
-          url: `${frontendUrl}/order-success?order_id=${orderId}&demo=true`,
-          demo_mode: true,
-          order_id: orderId
-        };
-        console.log("14. Sending response:", responseData);
-        return res.json(responseData);
-        
-      } catch (demoError) {
-        console.error("ERROR in demo mode section:", demoError);
-        throw demoError;
-      }
+      console.error("❌ STRIPE NOT CONFIGURED - This is required for production");
+      return res.status(503).json({ 
+        error: "Payment processing unavailable", 
+        message: "Stripe is not configured. Please contact support.",
+        code: "STRIPE_NOT_CONFIGURED"
+      });
     }
+
+    console.log("4. Proceeding with Stripe checkout session creation...");
+
+    // Extract delivery information from deliveryPreferences or fallback to legacy parameters
+    console.log("5. Processing delivery preferences...");
+    const finalDeliveryType = deliveryPreferences?.type || 'delivery';
+    const finalDeliveryAddress = deliveryPreferences?.address || deliveryAddress;
+    const finalDeliveryPhone = deliveryPreferences?.phone || deliveryPhone;
+
 
     console.log("15. Entering Stripe Connect mode");
     
@@ -289,10 +183,7 @@ router.post("/checkout-session", requireAuth, async (req, res) => {
       // Database setup error handled silently
     }
 
-    // Extract delivery information from deliveryPreferences or fallback to legacy parameters
-    const finalDeliveryType = deliveryPreferences?.type || 'delivery';
-    const finalDeliveryAddress = deliveryPreferences?.address || deliveryAddress;
-    const finalDeliveryPhone = deliveryPreferences?.phone || deliveryPhone;
+    // Remove duplicate declaration - variables already declared above
 
     // Combine restaurant instructions into a single string for legacy support
     let combinedOrderDetails = orderDetails || '';
@@ -376,7 +267,7 @@ router.post("/checkout-session", requireAuth, async (req, res) => {
         currency: 'usd',
         product_data: {
           name: 'Platform Fee (5%)',
-          description: 'Service fee for using A Food Zone platform',
+          description: 'Service fee for using OrderDabaly platform',
         },
         unit_amount: Math.round(platformFee * 100),
       },
@@ -397,18 +288,33 @@ router.post("/checkout-session", requireAuth, async (req, res) => {
       total: subtotal + platformFee
     };
 
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      mode: 'payment',
-      line_items: lineItems,
-      success_url: `${frontendUrl}/order-success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${frontendUrl}/cart?canceled=true`,
-      metadata: {
-        orderData: JSON.stringify(essentialOrderData),
-        userId: userId.toString(),
-        platformFee: platformFee.toString()
-      },
-    });
+    let session;
+    try {
+      session = await stripe.checkout.sessions.create({
+        payment_method_types: ['card'],
+        mode: 'payment',
+        line_items: lineItems,
+        success_url: `${frontendUrl}/order-success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${frontendUrl}/cart?canceled=true`,
+        metadata: {
+          orderData: JSON.stringify(essentialOrderData),
+          userId: userId.toString(),
+          platformFee: platformFee.toString()
+        },
+      });
+    } catch (stripeError) {
+      console.error("❌ Stripe session creation failed:", stripeError.message);
+      console.error("❌ Stripe error type:", stripeError.type);
+      console.error("❌ Stripe error code:", stripeError.code);
+      
+      // Return proper error for production - no fallback
+      return res.status(503).json({
+        error: "Payment processing failed",
+        message: "Unable to create checkout session. Please try again or contact support.",
+        details: stripeError.message,
+        code: "STRIPE_SESSION_FAILED"
+      });
+    }
 
     // Store the full order data temporarily in database for webhook processing
     try {
