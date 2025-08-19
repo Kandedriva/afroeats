@@ -31,8 +31,8 @@ export const rateLimits = {
   // Password reset - strict
   passwordReset: createRateLimit(15 * 60 * 1000, 3, 'Too many password reset attempts'),
   
-  // Order creation - moderate
-  orders: createRateLimit(5 * 60 * 1000, 10, 'Too many order attempts'),
+  // Order creation - moderate (increased for development)
+  orders: createRateLimit(5 * 60 * 1000, 100, 'Too many order attempts'),
   
   // File uploads - strict
   upload: createRateLimit(15 * 60 * 1000, 10, 'Too many upload attempts')
@@ -56,19 +56,19 @@ export const corsOptions = {
       process.env.REACT_APP_FRONTEND_URL,
       
       // Specific production URLs
-      'https://afoodzone.com',
-      'https://www.afoodzone.com',
-      'https://api.afoodzone.com',
-      'https://afoodzone.netlify.app',
-      'https://afoodzone.vercel.app',
+      'https://orderdabaly.com',
+      'https://www.orderdabaly.com',
+      'https://api.orderdabaly.com',
+      'https://orderdabaly.netlify.app',
+      'https://orderdabaly.vercel.app',
       
       // Backend service URLs (for admin dashboard and legacy support)
       'https://a-food-zone.onrender.com',
       'https://afro-restaurant-backend.onrender.com',
       
       // Support for both API and frontend subdomains
-      'https://app.afoodzone.com',
-      'https://admin.afoodzone.com'
+      'https://app.orderdabaly.com',
+      'https://admin.orderdabaly.com'
     ].filter(Boolean); // Remove undefined values
     
     console.log('🌐 CORS Request from origin:', origin || 'NO_ORIGIN');

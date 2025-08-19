@@ -103,7 +103,18 @@ router.post('/create-stripe-account', requireOwnerAuth, async (req, res) => {
         console.log('✅ Account link created for existing account:', accountLink.url);
         return res.json({ url: accountLink.url });
       } catch (linkErr) {
-        console.log('⚠️ Existing account link failed, redirecting to OAuth:', linkErr.message);
+        console.log('⚠️ Existing account link failed:', linkErr.message);
+        
+        // If Stripe error, return helpful message
+        if (linkErr.type === 'StripeAuthenticationError') {
+          return res.status(503).json({ 
+            error: 'Stripe authentication failed. Please check your Stripe configuration.',
+            details: linkErr.message,
+            type: 'stripe_auth_error'
+          });
+        }
+        
+        console.log('🔄 Falling back to OAuth flow');
         // Fall through to OAuth flow
       }
     }
@@ -343,7 +354,20 @@ router.get('/oauth-callback', async (req, res) => {
     // Handle OAuth errors
     if (error) {
       console.error('❌ OAuth error:', error, error_description);
-      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/owner/dashboard?error=${encodeURIComponent(error)}&error_description=${encodeURIComponent(error_description)}`);
+      
+      // Handle specific error cases
+      let redirectUrl;
+      if (error === 'access_denied') {
+        console.log('🚫 User denied access to Stripe Connect');
+        redirectUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/owner/dashboard?error=access_denied`;
+      } else {
+        redirectUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/owner/dashboard?error=${encodeURIComponent(error)}`;
+        if (error_description) {
+          redirectUrl += `&error_description=${encodeURIComponent(error_description)}`;
+        }
+      }
+      
+      return res.redirect(redirectUrl);
     }
 
     if (!code) {
@@ -369,10 +393,22 @@ router.get('/oauth-callback', async (req, res) => {
 
     // Exchange authorization code for access token
     console.log('🔄 Exchanging code for access token...');
-    const tokenResponse = await stripe.oauth.token({
-      grant_type: 'authorization_code',
-      code: code,
-    });
+    let tokenResponse;
+    try {
+      tokenResponse = await stripe.oauth.token({
+        grant_type: 'authorization_code',
+        code: code,
+      });
+    } catch (tokenError) {
+      console.error('❌ OAuth token exchange failed:', tokenError.message);
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      
+      if (tokenError.type === 'StripeAuthenticationError') {
+        return res.redirect(`${frontendUrl}/owner/dashboard?error=stripe_auth_failed&details=${encodeURIComponent('Invalid Stripe credentials')}`);
+      }
+      
+      return res.redirect(`${frontendUrl}/owner/dashboard?error=oauth_token_failed&details=${encodeURIComponent(tokenError.message)}`);
+    }
 
     console.log('✅ OAuth token received:', {
       stripe_user_id: tokenResponse.stripe_user_id,

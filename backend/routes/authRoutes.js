@@ -230,7 +230,7 @@ router.get("/profile", async (req, res) => {
       }
       
       // Clear cookie with proper mobile-friendly settings
-      res.clearCookie("afoodzone.sid", {
+      res.clearCookie("orderdabaly.sid", {
         path: '/',
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
