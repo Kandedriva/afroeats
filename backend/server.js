@@ -154,13 +154,12 @@ const sessionConfig = {
     // Set session to last 1 year (365 days)
     maxAge: process.env.SESSION_TIMEOUT ? parseInt(process.env.SESSION_TIMEOUT) : 365 * 24 * 60 * 60 * 1000, // Default 1 year
     httpOnly: true,
-    // For mobile compatibility, always use secure in production
+    // Always use secure in production for HTTPS
     secure: process.env.NODE_ENV === 'production',
-    // Use 'none' for cross-site cookies between different domains (orderdabaly.com <-> orderdabaly.onrender.com)
+    // Use 'none' for cross-site cookies - required for different domains
     sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
     // Don't set domain to allow cookies to work across different domains
     domain: undefined,
-    // Additional mobile-friendly settings
     path: '/'
   },
   rolling: true, // This extends the session on each request
@@ -172,16 +171,19 @@ const sessionConfig = {
     // Generate more secure session IDs
     return crypto.randomBytes(32).toString('hex');
   },
-  store: new PgSession({
-    pool: pool, // Use existing PostgreSQL connection pool
-    tableName: 'sessions', // Session table name
-    createTableIfMissing: true, // Auto-create sessions table
-    pruneSessionInterval: 60 * 15, // Prune expired sessions every 15 minutes (in seconds)
-    errorLog: console.error.bind(console) // Log session store errors
-  })
+  // Temporarily use memory store to test if PostgreSQL session store is the issue
+  // store: new PgSession({
+  //   pool: pool, // Use existing PostgreSQL connection pool
+  //   tableName: 'sessions', // Session table name
+  //   createTableIfMissing: true, // Auto-create sessions table
+  //   pruneSessionInterval: 60 * 15, // Prune expired sessions every 15 minutes (in seconds)
+  //   errorLog: console.error.bind(console) // Log session store errors
+  // })
+  // Using default memory store for testing
+  store: undefined
 };
 
-console.log('✅ Using PostgreSQL session store with persistent sessions');
+console.log('⚠️  TESTING: Using memory session store (sessions will not persist across server restarts)');
 
 app.use(session(sessionConfig));
 
