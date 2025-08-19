@@ -130,13 +130,6 @@ router.post("/login", checkAccountLockout, async (req, res) => {
     req.session.ownerId = owner.id;
     req.session.ownerName = owner.name;
     req.session.ownerEmail = owner.email;
-    
-    console.log('🔐 LOGIN SUCCESS - Session set:', {
-      sessionId: req.sessionID,
-      ownerId: req.session.ownerId,
-      ownerName: req.session.ownerName,
-      ownerEmail: req.session.ownerEmail
-    });
 
     res.json({ message: "Login successful", owner: { id: owner.id, name: owner.name, email: owner.email } });
   } catch (err) {
@@ -431,24 +424,13 @@ router.get("/check-session", (req, res) => {
 
 // Check current owner session
 router.get("/me", (req, res) => {
-  console.log('🔍 /api/owners/me - Session check:', {
-    sessionExists: !!req.session,
-    sessionId: req.sessionID,
-    ownerId: req.session?.ownerId,
-    ownerName: req.session?.ownerName,
-    ownerEmail: req.session?.ownerEmail,
-    cookies: req.headers.cookie
-  });
-  
   if (req.session.ownerId) {
-    console.log('✅ /api/owners/me - Session valid, returning owner data');
     res.json({
       id: req.session.ownerId,
       name: req.session.ownerName,
       email: req.session.ownerEmail,
     });
   } else {
-    console.log('❌ /api/owners/me - No valid session found');
     res.status(401).json({ error: "Not logged in" });
   }
 });
