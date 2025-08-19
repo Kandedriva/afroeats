@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: orderdabaly-backend
+    env: node
+    region: oregon
+    plan: starter
+    buildCommand: cd backend && ./build.sh
+    startCommand: cd backend && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NPM_CONFIG_PRODUCTION
+        value: false
+      - key: DISABLE_YARN
+        value: true
+      - key: NPM_CONFIG_PACKAGE_LOCK
+        value: true
+      # Add these environment variables in Render dashboard:
+      # DATABASE_URL: your_production_database_url
+      # STRIPE_SECRET_KEY: sk_live_...
+      # FRONTEND_URL: https://orderdabaly.com
+      # COOKIE_DOMAIN: .orderdabaly.com
+      # SESSION_SECRET: your_secure_session_secret
+    healthCheckPath: /api/health
+    # Auto-deploy from main branch
+    autoDeploy: true
+
+# Global settings
+buildTool: npm
