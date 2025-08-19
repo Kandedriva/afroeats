@@ -7,7 +7,7 @@ function OwnerLogin() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const { refreshAuth } = useOwnerAuth();
+  const { setOwner } = useOwnerAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -27,9 +27,18 @@ function OwnerLogin() {
         throw new Error(data.error || "Login failed");
       }
 
-      // Refresh auth context and redirect to dashboard
-      await refreshAuth();
-      navigate("/owner/dashboard");
+      const loginData = await res.json();
+      
+      // Set owner data directly from login response
+      if (loginData.owner) {
+        // Update the owner state immediately
+        setOwner(loginData.owner);
+        
+        // Navigate to dashboard
+        navigate("/owner/dashboard");
+      } else {
+        throw new Error("Login response missing owner data");
+      }
     } catch (err) {
       setError(err.message);
     }
