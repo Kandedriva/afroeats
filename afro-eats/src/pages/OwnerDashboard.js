@@ -35,6 +35,11 @@ function OwnerDashboard() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    // Only fetch data if owner is loaded and authenticated
+    if (!owner || authLoading) {
+      return;
+    }
+
     // Handle Stripe Connect returns
     const handleStripeReturns = async () => {
       const urlParams = new URLSearchParams(window.location.search);
@@ -106,7 +111,8 @@ function OwnerDashboard() {
           setRestaurant(restaurantData);
         }
       } catch (err) {
-        // Dashboard error
+        console.error('Dashboard fetch error:', err);
+        toast.error('Failed to load dashboard data. Please try refreshing the page.');
       } finally {
         setLoading(false);
       }
@@ -124,7 +130,7 @@ function OwnerDashboard() {
           setOrders(data.orders || []);
         }
       } catch (err) {
-        // Orders fetch error
+        // Orders fetch error - silently handle
       }
     };
 
@@ -140,7 +146,7 @@ function OwnerDashboard() {
           setUnreadCount(data.unreadCount || 0);
         }
       } catch (err) {
-        // Notifications fetch error
+        // Notifications fetch error - silently handle
       }
     };
 
@@ -149,7 +155,7 @@ function OwnerDashboard() {
     fetchStripeConnectStatus();
     fetchOrders();
     fetchNotifications();
-  }, []);
+  }, [owner, authLoading]);
 
   const fetchStripeConnectStatus = async () => {
     try {
