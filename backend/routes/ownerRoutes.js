@@ -129,6 +129,7 @@ router.post("/login", checkAccountLockout, async (req, res) => {
     // Set session
     req.session.ownerId = owner.id;
     req.session.ownerName = owner.name;
+    req.session.ownerEmail = owner.email;
 
     res.json({ message: "Login successful", owner: { id: owner.id, name: owner.name, email: owner.email } });
   } catch (err) {
@@ -427,6 +428,7 @@ router.get("/me", (req, res) => {
     res.json({
       id: req.session.ownerId,
       name: req.session.ownerName,
+      email: req.session.ownerEmail,
     });
   } else {
     res.status(401).json({ error: "Not logged in" });
