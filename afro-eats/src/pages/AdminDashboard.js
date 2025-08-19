@@ -15,6 +15,8 @@ const AdminDashboard = () => {
   const [restaurants, setRestaurants] = useState([]);
   const [orders, setOrders] = useState([]);
   const [systemHealth, setSystemHealth] = useState(null);
+  const [supportMessages, setSupportMessages] = useState([]);
+  const [supportStats, setSupportStats] = useState(null);
 
   // Check admin authentication
   useEffect(() => {
@@ -175,6 +177,36 @@ const AdminDashboard = () => {
     }
   };
 
+  const loadSupportMessages = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/admin/support-messages`, {
+        credentials: 'include'
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        setSupportMessages(data.messages);
+      }
+    } catch (error) {
+      // console.error('Failed to load support messages:', error);
+    }
+  };
+
+  const loadSupportStats = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/admin/support-stats`, {
+        credentials: 'include'
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        setSupportStats(data.stats);
+      }
+    } catch (error) {
+      // console.error('Failed to load support stats:', error);
+    }
+  };
+
   const handleTabChange = (tab) => {
     setActiveTab(tab);
     
@@ -193,6 +225,14 @@ const AdminDashboard = () => {
       case 'orders':
         if (orders.length === 0) {
           loadOrders();
+        }
+        break;
+      case 'support':
+        if (supportMessages.length === 0) {
+          loadSupportMessages();
+        }
+        if (!supportStats) {
+          loadSupportStats();
         }
         break;
       default:
@@ -286,6 +326,7 @@ const AdminDashboard = () => {
               { id: 'users', label: '👥 Users' },
               { id: 'restaurants', label: '🏪 Restaurants' },
               { id: 'orders', label: '📋 Orders' },
+              { id: 'support', label: '🎧 Support' },
               { id: 'system', label: '⚙️ System' }
             ].map((tab) => (
               <button
@@ -324,6 +365,14 @@ const AdminDashboard = () => {
         
         {activeTab === 'orders' && (
           <OrdersTab orders={orders} />
+        )}
+        
+        {activeTab === 'support' && (
+          <SupportTab 
+            supportMessages={supportMessages} 
+            supportStats={supportStats}
+            onUpdateMessage={loadSupportMessages}
+          />
         )}
         
         {activeTab === 'system' && (
@@ -570,6 +619,341 @@ const OrdersTab = ({ orders }) => (
   </div>
 );
 
+// Support Tab Component
+const SupportTab = ({ supportMessages, supportStats, onUpdateMessage }) => {
+  const [selectedMessage, setSelectedMessage] = useState(null);
+  const [response, setResponse] = useState('');
+  const [status, setStatus] = useState('');
+  const [priority, setPriority] = useState('');
+  const [updating, setUpdating] = useState(false);
+
+  const handleUpdateMessage = async (messageId) => {
+    if (!status && !priority && !response.trim()) {
+      toast.error('Please provide a status, priority, or response');
+      return;
+    }
+
+    setUpdating(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/admin/support-messages/${messageId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          status: status || undefined,
+          priority: priority || undefined,
+          admin_response: response || undefined
+        }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        toast.success('Support message updated successfully');
+        setSelectedMessage(null);
+        setResponse('');
+        setStatus('');
+        setPriority('');
+        onUpdateMessage(); // Refresh the messages list
+      } else {
+        toast.error(data.error || 'Failed to update support message');
+      }
+    } catch (error) {
+      toast.error('An error occurred while updating the message');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const getPriorityColor = (priority) => {
+    switch (priority) {
+      case 'urgent': return 'bg-red-100 text-red-800';
+      case 'high': return 'bg-orange-100 text-orange-800';
+      case 'medium': return 'bg-yellow-100 text-yellow-800';
+      case 'low': return 'bg-green-100 text-green-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'pending': return 'bg-yellow-100 text-yellow-800';
+      case 'in_progress': return 'bg-blue-100 text-blue-800';
+      case 'resolved': return 'bg-green-100 text-green-800';
+      case 'closed': return 'bg-gray-100 text-gray-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Support Statistics */}
+      {supportStats && (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center">
+              <div className="p-3 rounded-full bg-blue-50 text-blue-600 mr-4">
+                <span className="text-2xl">📧</span>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-600">Total Messages</p>
+                <p className="text-2xl font-bold text-gray-900">{supportStats.total_messages || 0}</p>
+                <p className="text-xs text-gray-500">{supportStats.today_count || 0} today</p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center">
+              <div className="p-3 rounded-full bg-yellow-50 text-yellow-600 mr-4">
+                <span className="text-2xl">⏳</span>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-600">Pending</p>
+                <p className="text-2xl font-bold text-gray-900">{supportStats.pending_count || 0}</p>
+                <p className="text-xs text-gray-500">Awaiting response</p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center">
+              <div className="p-3 rounded-full bg-red-50 text-red-600 mr-4">
+                <span className="text-2xl">🚨</span>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-600">Urgent</p>
+                <p className="text-2xl font-bold text-gray-900">{supportStats.urgent_count || 0}</p>
+                <p className="text-xs text-gray-500">High priority</p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center">
+              <div className="p-3 rounded-full bg-green-50 text-green-600 mr-4">
+                <span className="text-2xl">⏱️</span>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-600">Avg Response</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {supportStats.avg_response_time_hours ? 
+                    `${Math.round(supportStats.avg_response_time_hours)}h` : 'N/A'}
+                </p>
+                <p className="text-xs text-gray-500">Response time</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Support Messages List */}
+      <div className="bg-white rounded-lg shadow">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <h3 className="text-lg font-semibold">🎧 Support Messages</h3>
+        </div>
+        
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Customer
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Subject
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Status
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Priority
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Date
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {supportMessages.map((message) => (
+                <tr key={message.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div>
+                      <div className="text-sm font-medium text-gray-900">
+                        {message.user_name || 'Guest'}
+                      </div>
+                      <div className="text-sm text-gray-500">{message.user_email}</div>
+                      {message.user_phone && (
+                        <div className="text-xs text-gray-400">{message.user_phone}</div>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="text-sm text-gray-900 max-w-xs truncate">
+                      {message.subject}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(message.status)}`}>
+                      {message.status.replace('_', ' ')}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getPriorityColor(message.priority)}`}>
+                      {message.priority}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {new Date(message.created_at).toLocaleDateString()}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <button
+                      onClick={() => setSelectedMessage(message)}
+                      className="text-blue-600 hover:text-blue-900 font-medium"
+                    >
+                      View/Respond
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        
+        {supportMessages.length === 0 && (
+          <div className="text-center py-8 text-gray-500">
+            No support messages found
+          </div>
+        )}
+      </div>
+
+      {/* Message Detail Modal */}
+      {selectedMessage && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-2xl w-full max-h-screen overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold text-gray-800">Support Message Details</h2>
+                <button
+                  onClick={() => setSelectedMessage(null)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  ✕
+                </button>
+              </div>
+              
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <div className="block text-sm font-medium text-gray-700">Customer</div>
+                    <p className="mt-1 text-sm text-gray-900">
+                      {selectedMessage.user_name || 'Guest'} ({selectedMessage.user_email})
+                    </p>
+                  </div>
+                  <div>
+                    <div className="block text-sm font-medium text-gray-700">Date</div>
+                    <p className="mt-1 text-sm text-gray-900">
+                      {new Date(selectedMessage.created_at).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+                
+                <div>
+                  <div className="block text-sm font-medium text-gray-700">Subject</div>
+                  <p className="mt-1 text-sm text-gray-900">{selectedMessage.subject}</p>
+                </div>
+                
+                <div>
+                  <div className="block text-sm font-medium text-gray-700">Message</div>
+                  <div className="mt-1 p-3 bg-gray-50 border rounded-md">
+                    <p className="text-sm text-gray-900 whitespace-pre-wrap">{selectedMessage.message}</p>
+                  </div>
+                </div>
+                
+                {selectedMessage.admin_response && (
+                  <div>
+                    <div className="block text-sm font-medium text-gray-700">Previous Response</div>
+                    <div className="mt-1 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                      <p className="text-sm text-gray-900 whitespace-pre-wrap">{selectedMessage.admin_response}</p>
+                      <p className="text-xs text-gray-500 mt-2">
+                        Responded by {selectedMessage.admin_username} on {new Date(selectedMessage.responded_at).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                )}
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="status-select" className="block text-sm font-medium text-gray-700">Status</label>
+                    <select
+                      id="status-select"
+                      value={status || selectedMessage.status}
+                      onChange={(e) => setStatus(e.target.value)}
+                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="pending">Pending</option>
+                      <option value="in_progress">In Progress</option>
+                      <option value="resolved">Resolved</option>
+                      <option value="closed">Closed</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="priority-select" className="block text-sm font-medium text-gray-700">Priority</label>
+                    <select
+                      id="priority-select"
+                      value={priority || selectedMessage.priority}
+                      onChange={(e) => setPriority(e.target.value)}
+                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="low">Low</option>
+                      <option value="medium">Medium</option>
+                      <option value="high">High</option>
+                      <option value="urgent">Urgent</option>
+                    </select>
+                  </div>
+                </div>
+                
+                <div>
+                  <label htmlFor="admin-response" className="block text-sm font-medium text-gray-700">Admin Response</label>
+                  <textarea
+                    id="admin-response"
+                    value={response}
+                    onChange={(e) => setResponse(e.target.value)}
+                    rows="4"
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Type your response here..."
+                  />
+                </div>
+                
+                <div className="flex space-x-3 pt-4">
+                  <button
+                    onClick={() => setSelectedMessage(null)}
+                    className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-md font-medium hover:bg-gray-400 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => handleUpdateMessage(selectedMessage.id)}
+                    disabled={updating}
+                    className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-md font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {updating ? 'Updating...' : 'Update Message'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // System Tab Component
 const SystemTab = ({ systemHealth }) => (
   <div className="bg-white rounded-lg shadow p-6">
@@ -641,6 +1025,12 @@ OrdersTab.propTypes = {
   orders: PropTypes.arrayOf(PropTypes.object),
 };
 
+SupportTab.propTypes = {
+  supportMessages: PropTypes.arrayOf(PropTypes.object),
+  supportStats: PropTypes.object,
+  onUpdateMessage: PropTypes.func.isRequired,
+};
+
 SystemTab.propTypes = {
   systemHealth: PropTypes.object,
 };
@@ -664,6 +1054,11 @@ RestaurantsTab.defaultProps = {
 
 OrdersTab.defaultProps = {
   orders: [],
+};
+
+SupportTab.defaultProps = {
+  supportMessages: [],
+  supportStats: null,
 };
 
 SystemTab.defaultProps = {

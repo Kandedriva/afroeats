@@ -5,6 +5,7 @@ import { AnalyticsService } from '../services/analytics.js';
 import { getQueueStats } from '../services/queue.js';
 import { cache } from '../utils/cache.js';
 import { rateLimits, validators, handleValidationErrors } from '../middleware/security.js';
+import { logger } from '../services/logger.js';
 
 const router = express.Router();
 
@@ -504,6 +505,211 @@ router.get('/settings', requireAdminAuth, async (req, res) => {
         smtp_enabled: { value: 'false', description: 'Enable email sending' }
       }
     });
+  }
+});
+
+// Get support messages for admin dashboard
+router.get('/support-messages', requireAdminAuth, async (req, res) => {
+  try {
+    const { page = 1, limit = 20, status = 'all', priority = 'all' } = req.query;
+    const offset = (page - 1) * limit;
+    
+    let whereClause = 'WHERE 1=1';
+    const params = [];
+    let paramCount = 0;
+    
+    if (status !== 'all') {
+      paramCount++;
+      whereClause += ` AND sm.status = $${paramCount}`;
+      params.push(status);
+    }
+    
+    if (priority !== 'all') {
+      paramCount++;
+      whereClause += ` AND sm.priority = $${paramCount}`;
+      params.push(priority);
+    }
+    
+    // Get support messages with user details
+    const messagesResult = await pool.query(`
+      SELECT 
+        sm.id,
+        sm.user_id,
+        sm.user_email,
+        sm.user_phone,
+        sm.subject,
+        sm.message,
+        sm.status,
+        sm.priority,
+        sm.admin_response,
+        sm.admin_id,
+        sm.created_at,
+        sm.updated_at,
+        sm.responded_at,
+        u.name as user_name,
+        a.username as admin_username
+      FROM support_messages sm
+      LEFT JOIN users u ON sm.user_id = u.id
+      LEFT JOIN platform_admins a ON sm.admin_id = a.id
+      ${whereClause}
+      ORDER BY 
+        CASE sm.priority 
+          WHEN 'urgent' THEN 1 
+          WHEN 'high' THEN 2 
+          WHEN 'medium' THEN 3 
+          WHEN 'low' THEN 4 
+        END,
+        sm.created_at DESC
+      LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}
+    `, [...params, limit, offset]);
+    
+    // Get total count and status summary
+    const countResult = await pool.query(`
+      SELECT 
+        COUNT(*) as total,
+        COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending,
+        COUNT(CASE WHEN status = 'in_progress' THEN 1 END) as in_progress,
+        COUNT(CASE WHEN status = 'resolved' THEN 1 END) as resolved,
+        COUNT(CASE WHEN status = 'closed' THEN 1 END) as closed
+      FROM support_messages sm
+      ${whereClause}
+    `, params);
+    
+    res.json({
+      messages: messagesResult.rows,
+      summary: countResult.rows[0],
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: parseInt(countResult.rows[0].total),
+        pages: Math.ceil(countResult.rows[0].total / limit)
+      }
+    });
+  } catch (error) {
+    logger.error('Support messages list error:', error);
+    res.status(500).json({ error: 'Failed to load support messages' });
+  }
+});
+
+// Update support message status and response
+router.put('/support-messages/:id', requireAdminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, priority, admin_response } = req.body;
+    
+    // Validation
+    const validStatuses = ['pending', 'in_progress', 'resolved', 'closed'];
+    const validPriorities = ['low', 'medium', 'high', 'urgent'];
+    
+    if (status && !validStatuses.includes(status)) {
+      return res.status(400).json({ error: 'Invalid status' });
+    }
+    
+    if (priority && !validPriorities.includes(priority)) {
+      return res.status(400).json({ error: 'Invalid priority' });
+    }
+    
+    // Build update query dynamically
+    const updates = [];
+    const values = [];
+    let paramCount = 0;
+    
+    if (status) {
+      paramCount++;
+      updates.push(`status = $${paramCount}`);
+      values.push(status);
+    }
+    
+    if (priority) {
+      paramCount++;
+      updates.push(`priority = $${paramCount}`);
+      values.push(priority);
+    }
+    
+    if (admin_response !== undefined) {
+      paramCount++;
+      updates.push(`admin_response = $${paramCount}`);
+      values.push(admin_response);
+      
+      paramCount++;
+      updates.push(`admin_id = $${paramCount}`);
+      values.push(req.admin.id);
+      
+      // Set responded_at if providing a response
+      if (admin_response && admin_response.trim()) {
+        updates.push(`responded_at = CURRENT_TIMESTAMP`);
+      }
+    }
+    
+    if (updates.length === 0) {
+      return res.status(400).json({ error: 'No valid updates provided' });
+    }
+    
+    updates.push('updated_at = CURRENT_TIMESTAMP');
+    
+    paramCount++;
+    values.push(id);
+    
+    const query = `
+      UPDATE support_messages 
+      SET ${updates.join(', ')}
+      WHERE id = $${paramCount}
+      RETURNING *
+    `;
+    
+    const result = await pool.query(query, values);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Support message not found' });
+    }
+    
+    logger.info('Support message updated', { 
+      messageId: id, 
+      adminId: req.admin.id, 
+      updates: { status, priority, hasResponse: !!admin_response } 
+    });
+    
+    res.json({
+      success: true,
+      message: 'Support message updated successfully',
+      supportMessage: result.rows[0]
+    });
+    
+  } catch (error) {
+    logger.error('Error updating support message:', error);
+    res.status(500).json({ error: 'Failed to update support message' });
+  }
+});
+
+// Get support message statistics
+router.get('/support-stats', requireAdminAuth, async (req, res) => {
+  try {
+    const statsResult = await pool.query(`
+      SELECT 
+        COUNT(*) as total_messages,
+        COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending_count,
+        COUNT(CASE WHEN status = 'in_progress' THEN 1 END) as in_progress_count,
+        COUNT(CASE WHEN status = 'resolved' THEN 1 END) as resolved_count,
+        COUNT(CASE WHEN status = 'closed' THEN 1 END) as closed_count,
+        COUNT(CASE WHEN priority = 'urgent' THEN 1 END) as urgent_count,
+        COUNT(CASE WHEN priority = 'high' THEN 1 END) as high_count,
+        COUNT(CASE WHEN created_at >= CURRENT_DATE THEN 1 END) as today_count,
+        COUNT(CASE WHEN created_at >= CURRENT_DATE - INTERVAL '7 days' THEN 1 END) as week_count,
+        AVG(CASE 
+          WHEN responded_at IS NOT NULL AND created_at IS NOT NULL 
+          THEN EXTRACT(EPOCH FROM (responded_at - created_at))/3600 
+        END) as avg_response_time_hours
+      FROM support_messages
+    `);
+    
+    res.json({
+      success: true,
+      stats: statsResult.rows[0]
+    });
+    
+  } catch (error) {
+    logger.error('Error fetching support stats:', error);
+    res.status(500).json({ error: 'Failed to fetch support statistics' });
   }
 });
 

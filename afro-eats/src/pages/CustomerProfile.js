@@ -15,6 +15,13 @@ function CustomerProfile() {
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [errors, setErrors] = useState({});
+  const [showSupportForm, setShowSupportForm] = useState(false);
+  const [supportForm, setSupportForm] = useState({
+    subject: "",
+    message: "",
+    contact_info: ""
+  });
+  const [submittingSupport, setSubmittingSupport] = useState(false);
 
   useEffect(() => {
     const fetchUserProfile = async () => {
@@ -110,6 +117,49 @@ function CustomerProfile() {
       toast.error("An error occurred while updating your profile");
     } finally {
       setUpdating(false);
+    }
+  };
+
+  const handleSupportInputChange = (e) => {
+    const { name, value } = e.target;
+    setSupportForm(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleSupportSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!supportForm.subject.trim() || !supportForm.message.trim() || !supportForm.contact_info.trim()) {
+      toast.error("Please fill in all fields");
+      return;
+    }
+
+    setSubmittingSupport(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/support/submit`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify(supportForm),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        toast.success("Support request submitted successfully! We will respond within 24 hours.");
+        setSupportForm({ subject: "", message: "", contact_info: "" });
+        setShowSupportForm(false);
+      } else {
+        toast.error(data.error || "Failed to submit support request");
+      }
+    } catch (err) {
+      toast.error("An error occurred while submitting your support request");
+    } finally {
+      setSubmittingSupport(false);
     }
   };
 
@@ -237,17 +287,133 @@ function CustomerProfile() {
 
         {/* Additional Actions */}
         <div className="mt-8 pt-6 border-t border-gray-200">
-          <div className="text-sm text-gray-600">
-            <p className="mb-2">Need to update your password?</p>
-            <a 
-              href="/user/update-password" 
-              className="text-green-600 hover:text-green-700 font-medium"
-            >
-              Change Password →
-            </a>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="text-sm text-gray-600">
+              <p className="mb-2">Need to update your password?</p>
+              <a 
+                href="/user/update-password" 
+                className="text-green-600 hover:text-green-700 font-medium"
+              >
+                Change Password →
+              </a>
+            </div>
+            <div className="text-sm text-gray-600">
+              <p className="mb-2">Need help or have a complaint?</p>
+              <button 
+                onClick={() => setShowSupportForm(true)}
+                className="text-blue-600 hover:text-blue-700 font-medium"
+              >
+                Contact Support →
+              </button>
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Support Form Modal */}
+      {showSupportForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-md w-full max-h-screen overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold text-gray-800">Contact Support</h2>
+                <button
+                  onClick={() => setShowSupportForm(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  ✕
+                </button>
+              </div>
+              
+              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                <p className="text-sm text-blue-800">
+                  <strong>Privacy Notice:</strong> Please do not include any sensitive information 
+                  like passwords or payment details. Only provide your phone number or email for contact purposes.
+                </p>
+              </div>
+
+              <form onSubmit={handleSupportSubmit} className="space-y-4">
+                <div>
+                  <label htmlFor="subject" className="block text-sm font-medium text-gray-700 mb-2">
+                    Subject *
+                  </label>
+                  <input
+                    id="subject"
+                    type="text"
+                    name="subject"
+                    value={supportForm.subject}
+                    onChange={handleSupportInputChange}
+                    className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Brief description of your issue"
+                    maxLength={255}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="contact_info" className="block text-sm font-medium text-gray-700 mb-2">
+                    Contact Information (Email or Phone) *
+                  </label>
+                  <input
+                    id="contact_info"
+                    type="text"
+                    name="contact_info"
+                    value={supportForm.contact_info}
+                    onChange={handleSupportInputChange}
+                    className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Your email address or phone number"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="message" className="block text-sm font-medium text-gray-700 mb-2">
+                    Message *
+                  </label>
+                  <textarea
+                    id="message"
+                    name="message"
+                    value={supportForm.message}
+                    onChange={handleSupportInputChange}
+                    rows="6"
+                    className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                    placeholder="Describe your issue or inquiry in detail..."
+                    maxLength={2000}
+                    required
+                  />
+                  <div className="text-xs text-gray-500 mt-1 text-right">
+                    {supportForm.message.length}/2000
+                  </div>
+                </div>
+
+                <div className="flex space-x-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowSupportForm(false)}
+                    className="flex-1 bg-gray-300 text-gray-700 py-3 px-4 rounded-md font-medium hover:bg-gray-400 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submittingSupport}
+                    className="flex-1 bg-blue-600 text-white py-3 px-4 rounded-md font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                  >
+                    {submittingSupport ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Submitting...
+                      </>
+                    ) : (
+                      "Submit Request"
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
