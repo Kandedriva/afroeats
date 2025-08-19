@@ -19,10 +19,9 @@ export function OwnerAuthProvider({ children }) {
         if (res.ok) {
           const data = await res.json();
           setOwner(data);
-
         } else {
           setOwner(null);
-          }
+        }
       } catch (err) {
         // Error checking owner session
         setOwner(null);
@@ -56,7 +55,6 @@ export function OwnerAuthProvider({ children }) {
       if (res.ok) {
         const data = await res.json();
         setOwner(data);
-
       } else {
         setOwner(null);
       }
