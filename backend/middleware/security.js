@@ -62,11 +62,6 @@ export const corsOptions = {
       'https://orderdabaly.netlify.app',
       'https://orderdabaly.vercel.app',
       
-      // Legacy/cached domain support
-      'https://api.afoodzone.com',
-      'https://afoodzone.com',
-      'https://www.afoodzone.com',
-      
       // Backend service URLs (for admin dashboard and legacy support)
       'https://a-food-zone.onrender.com',
       'https://afro-restaurant-backend.onrender.com',

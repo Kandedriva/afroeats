@@ -19,6 +19,10 @@
   # React production build
   NODE_ENV = "production"
   
+  # API Configuration
+  REACT_APP_API_BASE_URL = "https://order-dabaly.onrender.com"
+  REACT_APP_STRIPE_PUBLISHABLE_KEY = "pk_live_51QvFhBJ8uZytashk3pwyBxgZDAlbWqWWMszfcayndzT4lXelDwzESLehLVtEsVeuLgKFqhYnL8mwI6Kvr1jhLWgZ00LqRHbQ2o"
+  
   # Build optimizations
   GENERATE_SOURCEMAP = "false"
   CI = "true"
