@@ -15,7 +15,6 @@ function OwnerLogin() {
     setError("");
 
     try {
-      console.log('OwnerLogin: Attempting login...');
       const res = await fetch(`${API_BASE_URL}/api/owners/login`, {
         method: "POST",
         credentials: "include",
@@ -23,20 +22,15 @@ function OwnerLogin() {
         body: JSON.stringify({ email, password }),
       });
 
-      console.log('OwnerLogin: Login response status:', res.status);
-
       if (!res.ok) {
         const data = await res.json();
-        console.error('OwnerLogin: Login failed:', data);
         throw new Error(data.error || "Login failed");
       }
 
       const loginData = await res.json();
-      console.log('OwnerLogin: Login successful, data:', loginData);
       
       // Set owner data directly from login response
       if (loginData.owner) {
-        console.log('OwnerLogin: Setting owner data and navigating...');
         // Update the owner state immediately
         setOwner(loginData.owner);
         
@@ -46,7 +40,6 @@ function OwnerLogin() {
         throw new Error("Login response missing owner data");
       }
     } catch (err) {
-      console.error('OwnerLogin: Error:', err);
       setError(err.message);
     }
   };
