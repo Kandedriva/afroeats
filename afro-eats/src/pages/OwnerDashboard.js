@@ -111,6 +111,7 @@ function OwnerDashboard() {
           setRestaurant(restaurantData);
         }
       } catch (err) {
+        // eslint-disable-next-line no-console
         console.error('Dashboard fetch error:', err);
         toast.error('Failed to load dashboard data. Please try refreshing the page.');
       } finally {
