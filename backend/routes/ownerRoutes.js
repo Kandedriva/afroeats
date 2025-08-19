@@ -130,6 +130,15 @@ router.post("/login", checkAccountLockout, async (req, res) => {
     req.session.ownerId = owner.id;
     req.session.ownerName = owner.name;
     req.session.ownerEmail = owner.email;
+    
+    // Force session save and log session ID
+    req.session.save((err) => {
+      if (err) {
+        console.error('Session save error:', err);
+      } else {
+        console.log('✅ Session saved successfully. ID:', req.sessionID);
+      }
+    });
 
     res.json({ message: "Login successful", owner: { id: owner.id, name: owner.name, email: owner.email } });
   } catch (err) {
@@ -424,6 +433,9 @@ router.get("/check-session", (req, res) => {
 
 // Check current owner session
 router.get("/me", (req, res) => {
+  // Log minimal session info for debugging
+  console.log('Session check - ID:', req.sessionID, 'OwnerID:', req.session?.ownerId, 'Has Cookie:', !!req.headers.cookie);
+  
   if (req.session.ownerId) {
     res.json({
       id: req.session.ownerId,
