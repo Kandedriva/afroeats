@@ -20,6 +20,7 @@ import webhookRoutes from "./routes/webhook.js";
 import adminRoutes from "./routes/adminRoutes.js";
 import imageProxyRoutes from "./routes/imageProxy.js";
 import debugRoutes from "./routes/debugRoutes.js";
+import supportRoutes from "./routes/supportRoutes.js";
 
 // Import security and analytics
 import { 
@@ -145,17 +146,17 @@ const PgSession = ConnectPgSimple(session);
 
 // Session configuration with PostgreSQL store
 const sessionConfig = {
-  secret: process.env.SESSION_SECRET || "afoodzone-super-secret-key-change-in-production",
+  secret: process.env.SESSION_SECRET || "orderdabaly-super-secret-key-change-in-production",
   resave: false,
   saveUninitialized: false,
-  name: 'afoodzone.sid',
+  name: 'orderdabaly.sid',
   cookie: {
     // Set session to last 1 year (365 days)
     maxAge: process.env.SESSION_TIMEOUT ? parseInt(process.env.SESSION_TIMEOUT) : 365 * 24 * 60 * 60 * 1000, // Default 1 year
     httpOnly: true,
     // For mobile compatibility, always use secure in production
     secure: process.env.NODE_ENV === 'production',
-    // Use 'none' for cross-site cookies between different domains (afoodzone.com <-> a-food-zone.onrender.com)
+    // Use 'none' for cross-site cookies between different domains (orderdabaly.com <-> orderdabaly.onrender.com)
     sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
     // Don't set domain to allow cookies to work across different domains
     domain: undefined,
@@ -207,6 +208,7 @@ app.use("/api", webhookRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api", imageProxyRoutes);
 app.use("/api/debug", debugRoutes);
+app.use("/api/support", supportRoutes);
 
 // Root route for deployment health checks
 app.get('/', (req, res) => {

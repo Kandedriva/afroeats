@@ -40,17 +40,44 @@ function OwnerDashboard() {
       const urlParams = new URLSearchParams(window.location.search);
       const stripeReturn = urlParams.get('stripe_return');
       const stripeRefresh = urlParams.get('stripe_refresh');
+      const error = urlParams.get('error');
+      const errorDescription = urlParams.get('error_description');
       
-      if (stripeReturn || stripeRefresh) {
-        // Returned from Stripe Connect onboarding
-        // Clean URL and refresh Stripe Connect status
+      if (stripeReturn || stripeRefresh || error) {
+        // Clean URL first
         window.history.replaceState({}, document.title, window.location.pathname);
-        setTimeout(() => {
-          fetchStripeConnectStatus();
-        }, 1000); // Give Stripe a moment to process
         
-        if (stripeReturn) {
-          toast.success("Stripe Connect setup completed! You can now receive payments.");
+        if (error) {
+          // Handle OAuth errors
+          if (error === 'access_denied') {
+            toast.info("Stripe Connect setup was cancelled. You can try again when ready to accept payments.");
+          } else if (error === 'no_code') {
+            toast.error("Stripe Connect setup failed. Please try again.");
+          } else if (error === 'stripe_auth_failed') {
+            toast.error("Stripe authentication failed. Please check your Stripe configuration or contact support.");
+          } else if (error === 'oauth_token_failed') {
+            const details = urlParams.get('details');
+            const errorMsg = details ? 
+              `Stripe OAuth failed: ${decodeURIComponent(details)}` : 
+              "Stripe Connect authentication failed. Please try again.";
+            toast.error(errorMsg);
+          } else if (error === 'stripe_not_configured') {
+            toast.error("Stripe is not configured. Please contact support.");
+          } else {
+            const errorMsg = errorDescription ? 
+              `Stripe Connect error: ${decodeURIComponent(errorDescription)}` : 
+              "There was an issue with Stripe Connect. Please try again.";
+            toast.error(errorMsg);
+          }
+        } else if (stripeReturn || stripeRefresh) {
+          // Returned from Stripe Connect onboarding
+          setTimeout(() => {
+            fetchStripeConnectStatus();
+          }, 1000); // Give Stripe a moment to process
+          
+          if (stripeReturn) {
+            toast.success("Stripe Connect setup completed! You can now receive payments.");
+          }
         }
       }
     };

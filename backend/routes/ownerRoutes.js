@@ -146,7 +146,7 @@ router.post("/logout", (req, res) => {
       return res.status(500).json({ error: "Failed to log out" });
     }
 
-    res.clearCookie("afoodzone.sid", {
+    res.clearCookie("orderdabaly.sid", {
       path: '/',
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',

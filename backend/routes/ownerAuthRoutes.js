@@ -48,7 +48,7 @@ router.post("/owners/login", async (req, res) => {
 // ========== OWNER LOGOUT ==========
 router.post("/owners/logout", (req, res) => {
   req.session.destroy(() => {
-    res.clearCookie("afoodzone.sid", {
+    res.clearCookie("orderdabaly.sid", {
       path: '/',
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
