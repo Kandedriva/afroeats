@@ -431,6 +431,23 @@ router.get("/check-session", (req, res) => {
   }
 });
 
+// Test session endpoint
+router.get("/session-test", (req, res) => {
+  // Set a test value in session
+  if (!req.session.testValue) {
+    req.session.testValue = 'session-working';
+    req.session.testTime = Date.now();
+  }
+  
+  res.json({
+    sessionId: req.sessionID,
+    testValue: req.session.testValue,
+    testTime: req.session.testTime,
+    hasCookie: !!req.headers.cookie,
+    cookieHeader: req.headers.cookie
+  });
+});
+
 // Check current owner session
 router.get("/me", (req, res) => {
   // Log minimal session info for debugging
