@@ -17,7 +17,18 @@ export const getImageUrl = (imageUrl, fallbackText = "No Image") => {
     return createPlaceholderImage(fallbackText);
   }
   
-  // If it's already a full URL (R2 or other CDN), return as-is
+  // If it's a cross-origin R2 image URL from the old domain, proxy it through current API
+  if (imageUrl.startsWith('https://api.afoodzone.com/api/r2-images/')) {
+    const imagePath = imageUrl.replace('https://api.afoodzone.com/api/r2-images/', '');
+    return `${API_BASE_URL}/api/r2-images/${imagePath}`;
+  }
+  
+  // If it's already our current domain R2 image, return as-is
+  if (imageUrl.startsWith(`${API_BASE_URL}/api/r2-images/`)) {
+    return imageUrl;
+  }
+  
+  // If it's any other full URL, return as-is
   if (imageUrl.startsWith('http')) {
     return imageUrl;
   }
