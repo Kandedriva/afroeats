@@ -132,7 +132,7 @@ CREATE INDEX IF NOT EXISTS idx_dishes_is_available ON dishes(is_available);
 INSERT INTO platform_admins (username, email, password_hash, role) 
 VALUES (
   'admin',
-  'admin@afoodzone.com',
+  'admin@orderdabaly.com',
   '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', -- bcrypt hash of 'Admin123!'
   'super_admin'
 ) ON CONFLICT (email) DO NOTHING;
