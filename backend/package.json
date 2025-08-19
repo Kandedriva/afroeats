@@ -1,7 +1,7 @@
 {
-  "name": "afro-eats-backend",
+  "name": "orderdabaly-backend",
   "version": "1.0.0",
-  "description": "Production-ready backend for Afro Eats restaurant ordering platform",
+  "description": "Production-ready backend for OrderDabaly restaurant ordering platform",
   "main": "server.js",
   "type": "module",
   "scripts": {
@@ -27,7 +27,7 @@
     "postgresql",
     "stripe"
   ],
-  "author": "Afro Eats Team",
+  "author": "OrderDabaly Team",
   "license": "MIT",
   "dependencies": {
     "@aws-sdk/client-s3": "^3.859.0",

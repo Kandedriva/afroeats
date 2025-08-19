@@ -46,7 +46,7 @@ function Navbar() {
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
           <Link to="/" className="text-xl sm:text-2xl font-bold text-green-600 flex-shrink-0">
-            A Food Zone
+            OrderDabaly
           </Link>
 
           {/* Desktop Navigation */}
