@@ -21,7 +21,7 @@
   
   # API Configuration
   REACT_APP_API_BASE_URL = "https://order-dabaly.onrender.com"
-  REACT_APP_STRIPE_PUBLISHABLE_KEY = "pk_live_51QvFhBJ8uZytashk3pwyBxgZDAlbWqWWMszfcayndzT4lXelDwzESLehLVtEsVeuLgKFqhYnL8mwI6Kvr1jhLWgZ00LqRHbQ2o"
+  # REACT_APP_STRIPE_PUBLISHABLE_KEY is set in Netlify dashboard environment variables for security
   
   # Build optimizations
   GENERATE_SOURCEMAP = "false"
