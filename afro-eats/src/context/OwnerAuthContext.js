@@ -12,23 +12,18 @@ export function OwnerAuthProvider({ children }) {
   useEffect(() => {
     const fetchOwner = async () => {
       try {
-        console.log('OwnerAuth: Checking existing session...');
         const res = await fetch(`${API_BASE_URL}/api/owners/me`, {
           credentials: "include",
         });
 
-        console.log('OwnerAuth: /api/owners/me response status:', res.status);
-
         if (res.ok) {
           const data = await res.json();
-          console.log('OwnerAuth: Owner data received:', data);
           setOwner(data);
         } else {
-          console.log('OwnerAuth: No existing session found');
           setOwner(null);
         }
       } catch (err) {
-        console.error('OwnerAuth: Error checking owner session:', err);
+        // Error checking owner session
         setOwner(null);
       } finally {
         setLoading(false);
@@ -53,23 +48,18 @@ export function OwnerAuthProvider({ children }) {
   const refreshAuth = async () => {
     setLoading(true);
     try {
-      console.log('OwnerAuth: Refreshing authentication...');
       const res = await fetch(`${API_BASE_URL}/api/owners/me`, {
         credentials: "include",
       });
 
-      console.log('OwnerAuth: refreshAuth response status:', res.status);
-
       if (res.ok) {
         const data = await res.json();
-        console.log('OwnerAuth: refreshAuth owner data:', data);
         setOwner(data);
       } else {
-        console.log('OwnerAuth: refreshAuth failed, clearing owner');
         setOwner(null);
       }
     } catch (err) {
-      console.error('OwnerAuth: Error refreshing owner session:', err);
+      // Error refreshing owner session
       setOwner(null);
     } finally {
       setLoading(false);
