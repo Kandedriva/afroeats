@@ -158,8 +158,8 @@ const sessionConfig = {
     secure: process.env.NODE_ENV === 'production',
     // Use 'none' for cross-site cookies with explicit secure flag
     sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-    // Explicitly set domain to null (not undefined) for cross-domain
-    domain: null,
+    // Set domain from environment variable for cross-domain support
+    domain: process.env.NODE_ENV === 'production' ? process.env.COOKIE_DOMAIN : null,
     path: '/'
   },
   rolling: true, // This extends the session on each request
@@ -171,11 +171,18 @@ const sessionConfig = {
     // Generate more secure session IDs
     return crypto.randomBytes(32).toString('hex');
   },
-  // Using memory store to test session issues
-  store: undefined
+  store: new PgSession({
+    pool,
+    tableName: 'session',
+    createTableIfMissing: true,
+    // Cleanup expired sessions
+    pruneSessionInterval: 15 * 60, // Clean up every 15 minutes
+    // Disable error logging for cleaner output
+    errorLog: process.env.NODE_ENV === 'development' ? console.error : undefined
+  })
 };
 
-console.log('⚠️  TESTING: Using memory session store (sessions will not persist across server restarts)');
+console.log('✅ Using PostgreSQL session store for persistent sessions');
 
 app.use(session(sessionConfig));
 
@@ -207,7 +214,7 @@ app.use("/api/support", supportRoutes);
 // Root route for deployment health checks
 app.get('/', (req, res) => {
   res.status(200).json({
-    message: "A Food Zone Backend API is running successfully",
+    message: "OrderDabaly Backend API is running successfully",
     status: "healthy",
     environment: process.env.NODE_ENV || 'development',
     timestamp: new Date().toISOString(),

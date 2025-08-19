@@ -18,8 +18,8 @@ export const getImageUrl = (imageUrl, fallbackText = "No Image") => {
   }
   
   // If it's a cross-origin R2 image URL from the old domain, proxy it through current API
-  if (imageUrl.startsWith('https://api.afoodzone.com/api/r2-images/')) {
-    const imagePath = imageUrl.replace('https://api.afoodzone.com/api/r2-images/', '');
+  if (imageUrl.startsWith('https://api.afoodzone.com/api/r2-images/') || imageUrl.startsWith('https://afoodzone.com/api/r2-images/')) {
+    const imagePath = imageUrl.replace(/https:\/\/(api\.)?afoodzone\.com\/api\/r2-images\//, '');
     return `${API_BASE_URL}/api/r2-images/${imagePath}`;
   }
   

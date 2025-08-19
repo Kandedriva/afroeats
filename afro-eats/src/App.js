@@ -158,6 +158,9 @@ function AppContent() {
         {/* Admin Routes */}
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
+        
+        {/* Catch-all route for 404 - redirect to home */}
+        <Route path="*" element={<RestaurantList />} />
       </Routes>
     </>
   );
