@@ -154,12 +154,12 @@ const sessionConfig = {
     // Set session to last 1 year (365 days)
     maxAge: process.env.SESSION_TIMEOUT ? parseInt(process.env.SESSION_TIMEOUT) : 365 * 24 * 60 * 60 * 1000, // Default 1 year
     httpOnly: true,
-    // Always use secure in production for HTTPS
+    // Always use secure in production for HTTPS (required for sameSite: 'none')
     secure: process.env.NODE_ENV === 'production',
-    // Use 'none' for cross-site cookies - required for different domains
+    // Use 'none' for cross-site cookies with explicit secure flag
     sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-    // Don't set domain to allow cookies to work across different domains
-    domain: undefined,
+    // Explicitly set domain to null (not undefined) for cross-domain
+    domain: null,
     path: '/'
   },
   rolling: true, // This extends the session on each request
@@ -171,15 +171,7 @@ const sessionConfig = {
     // Generate more secure session IDs
     return crypto.randomBytes(32).toString('hex');
   },
-  // Temporarily use memory store to test if PostgreSQL session store is the issue
-  // store: new PgSession({
-  //   pool: pool, // Use existing PostgreSQL connection pool
-  //   tableName: 'sessions', // Session table name
-  //   createTableIfMissing: true, // Auto-create sessions table
-  //   pruneSessionInterval: 60 * 15, // Prune expired sessions every 15 minutes (in seconds)
-  //   errorLog: console.error.bind(console) // Log session store errors
-  // })
-  // Using default memory store for testing
+  // Using memory store to test session issues
   store: undefined
 };
 
