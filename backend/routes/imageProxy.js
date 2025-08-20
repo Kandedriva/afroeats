@@ -55,10 +55,81 @@ router.get('/r2-images/*', async (req, res) => {
     logger.error('Error serving R2 image:', error);
     
     if (error.name === 'NoSuchKey') {
-      return res.status(404).json({ error: 'Image not found' });
+      // Try to serve from local uploads as fallback
+      const localPath = `/uploads/${key}`;
+      const fs = await import('fs');
+      const path_module = await import('path');
+      const __dirname = path_module.dirname(new URL(import.meta.url).pathname);
+      const fullPath = path_module.join(__dirname, '..', 'uploads', key);
+      
+      try {
+        if (fs.existsSync(fullPath)) {
+          logger.info(`Serving local image as fallback: ${fullPath}`);
+          return res.sendFile(fullPath);
+        }
+      } catch (localError) {
+        logger.error('Error serving local fallback image:', localError);
+      }
+      
+      return res.status(404).json({ error: 'Image not found in R2 or local storage' });
     }
     
-    res.status(500).json({ error: 'Failed to serve image' });
+    res.status(500).json({ error: 'Failed to serve image', details: error.message });
+  }
+});
+
+// Direct local image serving for development fallback
+router.get('/local-images/*', async (req, res) => {
+  try {
+    const imagePath = req.params[0];
+    const fs = await import('fs');
+    const path_module = await import('path');
+    const url_module = await import('url');
+    
+    const __filename = url_module.fileURLToPath(import.meta.url);
+    const __dirname = path_module.dirname(__filename);
+    const fullPath = path_module.join(__dirname, '..', 'uploads', imagePath);
+    
+    console.log(`🖼️ Serving local image: ${fullPath}`);
+    
+    if (fs.existsSync(fullPath)) {
+      // Set cache headers
+      res.set({
+        'Cache-Control': 'public, max-age=31536000',
+        'Access-Control-Allow-Origin': '*'
+      });
+      return res.sendFile(path_module.resolve(fullPath));
+    } else {
+      return res.status(404).json({ error: 'Local image not found', path: fullPath });
+    }
+  } catch (error) {
+    logger.error('Error serving local image:', error);
+    res.status(500).json({ error: 'Failed to serve local image' });
+  }
+});
+
+// Test endpoint to check R2 connectivity
+router.get('/r2-test', async (req, res) => {
+  try {
+    if (!r2Storage.isConfigured()) {
+      return res.status(503).json({ 
+        error: 'R2 storage not configured',
+        configured: false
+      });
+    }
+    
+    res.json({
+      message: 'R2 storage is configured and ready',
+      configured: true,
+      bucket: process.env.R2_BUCKET,
+      endpoint: process.env.R2_ENDPOINT
+    });
+  } catch (error) {
+    logger.error('R2 test error:', error);
+    res.status(500).json({ 
+      error: 'R2 test failed',
+      details: error.message 
+    });
   }
 });
 
