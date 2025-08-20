@@ -502,7 +502,7 @@ const startServer = async () => {
     
     // Start server
     app.listen(PORT, () => {
-      console.log(`🚀 A Food Zone Server running on port ${PORT}`);
+      console.log(`🚀 OrderDabaly Server running on port ${PORT}`);
       console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
       console.log(`📊 Admin dashboard: http://localhost:${PORT}/api/admin`);
       console.log(`🔍 Health check: http://localhost:${PORT}/api/health`);
