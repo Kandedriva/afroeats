@@ -10,14 +10,14 @@ const router = express.Router();
  * This allows us to serve R2 images even when the bucket is not publicly accessible
  */
 router.get('/r2-images/*', async (req, res) => {
-  try {
-    // Extract the key from the URL path
-    const key = req.params[0]; // This gets everything after /r2-images/
-    
-    if (!key) {
-      return res.status(400).json({ error: 'No image key provided' });
-    }
+  // Extract the key from the URL path (move outside try block)
+  const key = req.params[0]; // This gets everything after /r2-images/
+  
+  if (!key) {
+    return res.status(400).json({ error: 'No image key provided' });
+  }
 
+  try {
     // Check if R2 is configured
     if (!r2Storage.isConfigured()) {
       return res.status(503).json({ error: 'R2 storage not configured' });
@@ -56,22 +56,31 @@ router.get('/r2-images/*', async (req, res) => {
     
     if (error.name === 'NoSuchKey') {
       // Try to serve from local uploads as fallback
-      const localPath = `/uploads/${key}`;
       const fs = await import('fs');
       const path_module = await import('path');
-      const __dirname = path_module.dirname(new URL(import.meta.url).pathname);
+      const url_module = await import('url');
+      
+      const __filename = url_module.fileURLToPath(import.meta.url);
+      const __dirname = path_module.dirname(__filename);
       const fullPath = path_module.join(__dirname, '..', 'uploads', key);
       
       try {
         if (fs.existsSync(fullPath)) {
           logger.info(`Serving local image as fallback: ${fullPath}`);
-          return res.sendFile(fullPath);
+          
+          // Set proper headers for image serving
+          res.set({
+            'Cache-Control': 'public, max-age=31536000',
+            'Access-Control-Allow-Origin': '*'
+          });
+          
+          return res.sendFile(path_module.resolve(fullPath));
         }
       } catch (localError) {
         logger.error('Error serving local fallback image:', localError);
       }
       
-      return res.status(404).json({ error: 'Image not found in R2 or local storage' });
+      return res.status(404).json({ error: 'Image not found in R2 or local storage', key });
     }
     
     res.status(500).json({ error: 'Failed to serve image', details: error.message });

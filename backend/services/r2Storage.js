@@ -13,12 +13,8 @@ class R2StorageService {
   }
 
   initializeClient() {
-    console.log('🔍 R2 initialization check:', {
-      accessKey: !!process.env.R2_ACCESS_KEY,
-      secretKey: !!process.env.R2_SECRET_KEY, 
-      endpoint: !!process.env.R2_ENDPOINT,
-      bucket: process.env.R2_BUCKET
-    });
+    // R2 initialization check
+    logger.info(`R2 initialization: bucket=${process.env.R2_BUCKET}, endpoint configured=${!!process.env.R2_ENDPOINT}`);
     
     if (!process.env.R2_ACCESS_KEY || !process.env.R2_SECRET_KEY || !process.env.R2_ENDPOINT) {
       logger.warn('R2 credentials not configured, falling back to local storage');
