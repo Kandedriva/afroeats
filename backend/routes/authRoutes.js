@@ -234,7 +234,8 @@ router.get("/profile", async (req, res) => {
         path: '/',
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+        domain: process.env.NODE_ENV === 'production' && process.env.COOKIE_DOMAIN ? process.env.COOKIE_DOMAIN : undefined
       });
       
       // Set headers to prevent caching

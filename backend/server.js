@@ -159,7 +159,8 @@ const sessionConfig = {
     // Use 'none' for cross-site cookies with explicit secure flag
     sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
     // Set domain from environment variable for cross-domain support
-    domain: process.env.NODE_ENV === 'production' ? process.env.COOKIE_DOMAIN : null,
+    // Only set domain if frontend and backend are on same parent domain
+    domain: process.env.NODE_ENV === 'production' && process.env.COOKIE_DOMAIN ? process.env.COOKIE_DOMAIN : null,
     path: '/'
   },
   rolling: true, // This extends the session on each request
@@ -186,7 +187,20 @@ console.log('✅ Using PostgreSQL session store for persistent sessions');
 
 app.use(session(sessionConfig));
 
-// Session debugging can be enabled by uncommenting the lines below and ensuring sessionDebug.js is available
+// Session debugging middleware
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/auth/')) {
+    console.log('🔍 Session Debug for', req.method, req.path, {
+      sessionID: req.sessionID,
+      hasSession: !!req.session,
+      userId: req.session?.userId,
+      cookieHeader: req.headers.cookie ? 'present' : 'missing',
+      origin: req.get('Origin'),
+      userAgent: req.get('User-Agent')?.substring(0, 50)
+    });
+  }
+  next();
+});
 
 // Visitor tracking middleware (for frontend pages)
 app.use(trackVisitorMiddleware);
