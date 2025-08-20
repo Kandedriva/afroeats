@@ -28,6 +28,11 @@ export const getImageUrl = (imageUrl, fallbackText = "No Image") => {
     return imageUrl;
   }
   
+  // If it's a local uploads path (fallback for development)
+  if (imageUrl.startsWith('/uploads/')) {
+    return `${API_BASE_URL}${imageUrl}`;
+  }
+  
   // If it's any other full URL, return as-is
   if (imageUrl.startsWith('http')) {
     return imageUrl;
@@ -39,7 +44,19 @@ export const getImageUrl = (imageUrl, fallbackText = "No Image") => {
   return url;
 };
 
-// Handle image error events
+// Handle image error events with local fallback
 export const handleImageError = (event, fallbackText = "No Image") => {
+  const currentSrc = event.target.src;
+  
+  // If we're trying R2 images and it fails, try local images as fallback
+  if (currentSrc.includes('/api/r2-images/') && !currentSrc.includes('/local-images/')) {
+    const imagePath = currentSrc.split('/api/r2-images/')[1];
+    const localImageUrl = `${API_BASE_URL}/api/local-images/${imagePath}`;
+    console.log('🔄 Image failed, trying local fallback:', localImageUrl);
+    event.target.src = localImageUrl;
+    return;
+  }
+  
+  // If local fallback also fails, show placeholder
   event.target.src = createPlaceholderImage(fallbackText);
 };
