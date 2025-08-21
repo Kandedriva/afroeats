@@ -62,6 +62,10 @@ export const corsOptions = {
       'https://orderdabaly.netlify.app',
       'https://orderdabaly.vercel.app',
       
+      // Auto-deployed Netlify URLs (common pattern)
+      'https://main--orderdabaly.netlify.app',
+      'https://deploy-preview-*--orderdabaly.netlify.app',
+      
       // Backend service URLs (for admin dashboard and legacy support)
       'https://a-food-zone.onrender.com',
       'https://afro-restaurant-backend.onrender.com',
@@ -81,8 +85,11 @@ export const corsOptions = {
       return callback(null, true);
     }
     
-    // Check if origin is in allowed list
-    if (allowedOrigins.includes(origin)) {
+    // Check if origin is in allowed list or matches Netlify deploy preview pattern
+    const isAllowed = allowedOrigins.includes(origin) || 
+                     (origin && origin.includes('--orderdabaly.netlify.app'));
+    
+    if (isAllowed) {
       console.log('✅ CORS: Origin allowed:', origin);
       callback(null, true);
     } else {
