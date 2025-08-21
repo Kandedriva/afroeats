@@ -16,6 +16,7 @@ export const CartProvider = ({ children }) => {
     try {
       const res = await fetch(`${API_BASE_URL}/api/cart`, {
         credentials: "include",
+        method: "GET",
         headers: {
           'Cache-Control': 'no-cache',
           'Pragma': 'no-cache'
