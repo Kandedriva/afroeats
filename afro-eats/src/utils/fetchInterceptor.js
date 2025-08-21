@@ -6,7 +6,7 @@ const originalFetch = window.fetch;
 
 // Override global fetch
 window.fetch = function(...args) {
-  let [resource, config = {}] = args;
+  const [resource, config = {}] = args;
   
   // Check if this is an API call to our backend
   if (typeof resource === 'string' && resource.includes(API_BASE_URL)) {
