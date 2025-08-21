@@ -93,22 +93,21 @@ app.use((req, res, next) => {
   const origin = req.get('Origin');
   
   // Set enhanced headers for cross-domain cookie support
+  res.set({
+    'Access-Control-Allow-Credentials': 'true',
+    'Access-Control-Expose-Headers': 'Set-Cookie',
+    'Vary': 'Origin, Cookie'
+  });
+  
+  // For production, add additional headers for cross-origin cookies
   if (process.env.NODE_ENV === 'production') {
-    res.set({
-      'Access-Control-Allow-Credentials': 'true',
-      'Access-Control-Expose-Headers': 'Set-Cookie',
-      // Add specific headers for Chrome and cross-domain cookies
-      'Set-Cookie-SameSite': 'None',
-      'Vary': 'Origin, Cookie'
-    });
-    
-    // For Chrome users, add additional debug information
-    if (isChrome && !req.headers.cookie) {
-      console.log('⚠️ Chrome user without cookies detected:', {
-        userAgent: userAgent.substring(0, 100),
+    // Debug cookie issues
+    if (!req.headers.cookie && req.path.startsWith('/api/')) {
+      console.log('🍪 No cookies received:', {
+        path: req.path,
         origin,
-        hasSessionId: !!req.sessionID,
-        cookieHeader: req.headers.cookie ? 'present' : 'missing'
+        userAgent: userAgent.substring(0, 50),
+        sessionID: req.sessionID || 'none'
       });
     }
   }
