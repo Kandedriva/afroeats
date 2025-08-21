@@ -127,8 +127,16 @@ app.use((req, res, next) => {
   next();
 });
 
-// Static file serving with security
-app.use("/uploads", express.static(path.join(__dirname, "uploads"), {
+// Static file serving with security and CORS
+app.use("/uploads", (req, res, next) => {
+  // Add CORS headers for images
+  res.set({
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET',
+    'Access-Control-Allow-Headers': 'Content-Type'
+  });
+  next();
+}, express.static(path.join(__dirname, "uploads"), {
   maxAge: '1d',
   etag: true,
   lastModified: true
@@ -159,8 +167,8 @@ const sessionConfig = {
     // Use 'none' for cross-site cookies with explicit secure flag
     sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
     // Set domain from environment variable for cross-domain support
-    // Only set domain if frontend and backend are on same parent domain
-    domain: process.env.NODE_ENV === 'production' && process.env.COOKIE_DOMAIN ? process.env.COOKIE_DOMAIN : null,
+    // For production cross-origin setup, we need to NOT set domain to allow cross-origin cookies
+    domain: null,
     path: '/'
   },
   rolling: true, // This extends the session on each request
