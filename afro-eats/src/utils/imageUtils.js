@@ -52,7 +52,6 @@ export const handleImageError = (event, fallbackText = "No Image") => {
   if (currentSrc.includes('/api/r2-images/') && !currentSrc.includes('/local-images/')) {
     const imagePath = currentSrc.split('/api/r2-images/')[1];
     const localImageUrl = `${API_BASE_URL}/api/local-images/${imagePath}`;
-    console.log('🔄 Image failed, trying local fallback:', localImageUrl);
     event.target.src = localImageUrl;
     return;
   }
