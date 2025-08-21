@@ -25,6 +25,7 @@ window.fetch = function(...args) {
     
     // Debug API calls in development only
     if (process.env.NODE_ENV === 'development') {
+      // eslint-disable-next-line no-console
       console.log('🌐 API Call:', resource.replace(API_BASE_URL, ''), {
         method: config.method || 'GET',
         credentials: config.credentials
