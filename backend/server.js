@@ -161,20 +161,18 @@ const sessionConfig = {
     // Set session to last 1 year (365 days)
     maxAge: process.env.SESSION_TIMEOUT ? parseInt(process.env.SESSION_TIMEOUT) : 365 * 24 * 60 * 60 * 1000, // Default 1 year
     httpOnly: true,
-    // Always use secure in production for HTTPS (required for sameSite: 'none')
-    secure: process.env.NODE_ENV === 'production',
-    // Use 'none' for cross-site cookies with explicit secure flag
-    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-    // Set domain from environment variable for cross-domain support
-    // For production cross-origin setup, we need to NOT set domain to allow cross-origin cookies
-    domain: null,
+    // In production, only use secure if we're serving over HTTPS
+    secure: process.env.NODE_ENV === 'production' && process.env.HTTPS !== 'false',
+    // Use 'lax' for production to avoid third-party cookie issues, 'none' only if explicitly set
+    sameSite: process.env.NODE_ENV === 'production' 
+      ? (process.env.COOKIE_SAMESITE || 'lax') 
+      : 'lax',
+    // Don't set domain to allow cross-origin cookies
+    domain: undefined,
     path: '/'
   },
   rolling: true, // This extends the session on each request
   unset: 'destroy', // Clear the session when unset
-  // Mobile-specific session settings
-  saveUninitialized: false, // Don't save uninitialized sessions for mobile
-  resave: false, // Don't force session save on mobile
   genid: () => {
     // Generate more secure session IDs
     return crypto.randomBytes(32).toString('hex');
