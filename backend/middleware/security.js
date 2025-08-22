@@ -87,7 +87,11 @@ export const corsOptions = {
     
     // Check if origin is in allowed list or matches Netlify deploy preview pattern
     const isAllowed = allowedOrigins.includes(origin) || 
-                     (origin && origin.includes('--orderdabaly.netlify.app'));
+                     (origin && (
+                       origin.includes('--orderdabaly.netlify.app') ||
+                       origin.includes('netlify.app') ||
+                       origin.includes('vercel.app')
+                     ));
     
     if (isAllowed) {
       console.log('✅ CORS: Origin allowed:', origin);
@@ -101,7 +105,13 @@ export const corsOptions = {
         console.log('🔧 Development mode: Allowing origin anyway');
         callback(null, true);
       } else {
-        callback(new Error(`CORS policy violation: Origin ${origin} is not allowed`));
+        // In production, be more lenient for image requests and known hosting platforms
+        if (req && req.path && req.path.includes('/uploads/')) {
+          console.log('🖼️ Allowing image request from:', origin);
+          callback(null, true);
+        } else {
+          callback(new Error(`CORS policy violation: Origin ${origin} is not allowed`));
+        }
       }
     }
   },
