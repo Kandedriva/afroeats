@@ -20,7 +20,7 @@
   NODE_ENV = "production"
   
   # API Configuration
-  REACT_APP_API_BASE_URL = "https://order-dabaly.onrender.com"
+  REACT_APP_API_BASE_URL = "https://api.orderdabaly.com"
   # REACT_APP_STRIPE_PUBLISHABLE_KEY is set in Netlify dashboard environment variables for security
   
   # Build optimizations
