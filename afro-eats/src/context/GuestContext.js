@@ -6,6 +6,7 @@ export const GuestContext = createContext();
 export const GuestProvider = ({ children }) => {
   const [guestCart, setGuestCart] = useState([]);
   const [isGuestMode, setIsGuestMode] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
   
   // Load guest cart from localStorage on mount
   useEffect(() => {
@@ -15,17 +16,19 @@ export const GuestProvider = ({ children }) => {
         const parsedCart = JSON.parse(savedGuestCart);
         setGuestCart(parsedCart);
       } catch (err) {
-        // eslint-disable-next-line no-console
-        console.warn('Failed to parse guest cart from localStorage:', err);
+        // Failed to parse guest cart from localStorage, clear it
         localStorage.removeItem('afro-guest-cart');
       }
     }
+    setIsInitialized(true);
   }, []);
 
-  // Save guest cart to localStorage whenever it changes
+  // Save guest cart to localStorage whenever it changes (after initialization)
   useEffect(() => {
-    localStorage.setItem('afro-guest-cart', JSON.stringify(guestCart));
-  }, [guestCart]);
+    if (isInitialized) {
+      localStorage.setItem('afro-guest-cart', JSON.stringify(guestCart));
+    }
+  }, [guestCart, isInitialized]);
 
   const startGuestSession = () => {
     setIsGuestMode(true);
@@ -80,6 +83,12 @@ export const GuestProvider = ({ children }) => {
     localStorage.removeItem('afro-guest-cart');
   };
 
+  const clearGuestCartAfterSuccessfulOrder = () => {
+    // This method should only be called after a confirmed successful order
+    setGuestCart([]);
+    localStorage.removeItem('afro-guest-cart');
+  };
+
   const guestTotal = guestCart.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
   return (
@@ -94,6 +103,7 @@ export const GuestProvider = ({ children }) => {
         updateGuestQuantity,
         removeFromGuestCart,
         clearGuestCart,
+        clearGuestCartAfterSuccessfulOrder,
       }}
     >
       {children}
