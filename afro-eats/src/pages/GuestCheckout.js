@@ -38,7 +38,8 @@ export default function GuestCheckout() {
               setRestaurantDetails(data.restaurant);
             }
           } catch (err) {
-            console.error('Error fetching restaurant details:', err);
+            // Silently handle restaurant details fetch error
+            // This is not critical for checkout flow, delivery fee will default to 0
           }
         }
       }
@@ -117,8 +118,6 @@ export default function GuestCheckout() {
         toast.error(`Checkout failed: ${data.error || "Unknown error"}`);
       }
     } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error('Guest checkout error:', err);
       toast.error("Something went wrong during checkout. Please try again.");
     } finally {
       setLoading(false);
