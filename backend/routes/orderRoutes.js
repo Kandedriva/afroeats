@@ -878,10 +878,33 @@ router.post("/guest-checkout-session", async (req, res) => {
       console.log("Entering demo mode for guest order (Stripe not configured)");
       
       try {
-        // Calculate totals
+        // Calculate totals with delivery fee
         const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
         const platformFee = 1.20;
-        const total = subtotal + platformFee;
+        
+        // Get delivery fee from restaurant (for delivery orders only)
+        let deliveryFee = 0;
+        if (deliveryType === "delivery" && items.length > 0) {
+          // Get restaurant ID from first item (assuming all items are from same restaurant)
+          const restaurantId = items[0].restaurantId || items[0].restaurant_id;
+          if (restaurantId) {
+            try {
+              await pool.query("ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS delivery_fee DECIMAL(10, 2) DEFAULT 0.00");
+              const deliveryFeeRes = await pool.query(
+                "SELECT delivery_fee FROM restaurants WHERE id = $1",
+                [restaurantId]
+              );
+              if (deliveryFeeRes.rows.length > 0) {
+                deliveryFee = parseFloat(deliveryFeeRes.rows[0].delivery_fee) || 0;
+              }
+            } catch (err) {
+              console.warn("Could not fetch delivery fee:", err);
+              // Continue without delivery fee
+            }
+          }
+        }
+        
+        const total = subtotal + platformFee + deliveryFee;
 
         // Ensure necessary columns exist
         try {
@@ -947,10 +970,33 @@ router.post("/guest-checkout-session", async (req, res) => {
     // Real Stripe checkout flow
     console.log("Creating real Stripe checkout session for guest");
 
-    // Calculate totals
+    // Calculate totals with delivery fee
     const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
     const platformFee = 1.20;
-    const total = subtotal + platformFee;
+    
+    // Get delivery fee from restaurant (for delivery orders only)
+    let deliveryFee = 0;
+    if (deliveryType === "delivery" && items.length > 0) {
+      // Get restaurant ID from first item (assuming all items are from same restaurant)
+      const restaurantId = items[0].restaurantId || items[0].restaurant_id;
+      if (restaurantId) {
+        try {
+          await pool.query("ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS delivery_fee DECIMAL(10, 2) DEFAULT 0.00");
+          const deliveryFeeRes = await pool.query(
+            "SELECT delivery_fee FROM restaurants WHERE id = $1",
+            [restaurantId]
+          );
+          if (deliveryFeeRes.rows.length > 0) {
+            deliveryFee = parseFloat(deliveryFeeRes.rows[0].delivery_fee) || 0;
+          }
+        } catch (err) {
+          console.warn("Could not fetch delivery fee:", err);
+          // Continue without delivery fee
+        }
+      }
+    }
+    
+    const total = subtotal + platformFee + deliveryFee;
 
     // Create line items for Stripe
     const lineItems = items.map(item => ({
@@ -977,6 +1023,21 @@ router.post("/guest-checkout-session", async (req, res) => {
       },
       quantity: 1,
     });
+
+    // Add delivery fee as a line item if delivery order
+    if (deliveryFee > 0) {
+      lineItems.push({
+        price_data: {
+          currency: 'usd',
+          product_data: {
+            name: 'Delivery Fee',
+            description: 'Delivery charge by the restaurant',
+          },
+          unit_amount: Math.round(deliveryFee * 100), // Convert to cents
+        },
+        quantity: 1,
+      });
+    }
 
     // Get the frontend URL dynamically
     const frontendUrl = req.headers.origin || req.headers.referer?.replace(/\/$/, '') || 'http://localhost:3000';

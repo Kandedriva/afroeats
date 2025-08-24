@@ -32,6 +32,10 @@ function OwnerDashboard() {
   const [restaurantNameForm, setRestaurantNameForm] = useState('');
   const [updatingRestaurantName, setUpdatingRestaurantName] = useState(false);
   const restaurantNameInputRef = useRef(null);
+  const [editingDeliveryFee, setEditingDeliveryFee] = useState(false);
+  const [deliveryFeeForm, setDeliveryFeeForm] = useState('');
+  const [updatingDeliveryFee, setUpdatingDeliveryFee] = useState(false);
+  const deliveryFeeInputRef = useRef(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -717,6 +721,73 @@ function OwnerDashboard() {
     setRestaurantNameForm('');
   };
 
+  // Delivery Fee Management Functions
+  const handleEditDeliveryFee = () => {
+    setDeliveryFeeForm((restaurant.delivery_fee || 0).toString());
+    setEditingDeliveryFee(true);
+  };
+
+  useEffect(() => {
+    if (editingDeliveryFee && deliveryFeeInputRef.current) {
+      deliveryFeeInputRef.current.focus();
+    }
+  }, [editingDeliveryFee]);
+
+  const handleCancelEditDeliveryFee = () => {
+    setEditingDeliveryFee(false);
+    setDeliveryFeeForm('');
+  };
+
+  const handleUpdateDeliveryFee = async () => {
+    const fee = parseFloat(deliveryFeeForm);
+    
+    if (isNaN(fee) || fee < 0) {
+      toast.warning("Please enter a valid delivery fee (0 or greater).");
+      return;
+    }
+
+    if (fee > 50) {
+      toast.warning("Delivery fee cannot exceed $50.00.");
+      return;
+    }
+
+    if (fee === (restaurant.delivery_fee || 0)) {
+      setEditingDeliveryFee(false);
+      return;
+    }
+
+    setUpdatingDeliveryFee(true);
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/owners/restaurant/delivery-fee`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({ deliveryFee: fee }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setRestaurant(prev => ({
+          ...prev,
+          delivery_fee: fee
+        }));
+        setEditingDeliveryFee(false);
+        setDeliveryFeeForm('');
+        toast.success("Delivery fee updated successfully!");
+      } else {
+        toast.error(data.error || "Failed to update delivery fee");
+      }
+    } catch (err) {
+      toast.error("An error occurred while updating the delivery fee.");
+    } finally {
+      setUpdatingDeliveryFee(false);
+    }
+  };
+
   const handleUpdateRestaurantName = async () => {
     if (!restaurantNameForm.trim()) {
       toast.warning("Please enter a valid restaurant name.");
@@ -841,6 +912,76 @@ function OwnerDashboard() {
                 </div>
               )}
               <p className="text-gray-600 text-sm sm:text-base">📍 {restaurant.address}</p>
+              
+              {/* Delivery Fee Section */}
+              <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm font-medium text-gray-700">🚚 Delivery Fee:</span>
+                    {editingDeliveryFee ? (
+                      <div className="flex items-center space-x-2">
+                        <div className="flex items-center">
+                          <span className="text-sm text-gray-600 mr-1">$</span>
+                          <input
+                            ref={deliveryFeeInputRef}
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            max="50"
+                            value={deliveryFeeForm}
+                            onChange={(e) => setDeliveryFeeForm(e.target.value)}
+                            onKeyPress={(e) => {
+                              if (e.key === 'Enter') {
+                                handleUpdateDeliveryFee();
+                              } else if (e.key === 'Escape') {
+                                handleCancelEditDeliveryFee();
+                              }
+                            }}
+                            className="w-20 text-sm bg-white border border-blue-300 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="0.00"
+                          />
+                        </div>
+                        <button
+                          onClick={handleUpdateDeliveryFee}
+                          disabled={updatingDeliveryFee}
+                          className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
+                            updatingDeliveryFee
+                              ? 'bg-gray-400 text-gray-700 cursor-not-allowed'
+                              : 'bg-green-600 text-white hover:bg-green-700'
+                          }`}
+                        >
+                          {updatingDeliveryFee ? 'Saving...' : 'Save'}
+                        </button>
+                        <button
+                          onClick={handleCancelEditDeliveryFee}
+                          disabled={updatingDeliveryFee}
+                          className="px-2 py-1 text-xs font-medium text-gray-600 bg-gray-200 rounded hover:bg-gray-300 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center space-x-2">
+                        <span className="text-sm font-semibold text-green-600">
+                          ${(restaurant.delivery_fee || 0).toFixed(2)}
+                        </span>
+                        <button
+                          onClick={handleEditDeliveryFee}
+                          className="text-blue-600 hover:text-blue-800 transition-colors p-1"
+                          title="Edit delivery fee"
+                        >
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  This fee will be added to customer orders for delivery
+                </p>
+              </div>
             </div>
           </div>
           
