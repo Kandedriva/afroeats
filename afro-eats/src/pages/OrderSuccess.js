@@ -14,7 +14,7 @@ function OrderSuccess() {
   const [searchParams] = useSearchParams();
   const { forceRefreshCart, clearCart } = useCart();
   const { user } = useAuth();
-  const { clearGuestCart } = useGuest();
+  const { clearGuestCartAfterSuccessfulOrder } = useGuest();
   const orderId = searchParams.get('order_id');
   const sessionId = searchParams.get('session_id');
   const isDemo = searchParams.get('demo');
@@ -76,8 +76,8 @@ function OrderSuccess() {
           await new Promise(resolve => setTimeout(resolve, 500));
           await forceRefreshCart();
         } else if (isGuestFromStripe || guestOrderInfo?.guestOrder) {
-          // Guest user - clear guest cart
-          clearGuestCart();
+          // Guest user - clear guest cart after successful order
+          clearGuestCartAfterSuccessfulOrder();
         }
       } catch (err) {
         // Don't block the success page if we can't fetch details
@@ -88,7 +88,7 @@ function OrderSuccess() {
     };
 
     handleOrderSuccess();
-  }, [orderId, sessionId, isDemo, isGuestFromStripe, guestOrderInfo?.guestOrder, guestOrderInfo?.email, navigate, forceRefreshCart, clearCart, clearGuestCart, user]);
+  }, [orderId, sessionId, isDemo, isGuestFromStripe, guestOrderInfo?.guestOrder, guestOrderInfo?.email, navigate, forceRefreshCart, clearCart, clearGuestCartAfterSuccessfulOrder, user]);
 
   if (loading) {
     return (
