@@ -723,7 +723,7 @@ function OwnerDashboard() {
 
   // Delivery Fee Management Functions
   const handleEditDeliveryFee = () => {
-    setDeliveryFeeForm((restaurant.delivery_fee || 0).toString());
+    setDeliveryFeeForm((parseFloat(restaurant.delivery_fee) || 0).toString());
     setEditingDeliveryFee(true);
   };
 
@@ -751,7 +751,7 @@ function OwnerDashboard() {
       return;
     }
 
-    if (fee === (restaurant.delivery_fee || 0)) {
+    if (fee === (parseFloat(restaurant.delivery_fee) || 0)) {
       setEditingDeliveryFee(false);
       return;
     }
@@ -963,7 +963,7 @@ function OwnerDashboard() {
                     ) : (
                       <div className="flex items-center space-x-2">
                         <span className="text-sm font-semibold text-green-600">
-                          ${(restaurant.delivery_fee || 0).toFixed(2)}
+                          ${(parseFloat(restaurant.delivery_fee) || 0).toFixed(2)}
                         </span>
                         <button
                           onClick={handleEditDeliveryFee}
