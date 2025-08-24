@@ -17,12 +17,35 @@ export default function GuestCheckout() {
   const [deliveryType, setDeliveryType] = useState("delivery"); // "delivery" or "pickup"
   const [orderDetails, setOrderDetails] = useState("");
   const [loading, setLoading] = useState(false);
+  const [restaurantDetails, setRestaurantDetails] = useState(null);
 
   useEffect(() => {
     if (guestCart.length === 0) {
       navigate("/cart");
     }
   }, [guestCart.length, navigate]);
+
+  // Fetch restaurant details to get delivery fee
+  useEffect(() => {
+    const fetchRestaurantDetails = async () => {
+      if (guestCart.length > 0) {
+        const restaurantId = guestCart[0].restaurantId;
+        if (restaurantId) {
+          try {
+            const res = await fetch(`${API_BASE_URL}/api/restaurants/${restaurantId}`);
+            if (res.ok) {
+              const data = await res.json();
+              setRestaurantDetails(data.restaurant);
+            }
+          } catch (err) {
+            console.error('Error fetching restaurant details:', err);
+          }
+        }
+      }
+    };
+
+    fetchRestaurantDetails();
+  }, [guestCart]);
 
   const handleInputChange = (field, value) => {
     setGuestInfo(prev => ({
@@ -102,7 +125,13 @@ export default function GuestCheckout() {
     }
   };
 
-  const total = guestTotal;
+  // Calculate totals with delivery fee
+  const subtotal = guestTotal;
+  const platformFee = 1.20;
+  const deliveryFee = (deliveryType === "delivery" && restaurantDetails?.delivery_fee) 
+    ? parseFloat(restaurantDetails.delivery_fee) 
+    : 0;
+  const total = subtotal + platformFee + deliveryFee;
 
   return (
     <div className="max-w-4xl mx-auto mt-10 p-6 bg-white shadow rounded">
@@ -279,9 +308,28 @@ export default function GuestCheckout() {
 
       {/* Total and Place Order */}
       <div className="border-t pt-6">
-        <div className="flex justify-between font-bold text-lg mb-6">
-          <span>Total:</span>
-          <span>${total.toFixed(2)}</span>
+        {/* Order Summary Breakdown */}
+        <div className="mb-6 space-y-2">
+          <div className="flex justify-between text-gray-700">
+            <span>Subtotal:</span>
+            <span>${subtotal.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between text-gray-700">
+            <span>Platform Fee:</span>
+            <span>${platformFee.toFixed(2)}</span>
+          </div>
+          {deliveryType === "delivery" && (
+            <div className="flex justify-between text-gray-700">
+              <span>Delivery Fee:</span>
+              <span>${deliveryFee.toFixed(2)}</span>
+            </div>
+          )}
+          <div className="border-t pt-2 mt-2">
+            <div className="flex justify-between font-bold text-lg">
+              <span>Total:</span>
+              <span>${total.toFixed(2)}</span>
+            </div>
+          </div>
         </div>
         
         <button

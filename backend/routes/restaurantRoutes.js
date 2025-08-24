@@ -18,6 +18,13 @@ router.get("/restaurants/:id", async (req, res) => {
   const { id } = req.params;
 
   try {
+    // Ensure delivery_fee column exists
+    try {
+      await pool.query("ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS delivery_fee DECIMAL(10, 2) DEFAULT 0.00");
+    } catch (err) {
+      // Column might already exist
+    }
+
     const restaurantRes = await pool.query("SELECT * FROM restaurants WHERE id = $1", [id]);
     if (restaurantRes.rows.length === 0) {
       return res.status(404).json({ error: "Restaurant not found" });
@@ -28,8 +35,13 @@ router.get("/restaurants/:id", async (req, res) => {
       [id]
     );
 
+    const restaurant = restaurantRes.rows[0];
+    
     res.json({
-      restaurant: restaurantRes.rows[0],
+      restaurant: {
+        ...restaurant,
+        delivery_fee: restaurant.delivery_fee || 0.00
+      },
       dishes: dishesRes.rows,
     });
   } catch (err) {
