@@ -223,6 +223,11 @@ export default function GuestCheckout() {
                 <div>
                   <div className="font-medium">Delivery</div>
                   <div className="text-sm text-gray-600">Get your order delivered to your address</div>
+                  {deliveryFee > 0 && (
+                    <div className="text-xs text-green-600 font-medium mt-1">
+                      + ${deliveryFee.toFixed(2)} delivery fee
+                    </div>
+                  )}
                 </div>
               </div>
             </button>
@@ -241,6 +246,9 @@ export default function GuestCheckout() {
                 <div>
                   <div className="font-medium">Pickup</div>
                   <div className="text-sm text-gray-600">Pick up your order from the restaurant</div>
+                  <div className="text-xs text-green-600 font-medium mt-1">
+                    No delivery fee
+                  </div>
                 </div>
               </div>
             </button>
@@ -318,7 +326,7 @@ export default function GuestCheckout() {
             <span>Platform Fee:</span>
             <span>${platformFee.toFixed(2)}</span>
           </div>
-          {deliveryType === "delivery" && (
+          {deliveryType === "delivery" && deliveryFee > 0 && (
             <div className="flex justify-between text-gray-700">
               <span>Delivery Fee:</span>
               <span>${deliveryFee.toFixed(2)}</span>
