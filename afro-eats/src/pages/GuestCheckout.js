@@ -129,7 +129,7 @@ export default function GuestCheckout() {
   const subtotal = guestTotal;
   const platformFee = 1.20;
   const deliveryFee = (deliveryType === "delivery" && restaurantDetails?.delivery_fee) 
-    ? parseFloat(restaurantDetails.delivery_fee) 
+    ? (parseFloat(restaurantDetails.delivery_fee) || 0)
     : 0;
   const total = subtotal + platformFee + deliveryFee;
 
