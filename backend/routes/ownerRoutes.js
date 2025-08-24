@@ -1199,4 +1199,95 @@ router.patch("/restaurant/name", requireOwnerAuth, async (req, res) => {
   }
 });
 
+// ========= UPDATE DELIVERY FEE ==========
+router.put("/restaurant/delivery-fee", requireOwnerAuth, async (req, res) => {
+  const ownerId = req.owner.id;
+  const { deliveryFee } = req.body;
+
+  // Validate delivery fee
+  if (deliveryFee === undefined || deliveryFee === null) {
+    return res.status(400).json({ error: "Delivery fee is required" });
+  }
+
+  const fee = parseFloat(deliveryFee);
+  if (isNaN(fee) || fee < 0) {
+    return res.status(400).json({ error: "Delivery fee must be a valid positive number" });
+  }
+
+  if (fee > 50) {
+    return res.status(400).json({ error: "Delivery fee cannot exceed $50.00" });
+  }
+
+  try {
+    // Ensure delivery_fee column exists
+    try {
+      await pool.query("ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS delivery_fee DECIMAL(10, 2) DEFAULT 0.00");
+    } catch (err) {
+      // Column might already exist
+    }
+
+    // Check if restaurant exists for this owner
+    const restaurantRes = await pool.query(
+      "SELECT id FROM restaurants WHERE owner_id = $1",
+      [ownerId]
+    );
+
+    if (restaurantRes.rows.length === 0) {
+      return res.status(404).json({ error: "No restaurant found for this owner" });
+    }
+
+    // Update delivery fee
+    await pool.query(
+      "UPDATE restaurants SET delivery_fee = $1 WHERE owner_id = $2",
+      [fee, ownerId]
+    );
+
+    res.json({ 
+      success: true, 
+      message: "Delivery fee updated successfully",
+      deliveryFee: fee 
+    });
+
+  } catch (err) {
+    console.error('Delivery fee update error:', err);
+    res.status(500).json({ error: "Failed to update delivery fee" });
+  }
+});
+
+// ========= GET RESTAURANT WITH DELIVERY FEE ==========
+router.get("/restaurant/details", requireOwnerAuth, async (req, res) => {
+  const ownerId = req.owner.id;
+
+  try {
+    // Ensure delivery_fee column exists
+    try {
+      await pool.query("ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS delivery_fee DECIMAL(10, 2) DEFAULT 0.00");
+    } catch (err) {
+      // Column might already exist
+    }
+
+    const restaurantRes = await pool.query(
+      "SELECT id, name, address, phone_number, image_url, delivery_fee FROM restaurants WHERE owner_id = $1",
+      [ownerId]
+    );
+
+    if (restaurantRes.rows.length === 0) {
+      return res.status(404).json({ error: "No restaurant found for this owner" });
+    }
+
+    const restaurant = restaurantRes.rows[0];
+
+    res.json({
+      restaurant: {
+        ...restaurant,
+        delivery_fee: restaurant.delivery_fee || 0.00
+      }
+    });
+
+  } catch (err) {
+    console.error('Restaurant details fetch error:', err);
+    res.status(500).json({ error: "Failed to fetch restaurant details" });
+  }
+});
+
 export default router;
