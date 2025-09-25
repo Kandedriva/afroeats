@@ -1,6 +1,6 @@
 // React import removed as it's not needed in React 17+
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { toast } from 'react-toastify';
 import { API_BASE_URL } from "../config/api";
 
@@ -14,6 +14,7 @@ export default function Register() {
     address: "",
     phone: ""
   });
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -21,6 +22,11 @@ export default function Register() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    if (!acceptedTerms) {
+      toast.error("Please accept the Terms and Conditions and Privacy Policy to continue.");
+      return;
+    }
   
     try {
       const res = await fetch(`${API_BASE_URL}/api/auth/register`, {
@@ -107,7 +113,47 @@ export default function Register() {
           className="w-full px-4 py-2 border rounded"
           required
         />
-        <button type="submit" className="w-full bg-green-600 text-white py-2 rounded hover:bg-green-700">
+        
+        <div className="flex items-start space-x-3">
+          <input
+            type="checkbox"
+            id="terms"
+            checked={acceptedTerms}
+            onChange={(e) => setAcceptedTerms(e.target.checked)}
+            className="mt-1 h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
+            required
+          />
+          <label htmlFor="terms" className="text-sm text-gray-700">
+            I agree to the{" "}
+            <Link 
+              to="/terms" 
+              className="text-green-600 hover:text-green-800 underline"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Terms and Conditions
+            </Link>{" "}
+            and{" "}
+            <Link 
+              to="/privacy" 
+              className="text-green-600 hover:text-green-800 underline"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Privacy Policy
+            </Link>
+          </label>
+        </div>
+        
+        <button 
+          type="submit" 
+          disabled={!acceptedTerms}
+          className={`w-full py-2 rounded transition-colors ${
+            acceptedTerms
+              ? "bg-green-600 text-white hover:bg-green-700"
+              : "bg-gray-300 text-gray-500 cursor-not-allowed"
+          }`}
+        >
           Register
         </button>
       </form>

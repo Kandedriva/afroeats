@@ -30,13 +30,15 @@ import ProtectedOwnerRoute from "./Components/ProtectedOwnerRoute";
 import ProtectedRoute from "./Components/ProtectedRoute";
 import { OwnerAuthProvider } from "./context/OwnerAuthContext";
 import { GuestProvider } from "./context/GuestContext";
-import { ToastContainer } from 'react-toastify';
+import { ToastContainer, Slide } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import './utils/networkTest';
 import ErrorBoundary from "./Components/ErrorBoundary";
 import AsyncErrorBoundary from "./Components/AsyncErrorBoundary";
 import AdminLogin from "./pages/AdminLogin";
 import AdminDashboard from "./pages/AdminDashboard";
+import TermsAndConditions from "./pages/TermsAndConditions";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
 
 
 function AppContent() {
@@ -159,6 +161,10 @@ function AppContent() {
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
         
+        {/* Legal Pages */}
+        <Route path="/terms" element={<TermsAndConditions />} />
+        <Route path="/privacy" element={<PrivacyPolicy />} />
+        
         {/* Catch-all route for 404 - redirect to home */}
         <Route path="*" element={<RestaurantList />} />
       </Routes>
@@ -178,16 +184,25 @@ function App() {
                   <AppContent />
                   <ToastContainer
                     position="top-right"
-                    autoClose={5000}
+                    autoClose={4000}
                     hideProgressBar={false}
-                newestOnTop={false}
-                closeOnClick
-                rtl={false}
-                pauseOnFocusLoss
-                draggable
-                pauseOnHover
-                theme="light"
-              />
+                    newestOnTop={true}
+                    closeOnClick
+                    rtl={false}
+                    pauseOnFocusLoss
+                    draggable
+                    pauseOnHover
+                    theme="colored"
+                    transition={Slide}
+                    className="toast-container"
+                    toastClassName="custom-toast"
+                    bodyClassName="custom-toast-body"
+                    progressClassName="custom-progress"
+                    style={{
+                      fontSize: '14px',
+                      fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+                    }}
+                  />
             </CartProvider>
           </GuestProvider>
         </OwnerAuthProvider>

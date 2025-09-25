@@ -79,13 +79,33 @@ router.post("/register", ...uploadRestaurantLogo, async (req, res) => {
       [restaurant_name, location, phone_number, logoPath, ownerId]
     );
 
-    // Set session
-    req.session.ownerId = ownerId;
-    req.session.ownerName = name;
+    // Regenerate session ID for security and set owner session
+    req.session.regenerate((err) => {
+      if (err) {
+        console.error('Session regeneration error during owner registration:', err);
+        return res.status(500).json({ error: "Session error during registration" });
+      }
 
-    res.status(201).json({
-      owner: ownerResult.rows[0],
-      restaurant: restaurantResult.rows[0],
+      // Set session
+      req.session.ownerId = ownerId;
+      req.session.ownerName = name;
+      req.session.ownerEmail = email;
+      req.session.loginTime = new Date().toISOString();
+
+      // Force session save
+      req.session.save((saveErr) => {
+        if (saveErr) {
+          console.error('Session save error during owner registration:', saveErr);
+          return res.status(500).json({ error: "Session save error during registration" });
+        }
+
+        console.log('✅ Owner registration session saved successfully. ID:', req.sessionID, 'Owner:', name);
+        
+        res.status(201).json({
+          owner: ownerResult.rows[0],
+          restaurant: restaurantResult.rows[0],
+        });
+      });
     });
   } catch (err) {
     // Owner registration error
@@ -93,7 +113,7 @@ router.post("/register", ...uploadRestaurantLogo, async (req, res) => {
   }
 });
 
-// ========= OWNER LOGING ==========
+// ========= OWNER LOGIN (with account lockout) ==========
 router.post("/login", checkAccountLockout, async (req, res) => {
   const { email, password } = req.body;
 
@@ -126,21 +146,38 @@ router.post("/login", checkAccountLockout, async (req, res) => {
     // Clear failed attempts on successful login
     await handleSuccessfulLogin(req, res, () => {});
 
-    // Set session
-    req.session.ownerId = owner.id;
-    req.session.ownerName = owner.name;
-    req.session.ownerEmail = owner.email;
-    
-    // Force session save and log session ID
-    req.session.save((err) => {
-      if (err) {
-        console.error('Session save error:', err);
-      } else {
-        console.log('✅ Session saved successfully. ID:', req.sessionID);
+    // Regenerate session ID for security
+    req.session.regenerate((regenerateErr) => {
+      if (regenerateErr) {
+        console.error('Session regeneration error:', regenerateErr);
+        return res.status(500).json({ error: "Session error during login" });
       }
-    });
 
-    res.json({ message: "Login successful", owner: { id: owner.id, name: owner.name, email: owner.email } });
+      // Set session
+      req.session.ownerId = owner.id;
+      req.session.ownerName = owner.name;
+      req.session.ownerEmail = owner.email;
+      req.session.loginTime = new Date().toISOString();
+      
+      // Force session save and respond only after successful save
+      req.session.save((saveErr) => {
+        if (saveErr) {
+          console.error('Session save error during owner login:', saveErr);
+          return res.status(500).json({ error: "Session save error during login" });
+        }
+
+        console.log('✅ Owner session saved successfully. ID:', req.sessionID, 'Owner:', owner.name);
+        
+        res.json({ 
+          message: "Login successful", 
+          owner: { 
+            id: owner.id, 
+            name: owner.name, 
+            email: owner.email 
+          } 
+        });
+      });
+    });
   } catch (err) {
     console.error('Owner login error:', err);
     res.status(500).json({ error: "Server error during login" });
@@ -449,18 +486,42 @@ router.get("/session-test", (req, res) => {
 });
 
 // Check current owner session
-router.get("/me", (req, res) => {
-  // Log minimal session info for debugging
-  console.log('Session check - ID:', req.sessionID, 'OwnerID:', req.session?.ownerId, 'Has Cookie:', !!req.headers.cookie);
-  
-  if (req.session.ownerId) {
+router.get("/me", async (req, res) => {
+  try {
+    // Log minimal session info for debugging in development
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔍 Owner /me check - Session ID:', req.sessionID, 'Owner ID:', req.session?.ownerId, 'Has Cookie:', !!req.headers.cookie);
+    }
+    
+    if (!req.session || !req.session.ownerId) {
+      return res.status(401).json({ error: "Not logged in" });
+    }
+
+    // Validate that the owner still exists in the database
+    const ownerResult = await pool.query(
+      "SELECT id, name, email FROM restaurant_owners WHERE id = $1",
+      [req.session.ownerId]
+    );
+
+    if (ownerResult.rows.length === 0) {
+      // Owner no longer exists, clear session
+      req.session.destroy((err) => {
+        if (err) console.error('Error destroying invalid owner session:', err);
+      });
+      return res.status(401).json({ error: "Owner account not found" });
+    }
+
+    const owner = ownerResult.rows[0];
+    
     res.json({
-      id: req.session.ownerId,
-      name: req.session.ownerName,
-      email: req.session.ownerEmail,
+      id: owner.id,
+      name: owner.name,
+      email: owner.email,
+      loginTime: req.session.loginTime,
     });
-  } else {
-    res.status(401).json({ error: "Not logged in" });
+  } catch (err) {
+    console.error('Owner /me endpoint error:', err);
+    res.status(500).json({ error: "Server error checking authentication" });
   }
 });
 
