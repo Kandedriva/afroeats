@@ -21,6 +21,8 @@ import adminRoutes from "./routes/adminRoutes.js";
 import imageProxyRoutes from "./routes/imageProxy.js";
 import debugRoutes from "./routes/debugRoutes.js";
 import supportRoutes from "./routes/supportRoutes.js";
+import migrationRoutes from "./routes/migrationRoutes.js";
+import debugImageRoutes from "./routes/debugImageRoutes.js";
 
 // Import security and analytics
 import { 
@@ -161,12 +163,12 @@ const sessionConfig = {
     // Set session to last 1 year (365 days)
     maxAge: process.env.SESSION_TIMEOUT ? parseInt(process.env.SESSION_TIMEOUT) : 365 * 24 * 60 * 60 * 1000, // Default 1 year
     httpOnly: true,
-    // In production, only use secure if we're serving over HTTPS
+    // In development, disable secure cookies for local testing
     secure: process.env.NODE_ENV === 'production' && process.env.HTTPS !== 'false',
-    // Use 'lax' for production to avoid third-party cookie issues, 'none' only if explicitly set
-    sameSite: process.env.NODE_ENV === 'production' 
-      ? (process.env.COOKIE_SAMESITE || 'lax') 
-      : 'lax',
+    // In development, use 'lax' for better cross-origin support
+    sameSite: process.env.NODE_ENV === 'development' 
+      ? 'lax' 
+      : (process.env.COOKIE_SAMESITE || 'lax'),
     // Don't set domain to allow cross-origin cookies
     domain: undefined,
     path: '/'
@@ -228,7 +230,9 @@ app.use("/api", webhookRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api", imageProxyRoutes);
 app.use("/api/debug", debugRoutes);
+app.use("/api/debug", debugImageRoutes);
 app.use("/api/support", supportRoutes);
+app.use("/api/migration", migrationRoutes);
 
 // Root route for deployment health checks
 app.get('/', (req, res) => {

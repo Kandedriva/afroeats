@@ -17,57 +17,59 @@ export const getImageUrl = (imageUrl, fallbackText = "No Image") => {
     return createPlaceholderImage(fallbackText);
   }
   
-  // If it's a cross-origin R2 image URL from the old domain, proxy it through current API
-  if (imageUrl.startsWith('https://api.afoodzone.com/api/r2-images/') || imageUrl.startsWith('https://afoodzone.com/api/r2-images/')) {
-    const imagePath = imageUrl.replace(/https:\/\/(api\.)?afoodzone\.com\/api\/r2-images\//, '');
+  // Clean the imageUrl to remove any potential formatting issues
+  const cleanImageUrl = imageUrl.trim();
+  
+  // If it's already a complete HTTPS URL, return as-is
+  if (cleanImageUrl.startsWith('https://')) {
+    return cleanImageUrl;
+  }
+  
+  // If it's already a complete HTTP URL, return as-is
+  if (cleanImageUrl.startsWith('http://')) {
+    return cleanImageUrl;
+  }
+  
+  // Handle relative API paths (e.g., "/api/r2-images/...") - HIGHEST PRIORITY
+  if (cleanImageUrl.startsWith('/api/r2-images/')) {
+    return `${API_BASE_URL}${cleanImageUrl}`;
+  }
+  
+  // Handle other API paths
+  if (cleanImageUrl.startsWith('/api/')) {
+    return `${API_BASE_URL}${cleanImageUrl}`;
+  }
+  
+  // CRITICAL FIX: Handle legacy /uploads/ paths - convert to R2
+  if (cleanImageUrl.startsWith('/uploads/')) {
+    // Always convert /uploads/ to /api/r2-images/ regardless of environment
+    const imagePath = cleanImageUrl.replace('/uploads/', '');
     return `${API_BASE_URL}/api/r2-images/${imagePath}`;
   }
   
-  // If it's already our current domain R2 image, return as-is
-  if (imageUrl.startsWith(`${API_BASE_URL}/api/r2-images/`)) {
-    return imageUrl;
+  // If it's a cross-origin R2 image URL from the old domain, proxy it through current API
+  if (cleanImageUrl.startsWith('https://api.afoodzone.com/api/r2-images/') || cleanImageUrl.startsWith('https://afoodzone.com/api/r2-images/')) {
+    const imagePath = cleanImageUrl.replace(/https:\/\/(api\.)?afoodzone\.com\/api\/r2-images\//, '');
+    return `${API_BASE_URL}/api/r2-images/${imagePath}`;
   }
   
-  // If it's a local uploads path
-  if (imageUrl.startsWith('/uploads/')) {
-    // In production, try R2 proxy first, then local uploads
-    if (!API_BASE_URL.includes('localhost')) {
-      const imagePath = imageUrl.replace('/uploads/', '');
-      return `${API_BASE_URL}/api/r2-images/${imagePath}`;
-    }
-    return `${API_BASE_URL}${imageUrl}`;
-  }
-  
-  // For development: if API_BASE_URL is localhost and imageUrl contains r2-images, try local first
-  if (API_BASE_URL.includes('localhost') && imageUrl.includes('r2-images/')) {
-    const pathMatch = imageUrl.match(/r2-images\/(.+)$/);
-    if (pathMatch) {
-      return `${API_BASE_URL}/uploads/${pathMatch[1]}`;
-    }
-  }
-  
-  // For production: if imageUrl contains r2-images, ensure it goes through our proxy
-  if (!API_BASE_URL.includes('localhost') && imageUrl.includes('r2-images/')) {
-    const pathMatch = imageUrl.match(/r2-images\/(.+)$/);
+  // If imageUrl contains r2-images path without leading slash, add API base
+  if (cleanImageUrl.includes('r2-images/') && !cleanImageUrl.startsWith('/')) {
+    const pathMatch = cleanImageUrl.match(/r2-images\/(.+)$/);
     if (pathMatch) {
       return `${API_BASE_URL}/api/r2-images/${pathMatch[1]}`;
     }
   }
   
-  // If it's any other full URL, return as-is
-  if (imageUrl.startsWith('http')) {
-    return imageUrl;
-  }
-  
-  // For relative paths, construct with API base URL
-  const cleanPath = imageUrl.replace(/\\/g, "/");
+  // For other relative paths, construct with API base URL
+  const cleanPath = cleanImageUrl.replace(/\\/g, "/");
   
   // In production, assume relative paths are images that should go through R2 proxy
-  if (!API_BASE_URL.includes('localhost') && !cleanPath.startsWith('/api/')) {
-    const imagePath = cleanPath.replace(/^\//, '');
-    return `${API_BASE_URL}/api/r2-images/${imagePath}`;
+  if (!API_BASE_URL.includes('localhost') && !cleanPath.startsWith('/')) {
+    return `${API_BASE_URL}/api/r2-images/${cleanPath}`;
   }
   
+  // Default: prepend API base URL
   const url = `${API_BASE_URL}${cleanPath.startsWith('/') ? '' : '/'}${cleanPath}`;
   return url;
 };
@@ -81,30 +83,31 @@ export const handleImageError = (event, fallbackText = "No Image") => {
     return;
   }
   
-  // If we're trying R2 images and it fails, try local images as fallback
-  if (currentSrc.includes('/api/r2-images/') && !event.target.dataset.triedLocal) {
-    const imagePath = currentSrc.split('/api/r2-images/')[1];
-    const localImageUrl = `${API_BASE_URL}/api/local-images/${imagePath}`;
-    event.target.dataset.triedLocal = 'true';
-    event.target.src = localImageUrl;
-    return;
+  // In development: If we're trying R2 images and it fails, try local images as fallback
+  if (API_BASE_URL.includes('localhost')) {
+    if (currentSrc.includes('/api/r2-images/') && !event.target.dataset.triedLocal) {
+      const imagePath = currentSrc.split('/api/r2-images/')[1];
+      const localImageUrl = `${API_BASE_URL}/api/local-images/${imagePath}`;
+      event.target.dataset.triedLocal = 'true';
+      event.target.src = localImageUrl;
+      return;
+    }
+    
+    // If local-images API fails, try direct uploads path (DEVELOPMENT ONLY)
+    if (currentSrc.includes('/api/local-images/') && !event.target.dataset.triedUploads) {
+      const imagePath = currentSrc.split('/api/local-images/')[1];
+      const uploadsUrl = `${API_BASE_URL}/uploads/${imagePath}`;
+      event.target.dataset.triedUploads = 'true';
+      event.target.src = uploadsUrl;
+      return;
+    }
   }
   
-  // If local-images API fails, try direct uploads path
-  if (currentSrc.includes('/api/local-images/') && !event.target.dataset.triedUploads) {
-    const imagePath = currentSrc.split('/api/local-images/')[1];
-    const uploadsUrl = `${API_BASE_URL}/uploads/${imagePath}`;
-    event.target.dataset.triedUploads = 'true';
-    event.target.src = uploadsUrl;
-    return;
-  }
-  
-  // If direct uploads fails in production, try R2 proxy as final fallback
-  if (currentSrc.includes('/uploads/') && !API_BASE_URL.includes('localhost') && !event.target.dataset.triedR2Fallback) {
-    const imagePath = currentSrc.split('/uploads/')[1];
-    const r2FallbackUrl = `${API_BASE_URL}/api/r2-images/${imagePath}`;
-    event.target.dataset.triedR2Fallback = 'true';
-    event.target.src = r2FallbackUrl;
+  // PRODUCTION: Never try /uploads/ fallback - R2 is the only source
+  // If R2 image fails in production, show placeholder immediately
+  if (!API_BASE_URL.includes('localhost')) {
+    console.warn(`🖼️ Image failed to load in production: ${currentSrc}`);
+    event.target.src = createPlaceholderImage(fallbackText);
     return;
   }
   

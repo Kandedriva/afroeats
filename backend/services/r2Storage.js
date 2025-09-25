@@ -38,7 +38,11 @@ class R2StorageService {
    * Check if R2 is properly configured
    */
   isConfigured() {
-    return this.client !== null && this.bucketName && process.env.R2_ACCESS_KEY;
+    return this.client !== null && 
+           this.bucketName && 
+           process.env.R2_ACCESS_KEY && 
+           process.env.R2_SECRET_KEY && 
+           process.env.R2_ENDPOINT;
   }
 
   /**
@@ -159,7 +163,7 @@ class R2StorageService {
                 process.env.RENDER_EXTERNAL_URL || 
                 process.env.RAILWAY_STATIC_URL || 
                 (process.env.HEROKU_APP_NAME ? `https://${process.env.HEROKU_APP_NAME}.herokuapp.com` : null) ||
-                'https://afro-restaurant-backend.onrender.com'; // Known production URL fallback
+                'https://api.orderdabaly.com'; // Updated production URL
     } else {
       // Development
       baseUrl = `http://localhost:${process.env.PORT || 5001}`;
@@ -199,12 +203,6 @@ class R2StorageService {
     }
   }
 
-  /**
-   * Check if R2 is properly configured
-   */
-  isConfigured() {
-    return this.client !== null && this.bucketName && process.env.R2_ENDPOINT;
-  }
 
   /**
    * Migrate local image to R2 (utility function for migration)
