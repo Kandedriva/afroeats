@@ -569,6 +569,8 @@ router.get('/support-messages', requireAdminAuth, async (req, res) => {
         COUNT(*) as total,
         COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending,
         COUNT(CASE WHEN status = 'in_progress' THEN 1 END) as in_progress,
+        COUNT(CASE WHEN status = 'viewed' THEN 1 END) as viewed,
+        COUNT(CASE WHEN status = 'responded' THEN 1 END) as responded,
         COUNT(CASE WHEN status = 'resolved' THEN 1 END) as resolved,
         COUNT(CASE WHEN status = 'closed' THEN 1 END) as closed
       FROM support_messages sm
@@ -598,7 +600,7 @@ router.put('/support-messages/:id', requireAdminAuth, async (req, res) => {
     const { status, priority, admin_response } = req.body;
     
     // Validation
-    const validStatuses = ['pending', 'in_progress', 'resolved', 'closed'];
+    const validStatuses = ['pending', 'in_progress', 'viewed', 'responded', 'resolved', 'closed'];
     const validPriorities = ['low', 'medium', 'high', 'urgent'];
     
     if (status && !validStatuses.includes(status)) {
@@ -635,9 +637,15 @@ router.put('/support-messages/:id', requireAdminAuth, async (req, res) => {
       updates.push(`admin_id = $${paramCount}`);
       values.push(req.admin.id);
       
-      // Set responded_at if providing a response
+      // Set responded_at and change status to 'responded' if providing a response
       if (admin_response && admin_response.trim()) {
         updates.push(`responded_at = CURRENT_TIMESTAMP`);
+        // Auto-change status to 'responded' if not already set
+        if (!status) {
+          paramCount++;
+          updates.push(`status = $${paramCount}`);
+          values.push('responded');
+        }
       }
     }
     
@@ -689,6 +697,8 @@ router.get('/support-stats', requireAdminAuth, async (req, res) => {
         COUNT(*) as total_messages,
         COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending_count,
         COUNT(CASE WHEN status = 'in_progress' THEN 1 END) as in_progress_count,
+        COUNT(CASE WHEN status = 'viewed' THEN 1 END) as viewed_count,
+        COUNT(CASE WHEN status = 'responded' THEN 1 END) as responded_count,
         COUNT(CASE WHEN status = 'resolved' THEN 1 END) as resolved_count,
         COUNT(CASE WHEN status = 'closed' THEN 1 END) as closed_count,
         COUNT(CASE WHEN priority = 'urgent' THEN 1 END) as urgent_count,
@@ -710,6 +720,211 @@ router.get('/support-stats', requireAdminAuth, async (req, res) => {
   } catch (error) {
     logger.error('Error fetching support stats:', error);
     res.status(500).json({ error: 'Failed to fetch support statistics' });
+  }
+});
+
+// Delete support message
+router.delete('/support-messages/:id', requireAdminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // First check if the message exists
+    const checkResult = await pool.query('SELECT id FROM support_messages WHERE id = $1', [id]);
+    
+    if (checkResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Support message not found' });
+    }
+    
+    // Delete the message
+    await pool.query('DELETE FROM support_messages WHERE id = $1', [id]);
+    
+    logger.info('Support message deleted', { 
+      messageId: id, 
+      adminId: req.admin.id 
+    });
+    
+    res.json({
+      success: true,
+      message: 'Support message deleted successfully'
+    });
+    
+  } catch (error) {
+    logger.error('Error deleting support message:', error);
+    res.status(500).json({ error: 'Failed to delete support message' });
+  }
+});
+
+// System quick actions
+// Clear Redis cache
+router.post('/system/clear-cache', requireAdminAuth, async (req, res) => {
+  try {
+    // Clear all Redis cache keys (be careful with this in production)
+    await cache.flushall();
+    
+    logger.info('Redis cache cleared', { adminId: req.admin.id });
+    
+    res.json({
+      success: true,
+      message: 'Redis cache cleared successfully'
+    });
+  } catch (error) {
+    logger.error('Error clearing cache:', error);
+    res.status(500).json({ error: 'Failed to clear cache' });
+  }
+});
+
+// Generate system report
+router.get('/system/report', requireAdminAuth, async (req, res) => {
+  try {
+    // Get current system status
+    const systemHealthRes = await fetch(`${req.protocol}://${req.get('host')}/api/admin/system`, {
+      headers: {
+        'Cookie': req.headers.cookie
+      }
+    });
+    const systemHealth = await systemHealthRes.json();
+
+    // Get dashboard data
+    const dashboardRes = await fetch(`${req.protocol}://${req.get('host')}/api/admin/dashboard`, {
+      headers: {
+        'Cookie': req.headers.cookie
+      }
+    });
+    const dashboardData = await dashboardRes.json();
+
+    const report = {
+      generated_at: new Date().toISOString(),
+      generated_by: req.admin.username,
+      system_health: systemHealth,
+      overview: dashboardData,
+      summary: {
+        total_users: dashboardData.overview.total_users,
+        total_restaurants: dashboardData.overview.total_restaurants,
+        total_orders: dashboardData.overview.total_orders,
+        system_status: systemHealth.status,
+        database_status: systemHealth.database.status,
+        redis_status: systemHealth.redis.status
+      }
+    };
+    
+    logger.info('System report generated', { adminId: req.admin.id });
+    
+    res.json({
+      success: true,
+      report: report
+    });
+  } catch (error) {
+    logger.error('Error generating system report:', error);
+    res.status(500).json({ error: 'Failed to generate system report' });
+  }
+});
+
+// Restart services (placeholder - in real production, this might restart specific services)
+router.post('/system/restart', requireAdminAuth, async (req, res) => {
+  try {
+    // In a real system, you might restart specific services
+    // For now, we'll just log the action and clear cache
+    await cache.flushall();
+    
+    logger.warn('System restart requested', { adminId: req.admin.id });
+    
+    res.json({
+      success: true,
+      message: 'Services restart initiated. Cache cleared as part of restart process.'
+    });
+  } catch (error) {
+    logger.error('Error restarting services:', error);
+    res.status(500).json({ error: 'Failed to restart services' });
+  }
+});
+
+// View system logs
+router.get('/system/logs', requireAdminAuth, async (req, res) => {
+  try {
+    const fs = await import('fs');
+    const path = await import('path');
+    const { limit = 100 } = req.query;
+    
+    const logsDir = path.join(process.cwd(), 'logs');
+    const today = new Date().toISOString().split('T')[0];
+    
+    const logTypes = ['info', 'warn', 'error'];
+    const logs = [];
+    
+    for (const type of logTypes) {
+      const logFile = path.join(logsDir, `${today}-${type}.log`);
+      try {
+        if (fs.existsSync(logFile)) {
+          const content = fs.readFileSync(logFile, 'utf8');
+          const lines = content.split('\n').filter(line => line.trim());
+          lines.forEach(line => {
+            if (line.trim()) {
+              try {
+                const logEntry = JSON.parse(line);
+                logs.push({ ...logEntry, type });
+              } catch {
+                logs.push({ message: line, type, timestamp: new Date().toISOString() });
+              }
+            }
+          });
+        }
+      } catch (err) {
+        // Ignore file read errors
+      }
+    }
+    
+    // Sort by timestamp and limit
+    logs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    const limitedLogs = logs.slice(0, parseInt(limit));
+    
+    logger.info('System logs viewed', { adminId: req.admin.id, logCount: limitedLogs.length });
+    
+    res.json({
+      success: true,
+      logs: limitedLogs,
+      total_count: logs.length,
+      returned_count: limitedLogs.length
+    });
+  } catch (error) {
+    logger.error('Error retrieving system logs:', error);
+    res.status(500).json({ error: 'Failed to retrieve system logs' });
+  }
+});
+
+// Get restaurant contacts for admin
+router.get('/restaurant-contacts', requireAdminAuth, async (req, res) => {
+  try {
+    const contactsResult = await pool.query(`
+      SELECT 
+        r.id,
+        r.name,
+        r.image_url,
+        r.address,
+        r.phone_number as phone,
+        r.delivery_fee,
+        ro.id as owner_id,
+        ro.name as owner_name,
+        ro.email as owner_email,
+        ro.subscribed,
+        ro.has_active_subscription,
+        ro.is_subscribed,
+        CASE 
+          WHEN ro.id IS NOT NULL THEN true 
+          ELSE false 
+        END as is_active
+      FROM restaurants r
+      LEFT JOIN restaurant_owners ro ON r.owner_id = ro.id
+      ORDER BY r.name ASC
+    `);
+    
+    res.json({
+      success: true,
+      contacts: contactsResult.rows
+    });
+    
+  } catch (error) {
+    logger.error('Error fetching restaurant contacts:', error);
+    res.status(500).json({ error: 'Failed to fetch restaurant contacts' });
   }
 });
 

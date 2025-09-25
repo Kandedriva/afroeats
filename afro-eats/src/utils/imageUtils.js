@@ -106,7 +106,6 @@ export const handleImageError = (event, fallbackText = "No Image") => {
   // PRODUCTION: Never try /uploads/ fallback - R2 is the only source
   // If R2 image fails in production, show placeholder immediately
   if (!API_BASE_URL.includes('localhost')) {
-    console.warn(`🖼️ Image failed to load in production: ${currentSrc}`);
     event.target.src = createPlaceholderImage(fallbackText);
     return;
   }

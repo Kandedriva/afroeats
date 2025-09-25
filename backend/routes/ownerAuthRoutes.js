@@ -26,35 +26,61 @@ router.post("/owners/login", async (req, res) => {
       return res.status(400).json({ error: "Invalid credentials" });
     }
 
-    // Login successful
+    // Regenerate session ID for security
+    req.session.regenerate((err) => {
+      if (err) {
+        console.error('Session regeneration error:', err);
+        return res.status(500).json({ error: "Session error during login" });
+      }
 
-    // Save owner info to session
-    req.session.ownerId = owner.id;
-    req.session.ownerName = owner.name;
-    req.session.ownerEmail = owner.email;
+      // Save owner info to session
+      req.session.ownerId = owner.id;
+      req.session.ownerName = owner.name;
+      req.session.ownerEmail = owner.email;
+      req.session.loginTime = new Date().toISOString();
 
-    res.json({
-      message: "Login successful",
-      owner: {
-        id: owner.id,
-        name: owner.name,
-      },
+      // Force session save and respond only after successful save
+      req.session.save((saveErr) => {
+        if (saveErr) {
+          console.error('Session save error during owner login:', saveErr);
+          return res.status(500).json({ error: "Session save error during login" });
+        }
+
+        console.log('✅ Owner session saved successfully. ID:', req.sessionID, 'Owner:', owner.name);
+        
+        res.json({
+          message: "Login successful",
+          owner: {
+            id: owner.id,
+            name: owner.name,
+            email: owner.email,
+          },
+        });
+      });
     });
   } catch (err) {
+    console.error('Owner login error:', err);
     res.status(500).json({ error: "Server error during login" });
   }
 });
 
 // ========== OWNER LOGOUT ==========
 router.post("/owners/logout", (req, res) => {
-  req.session.destroy(() => {
+  req.session.destroy((err) => {
+    if (err) {
+      console.error('Session destruction error:', err);
+      return res.status(500).json({ error: "Failed to log out" });
+    }
+
     res.clearCookie("orderdabaly.sid", {
       path: '/',
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
-    }); // Match the session cookie name
-    res.json({ message: "Logged out" });
+    });
+    
+    console.log('✅ Owner logged out successfully');
+    res.json({ message: "Logged out successfully" });
   });
 });
 

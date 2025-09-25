@@ -16,6 +16,7 @@ const RegisterOwner = () => {
   });
   const [logo, setLogo] = useState(null);
   const [error, setError] = useState("");
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const { refreshAuth } = useOwnerAuth();
   const navigate = useNavigate();
 
@@ -29,6 +30,11 @@ const RegisterOwner = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    if (!acceptedTerms) {
+      setError("Please accept the Terms and Conditions and Privacy Policy to continue.");
+      return;
+    }
 
     const data = new FormData();
     for (const key in formData) {
@@ -148,9 +154,45 @@ const RegisterOwner = () => {
           className="block mb-3"
         />
 
+        <div className="flex items-start space-x-3 mb-4">
+          <input
+            type="checkbox"
+            id="terms"
+            checked={acceptedTerms}
+            onChange={(e) => setAcceptedTerms(e.target.checked)}
+            className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+            required
+          />
+          <label htmlFor="terms" className="text-sm text-gray-700">
+            I agree to the{" "}
+            <Link 
+              to="/terms" 
+              className="text-blue-600 hover:text-blue-800 underline"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Terms and Conditions
+            </Link>{" "}
+            and{" "}
+            <Link 
+              to="/privacy" 
+              className="text-blue-600 hover:text-blue-800 underline"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Privacy Policy
+            </Link>
+          </label>
+        </div>
+
         <button
           type="submit"
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+          disabled={!acceptedTerms}
+          className={`px-4 py-2 rounded transition-colors ${
+            acceptedTerms
+              ? "bg-blue-600 text-white hover:bg-blue-700"
+              : "bg-gray-300 text-gray-500 cursor-not-allowed"
+          }`}
         >
           Register
         </button><br></br>
