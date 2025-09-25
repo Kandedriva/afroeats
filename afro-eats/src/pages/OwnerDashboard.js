@@ -91,13 +91,19 @@ function OwnerDashboard() {
       }
     };
 
-    const fetchDashboard = async () => {
+    const fetchDashboard = async (retryCount = 0) => {
       try {
         const res = await fetch(`${API_BASE_URL}/api/owners/dashboard`, {
           credentials: "include",
         });
 
         if (!res.ok) {
+          if (res.status === 401 && retryCount < 2) {
+            // Authentication failed, wait and retry
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            return await fetchDashboard(retryCount + 1);
+          }
+          
           const error = await res.json();
           throw new Error(error.error || "Failed to load dashboard");
         }
@@ -114,10 +120,19 @@ function OwnerDashboard() {
           const restaurantData = await restaurantRes.json();
           setRestaurant(restaurantData);
         }
+        
+        return Promise.resolve(); // Explicit return for successful execution
       } catch (err) {
         // eslint-disable-next-line no-console
         console.error('Dashboard fetch error:', err);
-        toast.error('Failed to load dashboard data. Please try refreshing the page.');
+        if (err.message.includes('Unauthorized') || err.message.includes('not logged in')) {
+          toast.error('Session expired. Please log in again.');
+          // Clear owner state and redirect to login
+          setTimeout(() => navigate('/owner/login'), 2000);
+        } else {
+          toast.error('Failed to load dashboard data. Please try refreshing the page.');
+        }
+        return Promise.reject(err);
       } finally {
         setLoading(false);
       }
@@ -160,7 +175,7 @@ function OwnerDashboard() {
     fetchStripeConnectStatus();
     fetchOrders();
     fetchNotifications();
-  }, [owner, authLoading]);
+  }, [owner, authLoading, navigate]);
 
   const fetchStripeConnectStatus = async () => {
     try {
