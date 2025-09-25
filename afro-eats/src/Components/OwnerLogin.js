@@ -34,8 +34,10 @@ function OwnerLogin() {
         // Update the owner state immediately
         setOwner(loginData.owner);
         
-        // Navigate to dashboard
-        navigate("/owner/dashboard");
+        // Small delay to ensure session is properly established, then navigate
+        setTimeout(() => {
+          navigate("/owner/dashboard");
+        }, 500); // Longer delay to ensure backend session is ready
       } else {
         throw new Error("Login response missing owner data");
       }

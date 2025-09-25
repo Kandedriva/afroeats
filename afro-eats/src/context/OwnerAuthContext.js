@@ -20,11 +20,22 @@ export function OwnerAuthProvider({ children }) {
           const data = await res.json();
           setOwner(data);
         } else {
-          setOwner(null);
+          if (res.status === 401) {
+            // Only clear owner data if we don't already have owner data
+            // This prevents clearing the owner state right after login while session is being established
+            setOwner(prevOwner => {
+              if (prevOwner) {
+                return prevOwner;
+              }
+              return null;
+            });
+          } else {
+            // Network or server error - keep current state
+          }
         }
       } catch (err) {
-        // Error checking owner session
-        setOwner(null);
+        // Network error - don't clear owner data immediately
+        // Let user try to continue if they were logged in
       } finally {
         setLoading(false);
       }
@@ -39,10 +50,12 @@ export function OwnerAuthProvider({ children }) {
         method: "POST",
         credentials: "include",
       });
-      setOwner(null);
     } catch (err) {
-      // Logout failed
+      // Logout request failed, but we'll still clear the owner state
     }
+    
+    // Clear owner state regardless of response
+    setOwner(null);
   };
 
   const refreshAuth = async () => {
@@ -56,11 +69,13 @@ export function OwnerAuthProvider({ children }) {
         const data = await res.json();
         setOwner(data);
       } else {
-        setOwner(null);
+        if (res.status === 401) {
+          // Only clear if explicitly requested (like from logout)
+          // Don't automatically clear on 401 to prevent logout loops
+        }
       }
     } catch (err) {
-      // Error refreshing owner session
-      setOwner(null);
+      // Don't clear owner data on network errors, let user retry
     } finally {
       setLoading(false);
     }
