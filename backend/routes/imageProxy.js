@@ -6,6 +6,54 @@ import { logger } from '../services/logger.js';
 const router = express.Router();
 
 /**
+ * Generate a placeholder SVG image
+ */
+const generatePlaceholderSVG = (text, width = 300, height = 200) => {
+  const svg = `
+    <svg xmlns='http://www.w3.org/2000/svg' width='${width}' height='${height}' viewBox='0 0 ${width} ${height}'>
+      <rect width='${width}' height='${height}' fill='#f3f4f6'/>
+      <text x='50%' y='45%' dominant-baseline='middle' text-anchor='middle' font-family='system-ui' font-size='14' fill='#374151'>🍽️</text>
+      <text x='50%' y='60%' dominant-baseline='middle' text-anchor='middle' font-family='system-ui' font-size='12' fill='#6b7280'>${text}</text>
+    </svg>
+  `;
+  return svg;
+};
+
+/**
+ * Serve a placeholder image when the original is not found
+ */
+const serveImagePlaceholder = (res, key) => {
+  let placeholderText = 'No Image';
+  let width = 300;
+  let height = 200;
+  
+  // Customize placeholder based on image type
+  if (key.includes('dish_images')) {
+    placeholderText = 'Dish Image';
+    width = 400;
+    height = 300;
+  } else if (key.includes('restaurant_logos')) {
+    placeholderText = 'Restaurant Logo';
+    width = 200;
+    height = 200;
+  } else if (key.includes('profile_images')) {
+    placeholderText = 'Profile Image';
+    width = 150;
+    height = 150;
+  }
+  
+  const svg = generatePlaceholderSVG(placeholderText, width, height);
+  
+  res.set({
+    'Content-Type': 'image/svg+xml',
+    'Cache-Control': 'public, max-age=3600', // Cache placeholder for 1 hour
+    'Access-Control-Allow-Origin': '*',
+  });
+  
+  res.send(svg);
+};
+
+/**
  * Proxy endpoint to serve images from R2 storage
  * This allows us to serve R2 images even when the bucket is not publicly accessible
  */
@@ -80,7 +128,9 @@ router.get('/r2-images/*', async (req, res) => {
         logger.error('Error serving local fallback image:', localError);
       }
       
-      return res.status(404).json({ error: 'Image not found in R2 or local storage', key });
+      // If no local fallback exists, serve a placeholder image
+      logger.info(`Serving placeholder for missing image: ${key}`);
+      return serveImagePlaceholder(res, key);
     }
     
     res.status(500).json({ error: 'Failed to serve image', details: error.message });
@@ -109,7 +159,9 @@ router.get('/local-images/*', async (req, res) => {
       });
       return res.sendFile(path_module.resolve(fullPath));
     } else {
-      return res.status(404).json({ error: 'Local image not found', path: fullPath });
+      // Serve placeholder for missing local image
+      logger.info(`Serving placeholder for missing local image: ${imagePath}`);
+      return serveImagePlaceholder(res, imagePath);
     }
   } catch (error) {
     logger.error('Error serving local image:', error);
