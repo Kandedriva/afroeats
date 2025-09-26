@@ -71,60 +71,75 @@ app.use(requestLoggingMiddleware);
 // CORS with secure configuration
 app.use(cors(corsOptions));
 
-// Body parsing with size limits - conditional parsing to avoid conflicts with multer
+// Custom body parsing middleware with better error handling
 app.use((req, res, next) => {
-  // Skip JSON parsing for multipart/form-data requests (file uploads)
   const contentType = req.headers['content-type'] || '';
+  
+  // Skip all body parsing for multipart/form-data requests (handled by multer)
   if (contentType.toLowerCase().includes('multipart/form-data')) {
     return next();
   }
   
-  // Apply JSON parsing with proper error handling
-  express.json({ limit: '10mb' })(req, res, (err) => {
-    if (err) {
-      // Log JSON parsing error but don't crash the request
-      console.warn('JSON parsing error, continuing with empty body:', err.message);
-      req.body = {}; // Set empty body to prevent undefined errors
-      return next();
-    }
-    next();
-  });
-});
-
-app.use((req, res, next) => {
-  // Skip urlencoded parsing for multipart/form-data requests
-  const contentType = req.headers['content-type'] || '';
-  if (contentType.toLowerCase().includes('multipart/form-data')) {
-    return next();
+  // Handle JSON parsing with comprehensive error catching
+  if (contentType.toLowerCase().includes('application/json')) {
+    let rawData = '';
+    req.setEncoding('utf8');
+    
+    req.on('data', (chunk) => {
+      rawData += chunk;
+      // Prevent excessive data
+      if (rawData.length > 10 * 1024 * 1024) { // 10MB limit
+        res.status(413).json({ error: 'Request too large' });
+        return;
+      }
+    });
+    
+    req.on('end', () => {
+      try {
+        if (rawData.trim()) {
+          req.body = JSON.parse(rawData);
+        } else {
+          req.body = {};
+        }
+      } catch (err) {
+        console.warn('JSON parsing error for', req.url, ':', err.message);
+        req.body = {}; // Set empty body instead of crashing
+      }
+      next();
+    });
+    
+    req.on('error', (err) => {
+      console.warn('Request error:', err.message);
+      req.body = {};
+      next();
+    });
+    
+    return;
   }
   
-  // Apply urlencoded parsing with proper error handling
-  express.urlencoded({ extended: true, limit: '10mb' })(req, res, (err) => {
-    if (err) {
-      // Log urlencoded parsing error but don't crash the request
-      console.warn('URL-encoded parsing error, continuing:', err.message);
-      return next();
-    }
-    next();
-  });
+  // Handle URL-encoded data
+  if (contentType.toLowerCase().includes('application/x-www-form-urlencoded')) {
+    express.urlencoded({ extended: true, limit: '10mb' })(req, res, (err) => {
+      if (err) {
+        console.warn('URL-encoded parsing error:', err.message);
+        req.body = {};
+      }
+      next();
+    });
+    return;
+  }
+  
+  // For other content types, continue without parsing
+  next();
 });
 
 // Input sanitization and XSS protection
 app.use(sanitizeInput);
 app.use(xssProtection);
 
-// Error handling middleware for body parsing and multer errors
+// Global error handling middleware for any remaining errors
 app.use((err, req, res, next) => {
-  // Handle JSON syntax errors
-  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
-    console.warn('JSON syntax error caught:', err.message, 'URL:', req.url);
-    return res.status(400).json({ 
-      error: 'Invalid JSON format in request body',
-      details: 'Please check your request format and try again'
-    });
-  }
-  
-  // Handle multer errors (file upload errors)
+  // Handle multer errors
   if (err.code === 'LIMIT_FILE_SIZE') {
     console.warn('File size limit exceeded:', req.url);
     return res.status(413).json({ 
@@ -141,7 +156,6 @@ app.use((err, req, res, next) => {
     });
   }
   
-  // Handle other multer errors
   if (err.message && err.message.includes('Please upload a valid image file')) {
     console.warn('Invalid file type:', req.url);
     return res.status(400).json({ 
@@ -149,7 +163,17 @@ app.use((err, req, res, next) => {
     });
   }
   
-  // Continue to next error handler
+  // Handle any other parsing errors
+  if (err instanceof SyntaxError && err.message.includes('JSON')) {
+    console.warn('JSON syntax error:', err.message, 'URL:', req.url);
+    return res.status(400).json({ 
+      error: 'Invalid request format',
+      details: 'Please check your request and try again'
+    });
+  }
+  
+  // For unhandled errors, log and continue
+  console.warn('Unhandled error caught:', err.message, 'URL:', req.url);
   next(err);
 });
 
