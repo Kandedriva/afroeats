@@ -71,9 +71,22 @@ app.use(requestLoggingMiddleware);
 // CORS with secure configuration
 app.use(cors(corsOptions));
 
-// Body parsing with size limits
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+// Body parsing with size limits - conditional parsing to avoid conflicts with multer
+app.use((req, res, next) => {
+  // Skip JSON parsing for multipart/form-data requests (file uploads)
+  if (req.headers['content-type'] && req.headers['content-type'].includes('multipart/form-data')) {
+    return next();
+  }
+  return express.json({ limit: '10mb' })(req, res, next);
+});
+
+app.use((req, res, next) => {
+  // Skip urlencoded parsing for multipart/form-data requests
+  if (req.headers['content-type'] && req.headers['content-type'].includes('multipart/form-data')) {
+    return next();
+  }
+  return express.urlencoded({ extended: true, limit: '10mb' })(req, res, next);
+});
 
 // Input sanitization and XSS protection
 app.use(sanitizeInput);
