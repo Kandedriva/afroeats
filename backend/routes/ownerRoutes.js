@@ -349,23 +349,37 @@ router.put("/dishes/:id", requireOwnerAuth, ...uploadDishImage, async (req, res)
     contentType: req.headers['content-type']
   });
   
-  // Validate required fields
-  if (!req.body || typeof req.body !== 'object') {
-    return res.status(400).json({ 
-      error: "Invalid request body",
-      details: "Request body must be valid form data"
-    });
+  // For multipart form data, multer should have populated req.body
+  // Initialize req.body if it's undefined (safety measure)
+  if (!req.body) {
+    req.body = {};
   }
   
   const { name, description = "", price } = req.body;
   
-  // Validate required fields
-  if (!name || !price) {
+  // More flexible validation - handle empty strings and undefined
+  const trimmedName = typeof name === 'string' ? name.trim() : '';
+  const trimmedPrice = typeof price === 'string' ? price.trim() : price;
+  
+  // Validate required fields with better error messages
+  if (!trimmedName) {
     return res.status(400).json({ 
-      error: "Missing required fields",
-      details: "Name and price are required"
+      error: "Missing required field: name",
+      details: "Dish name is required and cannot be empty"
     });
   }
+  
+  if (!trimmedPrice || isNaN(parseFloat(trimmedPrice)) || parseFloat(trimmedPrice) <= 0) {
+    return res.status(400).json({ 
+      error: "Missing or invalid required field: price",
+      details: "Price must be a valid number greater than 0"
+    });
+  }
+  
+  // Use trimmed values for the update
+  const finalName = trimmedName;
+  const finalDescription = typeof description === 'string' ? description.trim() : '';
+  const finalPrice = parseFloat(trimmedPrice);
 
   try {
     // Verify ownership
@@ -404,11 +418,11 @@ router.put("/dishes/:id", requireOwnerAuth, ...uploadDishImage, async (req, res)
       return res.status(400).json({ error: uploadResult.error });
     }
 
-    // Update the dish
+    // Update the dish using validated and processed values
     const updatedDish = await pool.query(
       `UPDATE dishes SET name = $1, description = $2, price = $3, image_url = $4
        WHERE id = $5 RETURNING *`,
-      [name, description, price, imagePath, dishId]
+      [finalName, finalDescription, finalPrice, imagePath, dishId]
     );
 
     const formattedDish = {
