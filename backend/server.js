@@ -71,66 +71,54 @@ app.use(requestLoggingMiddleware);
 // CORS with secure configuration
 app.use(cors(corsOptions));
 
-// Custom body parsing middleware with better error handling
+// Body parsing middleware with comprehensive error handling
 app.use((req, res, next) => {
   const contentType = req.headers['content-type'] || '';
   
-  // Skip all body parsing for multipart/form-data requests (handled by multer)
+  // Skip body parsing for multipart/form-data (handled by multer)
   if (contentType.toLowerCase().includes('multipart/form-data')) {
     return next();
   }
   
-  // Handle JSON parsing with comprehensive error catching
-  if (contentType.toLowerCase().includes('application/json')) {
-    let rawData = '';
-    req.setEncoding('utf8');
-    
-    req.on('data', (chunk) => {
-      rawData += chunk;
-      // Prevent excessive data
-      if (rawData.length > 10 * 1024 * 1024) { // 10MB limit
-        res.status(413).json({ error: 'Request too large' });
-        return;
-      }
-    });
-    
-    req.on('end', () => {
-      try {
-        if (rawData.trim()) {
-          req.body = JSON.parse(rawData);
-        } else {
-          req.body = {};
-        }
-      } catch (err) {
-        console.warn('JSON parsing error for', req.url, ':', err.message);
-        req.body = {}; // Set empty body instead of crashing
-      }
-      next();
-    });
-    
-    req.on('error', (err) => {
-      console.warn('Request error:', err.message);
-      req.body = {};
-      next();
-    });
-    
-    return;
-  }
-  
-  // Handle URL-encoded data
-  if (contentType.toLowerCase().includes('application/x-www-form-urlencoded')) {
-    express.urlencoded({ extended: true, limit: '10mb' })(req, res, (err) => {
-      if (err) {
-        console.warn('URL-encoded parsing error:', err.message);
+  // Use express.json with custom error handling
+  express.json({ 
+    limit: '10mb',
+    strict: false,
+    type: 'application/json'
+  })(req, res, (err) => {
+    if (err) {
+      if (err instanceof SyntaxError && err.message.includes('JSON')) {
+        console.warn('JSON parsing error:', err.message, 'URL:', req.url);
+        // Set empty body instead of crashing
         req.body = {};
+        return next();
       }
-      next();
-    });
-    return;
+    }
+    next(err);
+  });
+});
+
+// URL-encoded body parsing with error handling
+app.use((req, res, next) => {
+  const contentType = req.headers['content-type'] || '';
+  
+  // Skip for multipart/form-data and JSON
+  if (contentType.toLowerCase().includes('multipart/form-data') || 
+      contentType.toLowerCase().includes('application/json')) {
+    return next();
   }
   
-  // For other content types, continue without parsing
-  next();
+  express.urlencoded({ 
+    extended: true, 
+    limit: '10mb',
+    type: 'application/x-www-form-urlencoded'
+  })(req, res, (err) => {
+    if (err) {
+      console.warn('URL-encoded parsing error:', err.message, 'URL:', req.url);
+      req.body = req.body || {};
+    }
+    next(err);
+  });
 });
 
 // Input sanitization and XSS protection

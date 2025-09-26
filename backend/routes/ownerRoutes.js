@@ -339,7 +339,33 @@ router.patch("/dishes/:id/availability", requireOwnerAuth, async (req, res) => {
 router.put("/dishes/:id", requireOwnerAuth, ...uploadDishImage, async (req, res) => {
   const ownerId = req.owner.id;
   const dishId = req.params.id;
+  
+  // Debug logging for request body
+  console.log('Dish update request:', {
+    dishId,
+    ownerId,
+    body: req.body,
+    hasFile: !!req.file,
+    contentType: req.headers['content-type']
+  });
+  
+  // Validate required fields
+  if (!req.body || typeof req.body !== 'object') {
+    return res.status(400).json({ 
+      error: "Invalid request body",
+      details: "Request body must be valid form data"
+    });
+  }
+  
   const { name, description = "", price } = req.body;
+  
+  // Validate required fields
+  if (!name || !price) {
+    return res.status(400).json({ 
+      error: "Missing required fields",
+      details: "Name and price are required"
+    });
+  }
 
   try {
     // Verify ownership
