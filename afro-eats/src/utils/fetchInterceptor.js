@@ -9,8 +9,16 @@ window.fetch = function(...args) {
   const [resource] = args;
   let config = args[1] || {};
   
+  // More robust API call detection
+  const isApiCall = typeof resource === 'string' && (
+    resource.includes(API_BASE_URL) ||
+    resource.includes('/api/') ||
+    resource.startsWith('http://localhost') ||
+    resource.startsWith('https://api.orderdabaly.com')
+  );
+  
   // Check if this is an API call to our backend
-  if (typeof resource === 'string' && resource.includes(API_BASE_URL)) {
+  if (isApiCall) {
     // Ensure credentials are included for API calls
     config = {
       ...config,
@@ -26,9 +34,10 @@ window.fetch = function(...args) {
     // Debug API calls in development only
     if (process.env.NODE_ENV === 'development') {
       // eslint-disable-next-line no-console
-      console.log('🌐 API Call:', resource.replace(API_BASE_URL, ''), {
+      console.log('🌐 API Call:', resource, {
         method: config.method || 'GET',
-        credentials: config.credentials
+        credentials: config.credentials,
+        isApiCall: true
       });
     }
   }
