@@ -19,17 +19,56 @@ export default function RestaurantList() {
   useEffect(() => {
     const fetchRestaurants = async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/restaurants`);
-        if (!res.ok) {
-          throw new Error("Failed to fetch restaurants");
-        }
-        const data = await res.json();
-        setRestaurants(data);
-      } catch (err) {
-        setError('Failed to load restaurants. Please try again later.');
+        // Debug logging
         if (process.env.NODE_ENV === 'development') {
           // eslint-disable-next-line no-console
-          console.error('Error fetching restaurants:', err);
+          console.log('🔄 Fetching restaurants from:', `${API_BASE_URL}/api/restaurants`);
+        }
+        
+        const res = await fetch(`${API_BASE_URL}/api/restaurants`);
+        
+        // Debug response
+        if (process.env.NODE_ENV === 'development') {
+          // eslint-disable-next-line no-console
+          console.log('📡 Restaurant API response:', {
+            status: res.status,
+            ok: res.ok,
+            url: res.url
+          });
+        }
+        
+        if (!res.ok) {
+          throw new Error(`Failed to fetch restaurants (${res.status}): ${res.statusText}`);
+        }
+        
+        const data = await res.json();
+        
+        // Debug data
+        if (process.env.NODE_ENV === 'development') {
+          // eslint-disable-next-line no-console
+          console.log('📊 Restaurant data received:', data);
+        }
+        
+        // Validate data is array
+        if (!Array.isArray(data)) {
+          throw new Error('Invalid data format: expected array of restaurants');
+        }
+        
+        setRestaurants(data);
+        setError(null); // Clear any previous errors
+      } catch (err) {
+        // Enhanced error handling
+        const errorMessage = err.message || 'Failed to load restaurants. Please try again later.';
+        setError(errorMessage);
+        
+        if (process.env.NODE_ENV === 'development') {
+          // eslint-disable-next-line no-console
+          console.error('❌ Error fetching restaurants:', {
+            error: err,
+            message: err.message,
+            stack: err.stack,
+            apiUrl: `${API_BASE_URL}/api/restaurants`
+          });
         }
       } finally {
         setLoading(false);
@@ -37,7 +76,7 @@ export default function RestaurantList() {
     };
 
     fetchRestaurants();
-  }, []);
+  }, []); // Empty dependency array is intentional for initial load
 
   const handleSupportInputChange = (e) => {
     const { name, value } = e.target;
