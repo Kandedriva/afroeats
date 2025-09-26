@@ -13,7 +13,7 @@ const upload = multer({
   },
   fileFilter: (req, file, cb) => {
     // Accept only image files
-    if (file.mimetype.startsWith('image/')) {
+    if (file && file.mimetype && file.mimetype.startsWith('image/')) {
       cb(null, true);
     } else {
       cb(new Error('Please upload a valid image file (JPEG, PNG, GIF, WebP, AVIF)'), false);
@@ -29,11 +29,21 @@ const upload = multer({
  */
 export const uploadToR2 = (imageType = 'general', fieldName = 'image', optimize = true) => {
   return [
-    upload.single(fieldName),
+    (req, res, next) => {
+      upload.single(fieldName)(req, res, (err) => {
+        if (err) {
+          // Log the specific multer error
+          logger.warn('Multer upload error:', err.message, 'for field:', fieldName);
+          req.r2UploadError = err.message;
+          return next(); // Continue to next middleware but with error set
+        }
+        next();
+      });
+    },
     async (req, res, next) => {
       try {
-        // Skip if no file uploaded
-        if (!req.file) {
+        // Skip if there was a multer error or no file uploaded
+        if (req.r2UploadError || !req.file) {
           return next();
         }
 
