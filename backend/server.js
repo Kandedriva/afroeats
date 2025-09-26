@@ -74,23 +74,84 @@ app.use(cors(corsOptions));
 // Body parsing with size limits - conditional parsing to avoid conflicts with multer
 app.use((req, res, next) => {
   // Skip JSON parsing for multipart/form-data requests (file uploads)
-  if (req.headers['content-type'] && req.headers['content-type'].includes('multipart/form-data')) {
+  const contentType = req.headers['content-type'] || '';
+  if (contentType.toLowerCase().includes('multipart/form-data')) {
     return next();
   }
-  return express.json({ limit: '10mb' })(req, res, next);
+  
+  // Apply JSON parsing with proper error handling
+  express.json({ limit: '10mb' })(req, res, (err) => {
+    if (err) {
+      // Log JSON parsing error but don't crash the request
+      console.warn('JSON parsing error, continuing with empty body:', err.message);
+      req.body = {}; // Set empty body to prevent undefined errors
+      return next();
+    }
+    next();
+  });
 });
 
 app.use((req, res, next) => {
   // Skip urlencoded parsing for multipart/form-data requests
-  if (req.headers['content-type'] && req.headers['content-type'].includes('multipart/form-data')) {
+  const contentType = req.headers['content-type'] || '';
+  if (contentType.toLowerCase().includes('multipart/form-data')) {
     return next();
   }
-  return express.urlencoded({ extended: true, limit: '10mb' })(req, res, next);
+  
+  // Apply urlencoded parsing with proper error handling
+  express.urlencoded({ extended: true, limit: '10mb' })(req, res, (err) => {
+    if (err) {
+      // Log urlencoded parsing error but don't crash the request
+      console.warn('URL-encoded parsing error, continuing:', err.message);
+      return next();
+    }
+    next();
+  });
 });
 
 // Input sanitization and XSS protection
 app.use(sanitizeInput);
 app.use(xssProtection);
+
+// Error handling middleware for body parsing and multer errors
+app.use((err, req, res, next) => {
+  // Handle JSON syntax errors
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    console.warn('JSON syntax error caught:', err.message, 'URL:', req.url);
+    return res.status(400).json({ 
+      error: 'Invalid JSON format in request body',
+      details: 'Please check your request format and try again'
+    });
+  }
+  
+  // Handle multer errors (file upload errors)
+  if (err.code === 'LIMIT_FILE_SIZE') {
+    console.warn('File size limit exceeded:', req.url);
+    return res.status(413).json({ 
+      error: 'File too large',
+      details: 'Maximum file size is 5MB'
+    });
+  }
+  
+  if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+    console.warn('Unexpected file field:', req.url);
+    return res.status(400).json({ 
+      error: 'Unexpected file upload',
+      details: 'Please check the file field name'
+    });
+  }
+  
+  // Handle other multer errors
+  if (err.message && err.message.includes('Please upload a valid image file')) {
+    console.warn('Invalid file type:', req.url);
+    return res.status(400).json({ 
+      error: err.message
+    });
+  }
+  
+  // Continue to next error handler
+  next(err);
+});
 
 // Rate limiting (applied selectively)
 app.use('/api/auth/register', rateLimits.register);
