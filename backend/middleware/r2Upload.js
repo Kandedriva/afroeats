@@ -42,6 +42,14 @@ export const uploadToR2 = (imageType = 'general', fieldName = 'image', optimize 
     },
     async (req, res, next) => {
       try {
+        // Debug logging for multipart form processing
+        console.log('R2 Upload middleware - Form data received:', {
+          hasFile: !!req.file,
+          body: req.body,
+          r2UploadError: req.r2UploadError,
+          url: req.url
+        });
+        
         // Skip if there was a multer error or no file uploaded
         if (req.r2UploadError || !req.file) {
           return next();
