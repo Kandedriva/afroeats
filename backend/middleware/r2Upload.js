@@ -30,24 +30,37 @@ const upload = multer({
 export const uploadToR2 = (imageType = 'general', fieldName = 'image', optimize = true) => {
   return [
     (req, res, next) => {
-      upload.single(fieldName)(req, res, (err) => {
+      // Use .any() to handle all multipart fields, then process file separately
+      upload.any()(req, res, (err) => {
         if (err) {
           // Log the specific multer error
           logger.warn('Multer upload error:', err.message, 'for field:', fieldName);
           req.r2UploadError = err.message;
           return next(); // Continue to next middleware but with error set
         }
+        
+        // Find the specific file field if it exists
+        if (req.files && req.files.length > 0) {
+          const fileField = req.files.find(file => file.fieldname === fieldName);
+          if (fileField) {
+            req.file = fileField; // Set req.file for compatibility
+          }
+        }
+        
         next();
       });
     },
     async (req, res, next) => {
       try {
-        // Debug logging for multipart form processing
-        console.log('R2 Upload middleware - Form data received:', {
+        // Enhanced debug logging for multipart form processing
+        console.log('R2 Upload middleware - Multer processing complete:', {
           hasFile: !!req.file,
+          filesArray: req.files ? req.files.map(f => ({ fieldname: f.fieldname, originalname: f.originalname })) : [],
           body: req.body,
+          bodyKeys: req.body ? Object.keys(req.body) : [],
           r2UploadError: req.r2UploadError,
-          url: req.url
+          url: req.url,
+          contentType: req.headers['content-type']
         });
         
         // Skip if there was a multer error or no file uploaded
