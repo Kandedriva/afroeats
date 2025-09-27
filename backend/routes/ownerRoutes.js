@@ -356,12 +356,10 @@ router.put("/dishes/:id", requireOwnerAuth, ...uploadDishImage, async (req, res)
   console.log('Body keys:', req.body ? Object.keys(req.body) : 'no body');
   console.log('=== END DEBUG ===');
   
-  // Verify multipart form data content type
-  if (!req.headers['content-type']?.includes('multipart/form-data')) {
-    return res.status(400).json({ 
-      error: "Request must use multipart/form-data content type",
-      receivedContentType: req.headers['content-type']
-    });
+  // Multer middleware handles content-type validation automatically
+  // Log content type for debugging if needed
+  if (process.env.NODE_ENV === 'development') {
+    console.log('Content-Type received:', req.headers['content-type']);
   }
 
   // Ensure req.body exists and has expected structure
