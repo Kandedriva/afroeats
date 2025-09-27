@@ -356,58 +356,59 @@ router.put("/dishes/:id", requireOwnerAuth, ...uploadDishImage, async (req, res)
   console.log('Body keys:', req.body ? Object.keys(req.body) : 'no body');
   console.log('=== END DEBUG ===');
   
-  // For multipart form data, multer should have populated req.body
-  // Initialize req.body if it's undefined (safety measure)
-  if (!req.body) {
+  // Verify multipart form data content type
+  if (!req.headers['content-type']?.includes('multipart/form-data')) {
+    return res.status(400).json({ 
+      error: "Request must use multipart/form-data content type",
+      receivedContentType: req.headers['content-type']
+    });
+  }
+
+  // Ensure req.body exists and has expected structure
+  if (!req.body || typeof req.body !== 'object') {
     req.body = {};
   }
   
   const { name, description = "", price } = req.body;
   
-  // More flexible validation - handle empty strings and undefined
-  const trimmedName = typeof name === 'string' ? name.trim() : '';
-  const trimmedPrice = typeof price === 'string' ? price.trim() : price;
+  // More flexible validation - handle empty strings, undefined, and various data types
+  const trimmedName = (name && typeof name === 'string') ? name.trim() : (name ? String(name).trim() : '');
+  const trimmedPrice = (price !== undefined && price !== null) ? String(price).trim() : '';
+  const trimmedDescription = (description && typeof description === 'string') ? description.trim() : (description ? String(description) : '');
   
-  // Enhanced debugging for validation failures
-  console.log('VALIDATION DEBUG:');
-  console.log('name from body:', JSON.stringify(name));
-  console.log('trimmedName:', JSON.stringify(trimmedName));
-  console.log('price from body:', JSON.stringify(price));
-  console.log('trimmedPrice:', JSON.stringify(trimmedPrice));
+  // Enhanced debugging for validation failures (only in development)
+  if (process.env.NODE_ENV === 'development') {
+    console.log('VALIDATION DEBUG:');
+    console.log('name from body:', JSON.stringify(name));
+    console.log('trimmedName:', JSON.stringify(trimmedName));
+    console.log('price from body:', JSON.stringify(price));
+    console.log('trimmedPrice:', JSON.stringify(trimmedPrice));
+  }
   
-  // Validate required fields with better error messages
-  if (!trimmedName) {
+  // Validate required fields with improved error messages
+  if (!trimmedName || trimmedName.length === 0) {
     console.log('VALIDATION FAILED: Name is missing or empty');
     return res.status(400).json({ 
-      error: "Missing required field: name",
-      details: "Dish name is required and cannot be empty",
-      debug: {
-        receivedName: name,
-        nameType: typeof name,
-        bodyKeys: Object.keys(req.body || {}),
-        bodyContent: req.body
-      }
+      error: "Dish name is required",
+      details: "Dish name cannot be empty",
+      received: { name, price, description }
     });
   }
   
-  if (!trimmedPrice || isNaN(parseFloat(trimmedPrice)) || parseFloat(trimmedPrice) <= 0) {
+  const numericPrice = parseFloat(trimmedPrice);
+  if (isNaN(numericPrice) || numericPrice <= 0) {
     console.log('VALIDATION FAILED: Price is missing or invalid');
     return res.status(400).json({ 
-      error: "Missing or invalid required field: price",
-      details: "Price must be a valid number greater than 0",
-      debug: {
-        receivedPrice: price,
-        priceType: typeof price,
-        bodyKeys: Object.keys(req.body || {}),
-        bodyContent: req.body
-      }
+      error: "Valid price is required",
+      details: "Price must be a number greater than 0",
+      received: { name, price, description }
     });
   }
   
-  // Use trimmed values for the update
+  // Use validated values for the update
   const finalName = trimmedName;
-  const finalDescription = typeof description === 'string' ? description.trim() : '';
-  const finalPrice = parseFloat(trimmedPrice);
+  const finalDescription = trimmedDescription;
+  const finalPrice = numericPrice;
   
   console.log('VALIDATION PASSED:', { finalName, finalDescription, finalPrice });
 
