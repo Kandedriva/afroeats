@@ -340,14 +340,21 @@ router.put("/dishes/:id", requireOwnerAuth, ...uploadDishImage, async (req, res)
   const ownerId = req.owner.id;
   const dishId = req.params.id;
   
-  // Debug logging for request body
-  console.log('Dish update request:', {
-    dishId,
-    ownerId,
-    body: req.body,
-    hasFile: !!req.file,
-    contentType: req.headers['content-type']
-  });
+  // Comprehensive debug logging for request data
+  console.log('=== DISH UPDATE DEBUG ===');
+  console.log('dishId:', dishId);
+  console.log('ownerId:', ownerId);
+  console.log('req.body:', JSON.stringify(req.body, null, 2));
+  console.log('req.file:', req.file ? { 
+    fieldname: req.file.fieldname, 
+    originalname: req.file.originalname, 
+    size: req.file.size 
+  } : null);
+  console.log('Content-Type:', req.headers['content-type']);
+  console.log('All headers:', Object.keys(req.headers));
+  console.log('Raw body type:', typeof req.body);
+  console.log('Body keys:', req.body ? Object.keys(req.body) : 'no body');
+  console.log('=== END DEBUG ===');
   
   // For multipart form data, multer should have populated req.body
   // Initialize req.body if it's undefined (safety measure)
@@ -361,18 +368,39 @@ router.put("/dishes/:id", requireOwnerAuth, ...uploadDishImage, async (req, res)
   const trimmedName = typeof name === 'string' ? name.trim() : '';
   const trimmedPrice = typeof price === 'string' ? price.trim() : price;
   
+  // Enhanced debugging for validation failures
+  console.log('VALIDATION DEBUG:');
+  console.log('name from body:', JSON.stringify(name));
+  console.log('trimmedName:', JSON.stringify(trimmedName));
+  console.log('price from body:', JSON.stringify(price));
+  console.log('trimmedPrice:', JSON.stringify(trimmedPrice));
+  
   // Validate required fields with better error messages
   if (!trimmedName) {
+    console.log('VALIDATION FAILED: Name is missing or empty');
     return res.status(400).json({ 
       error: "Missing required field: name",
-      details: "Dish name is required and cannot be empty"
+      details: "Dish name is required and cannot be empty",
+      debug: {
+        receivedName: name,
+        nameType: typeof name,
+        bodyKeys: Object.keys(req.body || {}),
+        bodyContent: req.body
+      }
     });
   }
   
   if (!trimmedPrice || isNaN(parseFloat(trimmedPrice)) || parseFloat(trimmedPrice) <= 0) {
+    console.log('VALIDATION FAILED: Price is missing or invalid');
     return res.status(400).json({ 
       error: "Missing or invalid required field: price",
-      details: "Price must be a valid number greater than 0"
+      details: "Price must be a valid number greater than 0",
+      debug: {
+        receivedPrice: price,
+        priceType: typeof price,
+        bodyKeys: Object.keys(req.body || {}),
+        bodyContent: req.body
+      }
     });
   }
   
@@ -380,6 +408,8 @@ router.put("/dishes/:id", requireOwnerAuth, ...uploadDishImage, async (req, res)
   const finalName = trimmedName;
   const finalDescription = typeof description === 'string' ? description.trim() : '';
   const finalPrice = parseFloat(trimmedPrice);
+  
+  console.log('VALIDATION PASSED:', { finalName, finalDescription, finalPrice });
 
   try {
     // Verify ownership
@@ -1389,6 +1419,31 @@ router.get("/restaurant/details", requireOwnerAuth, async (req, res) => {
     console.error('Restaurant details fetch error:', err);
     res.status(500).json({ error: "Failed to fetch restaurant details" });
   }
+});
+
+// Test endpoint for debugging multipart form data
+router.post("/test-multipart", ...uploadDishImage, async (req, res) => {
+  console.log('=== MULTIPART TEST DEBUG ===');
+  console.log('req.body:', JSON.stringify(req.body, null, 2));
+  console.log('req.file:', req.file ? { 
+    fieldname: req.file.fieldname, 
+    originalname: req.file.originalname, 
+    size: req.file.size 
+  } : null);
+  console.log('Content-Type:', req.headers['content-type']);
+  console.log('Body keys:', req.body ? Object.keys(req.body) : 'no body');
+  console.log('=== END TEST DEBUG ===');
+  
+  res.json({
+    success: true,
+    body: req.body,
+    file: req.file ? {
+      fieldname: req.file.fieldname,
+      originalname: req.file.originalname,
+      size: req.file.size
+    } : null,
+    contentType: req.headers['content-type']
+  });
 });
 
 export default router;
