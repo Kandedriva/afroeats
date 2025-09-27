@@ -370,26 +370,32 @@ router.put("/dishes/:id", requireOwnerAuth, ...uploadDishImage, async (req, res)
   const { name, description = "", price } = req.body;
   
   // More flexible validation - handle empty strings, undefined, and various data types
-  const trimmedName = (name && typeof name === 'string') ? name.trim() : (name ? String(name).trim() : '');
-  const trimmedPrice = (price !== undefined && price !== null) ? String(price).trim() : '';
-  const trimmedDescription = (description && typeof description === 'string') ? description.trim() : (description ? String(description) : '');
+  const trimmedName = name ? String(name).trim() : '';
+  const trimmedPrice = (price !== undefined && price !== null && price !== '') ? String(price).trim() : '';
+  const trimmedDescription = description ? String(description).trim() : '';
   
   // Enhanced debugging for validation failures (only in development)
   if (process.env.NODE_ENV === 'development') {
     console.log('VALIDATION DEBUG:');
-    console.log('name from body:', JSON.stringify(name));
-    console.log('trimmedName:', JSON.stringify(trimmedName));
-    console.log('price from body:', JSON.stringify(price));
+    console.log('Raw req.body:', req.body);
+    console.log('name from body:', JSON.stringify(name), 'Type:', typeof name);
+    console.log('trimmedName:', JSON.stringify(trimmedName), 'Length:', trimmedName.length);
+    console.log('price from body:', JSON.stringify(price), 'Type:', typeof price);
     console.log('trimmedPrice:', JSON.stringify(trimmedPrice));
+    console.log('description from body:', JSON.stringify(description), 'Type:', typeof description);
   }
   
   // Validate required fields with improved error messages
   if (!trimmedName || trimmedName.length === 0) {
     console.log('VALIDATION FAILED: Name is missing or empty');
+    console.log('Full request body keys:', Object.keys(req.body || {}));
+    console.log('Full request body values:', Object.values(req.body || {}));
     return res.status(400).json({ 
       error: "Dish name is required",
       details: "Dish name cannot be empty",
-      received: { name, price, description }
+      received: { name, price, description },
+      bodyKeys: Object.keys(req.body || {}),
+      bodyValues: req.body
     });
   }
   
