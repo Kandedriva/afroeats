@@ -75,50 +75,49 @@ app.use(cors(corsOptions));
 app.use((req, res, next) => {
   const contentType = req.headers['content-type'] || '';
   
-  // Skip body parsing for multipart/form-data (handled by multer)
+  // Skip ALL body parsing for multipart/form-data (handled by multer)
   if (contentType.toLowerCase().includes('multipart/form-data')) {
+    console.log('Skipping body parsing for multipart request:', req.url);
+    req.body = {}; // Ensure req.body exists
     return next();
   }
   
-  // Use express.json with custom error handling
-  express.json({ 
-    limit: '10mb',
-    strict: false,
-    type: 'application/json'
-  })(req, res, (err) => {
-    if (err) {
-      if (err instanceof SyntaxError && err.message.includes('JSON')) {
-        console.warn('JSON parsing error:', err.message, 'URL:', req.url);
-        // Set empty body instead of crashing
-        req.body = {};
-        return next();
+  // Only parse JSON for explicit JSON content type
+  if (contentType.toLowerCase().includes('application/json')) {
+    express.json({ 
+      limit: '10mb',
+      strict: false,
+      type: 'application/json'
+    })(req, res, (err) => {
+      if (err) {
+        if (err instanceof SyntaxError && err.message.includes('JSON')) {
+          console.warn('JSON parsing error:', err.message, 'URL:', req.url);
+          req.body = {};
+          return next();
+        }
+        return next(err);
       }
-    }
-    next(err);
-  });
-});
-
-// URL-encoded body parsing with error handling
-app.use((req, res, next) => {
-  const contentType = req.headers['content-type'] || '';
-  
-  // Skip for multipart/form-data and JSON
-  if (contentType.toLowerCase().includes('multipart/form-data') || 
-      contentType.toLowerCase().includes('application/json')) {
-    return next();
+      next();
+    });
+  } else if (contentType.toLowerCase().includes('application/x-www-form-urlencoded')) {
+    // Only parse URL-encoded for explicit form content type
+    express.urlencoded({ 
+      extended: true, 
+      limit: '10mb',
+      type: 'application/x-www-form-urlencoded'
+    })(req, res, (err) => {
+      if (err) {
+        console.warn('URL-encoded parsing error:', err.message, 'URL:', req.url);
+        req.body = req.body || {};
+        return next(err);
+      }
+      next();
+    });
+  } else {
+    // For other content types, just ensure req.body exists
+    req.body = req.body || {};
+    next();
   }
-  
-  express.urlencoded({ 
-    extended: true, 
-    limit: '10mb',
-    type: 'application/x-www-form-urlencoded'
-  })(req, res, (err) => {
-    if (err) {
-      console.warn('URL-encoded parsing error:', err.message, 'URL:', req.url);
-      req.body = req.body || {};
-    }
-    next(err);
-  });
 });
 
 // Input sanitization and XSS protection
