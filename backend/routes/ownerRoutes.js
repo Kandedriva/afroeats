@@ -356,11 +356,8 @@ router.put("/dishes/:id", requireOwnerAuth, ...uploadDishImage, async (req, res)
   console.log('Body keys:', req.body ? Object.keys(req.body) : 'no body');
   console.log('=== END DEBUG ===');
   
-  // Multer middleware handles content-type validation automatically
-  // Log content type for debugging if needed
-  if (process.env.NODE_ENV === 'development') {
-    console.log('Content-Type received:', req.headers['content-type']);
-  }
+  // TEMPORARY: Log content type for debugging in production
+  console.log('Content-Type received:', req.headers['content-type']);
 
   // Ensure req.body exists and has expected structure
   if (!req.body || typeof req.body !== 'object') {
@@ -374,16 +371,16 @@ router.put("/dishes/:id", requireOwnerAuth, ...uploadDishImage, async (req, res)
   const trimmedPrice = (price !== undefined && price !== null && price !== '') ? String(price).trim() : '';
   const trimmedDescription = description ? String(description).trim() : '';
   
-  // Enhanced debugging for validation failures (only in development)
-  if (process.env.NODE_ENV === 'development') {
-    console.log('VALIDATION DEBUG:');
-    console.log('Raw req.body:', req.body);
-    console.log('name from body:', JSON.stringify(name), 'Type:', typeof name);
-    console.log('trimmedName:', JSON.stringify(trimmedName), 'Length:', trimmedName.length);
-    console.log('price from body:', JSON.stringify(price), 'Type:', typeof price);
-    console.log('trimmedPrice:', JSON.stringify(trimmedPrice));
-    console.log('description from body:', JSON.stringify(description), 'Type:', typeof description);
-  }
+  // TEMPORARY: Enhanced debugging for validation failures (production + development)
+  console.log('=== DISH UPDATE VALIDATION DEBUG ===');
+  console.log('Raw req.body:', JSON.stringify(req.body));
+  console.log('name from body:', JSON.stringify(name), 'Type:', typeof name);
+  console.log('trimmedName:', JSON.stringify(trimmedName), 'Length:', trimmedName.length);
+  console.log('price from body:', JSON.stringify(price), 'Type:', typeof price);
+  console.log('trimmedPrice:', JSON.stringify(trimmedPrice));
+  console.log('description from body:', JSON.stringify(description), 'Type:', typeof description);
+  console.log('req.file:', req.file ? 'Present' : 'Not present');
+  console.log('=== END VALIDATION DEBUG ===');
   
   // Validate required fields with improved error messages
   if (!trimmedName || trimmedName.length === 0) {
