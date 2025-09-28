@@ -78,7 +78,7 @@ const AdminLogin = () => {
                 value={formData.email}
                 onChange={handleChange}
                 className="appearance-none relative block w-full px-4 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white bg-opacity-90"
-                placeholder="admin@orderdabaly.com"
+                placeholder="drivanokande4985@gmail.com"
               />
             </div>
 
