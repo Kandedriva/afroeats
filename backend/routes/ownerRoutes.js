@@ -207,7 +207,21 @@ router.post("/logout", (req, res) => {
 
 // ========= ADD DISH ==========
 router.post("/dishes", requireOwnerAuth, ...uploadDishImage, async (req, res) => {
+  console.log('=== DISH CREATION DEBUG ===');
+  console.log('req.body:', req.body);
+  console.log('req.file:', req.file ? 'File present' : 'No file');
+  console.log('Content-Type:', req.headers['content-type']);
+  console.log('=== END DEBUG ===');
+  
   const { name, description = "", price, available } = req.body;
+  
+  // Validate required fields
+  if (!name || !price) {
+    return res.status(400).json({ 
+      error: "Name and price are required",
+      debug: { name, price, body: req.body }
+    });
+  }
   
   // Handle R2 upload result
   const uploadResult = handleR2UploadResult(req);
@@ -238,8 +252,12 @@ router.post("/dishes", requireOwnerAuth, ...uploadDishImage, async (req, res) =>
 
     res.status(201).json({ dish: newDish.rows[0] });
   } catch (err) {
-    // Add dish error
-    res.status(500).json({ error: "Server error while adding dish" });
+    console.error('Database error adding dish:', err.message);
+    console.error('Values:', { name, description, price, imagePath, available });
+    res.status(500).json({ 
+      error: "Server error while adding dish",
+      debug: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 });
 
