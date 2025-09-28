@@ -18,7 +18,7 @@ const requireAdminAuth = async (req, res, next) => {
     
     // Verify admin still exists and is active
     const adminResult = await pool.query(
-      'SELECT id, username, role, is_active FROM platform_admins WHERE id = $1 AND is_active = true',
+      'SELECT id, username, email, role, is_active FROM platform_admins WHERE id = $1 AND is_active = true',
       [req.session.adminId]
     );
     
