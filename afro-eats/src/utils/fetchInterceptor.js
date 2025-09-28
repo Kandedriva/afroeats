@@ -25,8 +25,10 @@ window.fetch = function(...args) {
       credentials: 'include',
       headers: {
         ...config.headers,
-        // Ensure proper content type if not set
-        ...(config.method !== 'GET' && !config.headers?.['Content-Type'] && 
+        // Only set Content-Type to JSON if no body or body is not FormData
+        ...(config.method !== 'GET' && 
+           !config.headers?.['Content-Type'] && 
+           !(config.body instanceof FormData) &&
            { 'Content-Type': 'application/json' })
       }
     };
