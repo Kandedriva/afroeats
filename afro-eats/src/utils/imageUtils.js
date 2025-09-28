@@ -13,12 +13,13 @@ export const createPlaceholderImage = (text = "No Image", width = 300, height = 
 
 // Get image URL with proper fallback
 export const getImageUrl = (imageUrl, fallbackText = "No Image") => {
-  if (!imageUrl) {
+  // Handle null, undefined, empty string, or whitespace-only strings
+  if (!imageUrl || typeof imageUrl !== 'string' || imageUrl.trim() === '') {
     return createPlaceholderImage(fallbackText);
   }
   
   // Clean the imageUrl to remove any potential formatting issues
-  const cleanImageUrl = imageUrl.trim();
+  const cleanImageUrl = imageUrl.trim().replace(/\\/g, "/");
   
   // If it's already a complete HTTPS URL, return as-is
   if (cleanImageUrl.startsWith('https://')) {

@@ -1228,14 +1228,15 @@ function OwnerDashboard() {
             >
               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-4 sm:space-y-0">
                 <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                  {dish.image_url && (
+                  <div className="flex-shrink-0">
                     <img
                       src={getImageUrl(dish.image_url, dish.name)}
                       alt={dish.name}
-                      className="w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-lg mx-auto sm:mx-0"
+                      className="w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-lg mx-auto sm:mx-0 bg-gray-100"
                       onError={(e) => handleImageError(e, dish.name)}
+                      loading="lazy"
                     />
-                  )}
+                  </div>
                   <div className="text-center sm:text-left">
                     <h4 className="font-semibold text-lg sm:text-xl mb-1">{dish.name}</h4>
                     <p className="text-gray-600 text-lg font-medium mb-1">${dish.price}</p>
@@ -1575,19 +1576,18 @@ function OwnerDashboard() {
             
             <form onSubmit={handleUpdateDish} className="space-y-4">
               {/* Current Image Display */}
-              {editingDish.image_url && (
-                <div className="mb-4">
-                  <p className="text-sm font-medium text-gray-700 mb-2">Current Image:</p>
-                  <div className="flex justify-center">
-                    <img
-                      src={getImageUrl(editingDish.image_url, editingDish.name)}
-                      alt={editingDish.name}
-                      className="w-20 h-20 object-cover rounded-lg border-2 border-gray-200"
-                      onError={(e) => handleImageError(e, editingDish.name)}
-                    />
-                  </div>
+              <div className="mb-4">
+                <p className="text-sm font-medium text-gray-700 mb-2">Current Image:</p>
+                <div className="flex justify-center">
+                  <img
+                    src={getImageUrl(editingDish.image_url, editingDish.name)}
+                    alt={editingDish.name}
+                    className="w-20 h-20 object-cover rounded-lg border-2 border-gray-200 bg-gray-100"
+                    onError={(e) => handleImageError(e, editingDish.name)}
+                    loading="lazy"
+                  />
                 </div>
-              )}
+              </div>
               
               {/* Dish Name */}
               <div>
@@ -1716,16 +1716,15 @@ function OwnerDashboard() {
               Delete Dish
             </h3>
             <div className="mb-4">
-              {showDeleteConfirm.image_url && (
-                <div className="flex justify-center mb-3">
-                  <img
-                    src={getImageUrl(showDeleteConfirm.image_url, showDeleteConfirm.name)}
-                    alt={showDeleteConfirm.name}
-                    className="w-16 h-16 object-cover rounded-lg border-2 border-gray-200"
-                    onError={(e) => handleImageError(e, showDeleteConfirm.name)}
-                  />
-                </div>
-              )}
+              <div className="flex justify-center mb-3">
+                <img
+                  src={getImageUrl(showDeleteConfirm.image_url, showDeleteConfirm.name)}
+                  alt={showDeleteConfirm.name}
+                  className="w-16 h-16 object-cover rounded-lg border-2 border-gray-200 bg-gray-100"
+                  onError={(e) => handleImageError(e, showDeleteConfirm.name)}
+                  loading="lazy"
+                />
+              </div>
               <p className="text-gray-600 mb-4 text-sm sm:text-base">
                 Are you sure you want to delete <strong>&ldquo;{showDeleteConfirm.name}&rdquo;</strong>?
               </p>
