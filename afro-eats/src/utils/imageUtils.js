@@ -11,7 +11,7 @@ export const createPlaceholderImage = (text = "No Image", width = 300, height = 
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 };
 
-// Get image URL with proper fallback
+// Get image URL with Safari compatibility enhancements
 export const getImageUrl = (imageUrl, fallbackText = "No Image") => {
   // Handle null, undefined, empty string, or whitespace-only strings
   if (!imageUrl || typeof imageUrl !== 'string' || imageUrl.trim() === '') {
@@ -21,8 +21,13 @@ export const getImageUrl = (imageUrl, fallbackText = "No Image") => {
   // Clean the imageUrl to remove any potential formatting issues
   const cleanImageUrl = imageUrl.trim().replace(/\\/g, "/");
   
-  // If it's already a complete HTTPS URL, return as-is
+  // If it's already a complete HTTPS URL, add Safari-specific cache-busting in production
   if (cleanImageUrl.startsWith('https://')) {
+    // For Safari compatibility, add cache-busting parameter in production
+    if (!API_BASE_URL.includes('localhost') && isSafariOrWebKit()) {
+      const separator = cleanImageUrl.includes('?') ? '&' : '?';
+      return `${cleanImageUrl}${separator}safari=1`;
+    }
     return cleanImageUrl;
   }
   
@@ -75,7 +80,7 @@ export const getImageUrl = (imageUrl, fallbackText = "No Image") => {
   return url;
 };
 
-// Handle image error events with comprehensive fallback
+// Safari-compatible image error handler with enhanced retry logic
 export const handleImageError = (event, fallbackText = "No Image") => {
   const currentSrc = event.target.src;
   
@@ -84,55 +89,106 @@ export const handleImageError = (event, fallbackText = "No Image") => {
     return;
   }
 
-  // Check if this is a temporary failure and retry once
-  if (!event.target.dataset.retried) {
-    event.target.dataset.retried = 'true';
+  // Enhanced retry logic for Safari/mobile browsers
+  const maxRetries = 2;
+  const currentRetries = parseInt(event.target.dataset.retryCount || '0');
+  
+  if (currentRetries < maxRetries) {
+    const newRetryCount = currentRetries + 1;
+    event.target.dataset.retryCount = newRetryCount;
     
-    // Add cache-busting parameter to force fresh request
-    const separator = currentSrc.includes('?') ? '&' : '?';
-    const cacheBustSrc = `${currentSrc}${separator}t=${Date.now()}`;
+    // Progressive retry strategy with different cache-busting approaches
+    let retrySrc;
+    if (newRetryCount === 1) {
+      // First retry: Add timestamp cache-bust
+      const separator = currentSrc.includes('?') ? '&' : '?';
+      retrySrc = `${currentSrc}${separator}t=${Date.now()}`;
+    } else {
+      // Second retry: Add random parameter for Safari
+      const separator = currentSrc.includes('?') ? '&' : '?';
+      retrySrc = `${currentSrc}${separator}r=${Math.random().toString(36).substring(7)}&safari=1`;
+    }
     
     // Log retry attempt only in development
     if (process.env.NODE_ENV === 'development') {
       // eslint-disable-next-line no-console
-      console.log(`🔄 Retrying failed image load for "${fallbackText}": ${cacheBustSrc}`);
+      console.log(`🔄 Safari-compatible retry ${newRetryCount}/${maxRetries} for "${fallbackText}": ${retrySrc}`);
     }
     
-    // Retry loading the image with cache-busting
+    // Retry loading the image with progressive delay
     setTimeout(() => {
-      event.target.src = cacheBustSrc;
-    }, 1000); // Wait 1 second before retry
+      event.target.src = retrySrc;
+    }, newRetryCount * 1500); // Increase delay for each retry (1.5s, 3s)
     
     return;
   }
   
-  // In development: If we're trying R2 images and it fails, try local images as fallback
-  if (API_BASE_URL.includes('localhost')) {
-    if (currentSrc.includes('/api/r2-images/') && !event.target.dataset.triedLocal) {
-      const imagePath = currentSrc.split('/api/r2-images/')[1];
-      const localImageUrl = `${API_BASE_URL}/api/local-images/${imagePath}`;
-      event.target.dataset.triedLocal = 'true';
-      event.target.src = localImageUrl;
-      return;
-    }
+  // After max retries, try fallback strategies
+  if (!event.target.dataset.triedFallbacks) {
+    event.target.dataset.triedFallbacks = 'true';
     
-    // If local-images API fails, try direct uploads path (DEVELOPMENT ONLY)
-    if (currentSrc.includes('/api/local-images/') && !event.target.dataset.triedUploads) {
-      const imagePath = currentSrc.split('/api/local-images/')[1];
-      const uploadsUrl = `${API_BASE_URL}/uploads/${imagePath}`;
-      event.target.dataset.triedUploads = 'true';
-      event.target.src = uploadsUrl;
-      return;
+    // In development: Try local images as fallback
+    if (API_BASE_URL.includes('localhost') && currentSrc.includes('/api/r2-images/')) {
+      const imagePath = currentSrc.split('/api/r2-images/')[1]?.split('?')[0]; // Remove query params
+      if (imagePath) {
+        const localImageUrl = `${API_BASE_URL}/api/local-images/${imagePath}`;
+        event.target.src = localImageUrl;
+        return;
+      }
     }
   }
   
-  // PRODUCTION: Never try /uploads/ fallback - R2 is the only source
-  // If R2 image fails in production, show placeholder immediately
-  if (!API_BASE_URL.includes('localhost')) {
-    event.target.src = createPlaceholderImage(fallbackText);
-    return;
+  // Final fallback: show placeholder
+  if (process.env.NODE_ENV === 'development') {
+    // eslint-disable-next-line no-console
+    console.log(`❌ All image loading attempts failed for "${fallbackText}", showing placeholder`);
   }
-  
-  // If all fallbacks fail, show placeholder
   event.target.src = createPlaceholderImage(fallbackText);
+};
+
+// Safari-specific image loading helper
+export const loadImageSafari = (imgElement, src, fallbackText = "No Image") => {
+  return new Promise((resolve, reject) => {
+    // Reset retry counters
+    imgElement.dataset.retryCount = '0';
+    imgElement.dataset.triedFallbacks = 'false';
+    
+    // Set up error handler
+    const errorHandler = (event) => {
+      handleImageError(event, fallbackText);
+      resolve(false); // Image failed to load
+    };
+    
+    // Set up success handler
+    const loadHandler = () => {
+      imgElement.removeEventListener('error', errorHandler);
+      imgElement.removeEventListener('load', loadHandler);
+      resolve(true); // Image loaded successfully
+    };
+    
+    // Add event listeners
+    imgElement.addEventListener('error', errorHandler, { once: false });
+    imgElement.addEventListener('load', loadHandler, { once: true });
+    
+    // Start loading
+    imgElement.src = src;
+    
+    // Timeout after 30 seconds
+    setTimeout(() => {
+      imgElement.removeEventListener('error', errorHandler);
+      imgElement.removeEventListener('load', loadHandler);
+      reject(new Error('Image load timeout'));
+    }, 30000);
+  });
+};
+
+// Check if current browser is Safari/WebKit
+export const isSafariOrWebKit = () => {
+  if (typeof navigator === 'undefined') return false;
+  const userAgent = navigator.userAgent;
+  return (
+    /Safari/.test(userAgent) && !/Chrome/.test(userAgent) ||
+    /WebKit/.test(userAgent) && !/Chrome/.test(userAgent) ||
+    /iPad|iPhone|iPod/.test(userAgent)
+  );
 };

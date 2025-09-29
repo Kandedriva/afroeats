@@ -5,6 +5,25 @@ import { logger } from '../services/logger.js';
 
 const router = express.Router();
 
+// Add CORS middleware specifically for Safari/mobile browsers
+router.use((req, res, next) => {
+  res.set({
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+    'Access-Control-Allow-Headers': 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, Pragma',
+    'Access-Control-Allow-Credentials': 'false',
+    'Cross-Origin-Resource-Policy': 'cross-origin'
+  });
+  
+  // Handle preflight OPTIONS requests
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+  
+  next();
+});
+
 /**
  * Generate a placeholder SVG image
  */
@@ -56,6 +75,7 @@ const serveImagePlaceholder = (res, key) => {
 /**
  * Proxy endpoint to serve images from R2 storage
  * This allows us to serve R2 images even when the bucket is not publicly accessible
+ * SAFARI COMPATIBLE VERSION - Uses buffer instead of streaming for cross-browser compatibility
  */
 router.get('/r2-images/*', async (req, res) => {
   // Extract the key from the URL path (move outside try block)
@@ -85,6 +105,10 @@ router.get('/r2-images/*', async (req, res) => {
 
     while (retryCount < maxRetries) {
       try {
+        // Reinitialize client on each retry to handle token refresh
+        if (retryCount > 0) {
+          await r2Storage.reinitializeClient();
+        }
         response = await r2Storage.client.send(command);
         break; // Success, exit retry loop
       } catch (retryError) {
@@ -96,8 +120,10 @@ router.get('/r2-images/*', async (req, res) => {
             retryError.name === 'InvalidAccessKeyId' ||
             retryError.name === 'SignatureDoesNotMatch' ||
             retryError.message?.includes('InvalidAccessKeyId') ||
-            retryError.message?.includes('SignatureDoesNotMatch')) {
-          logger.warn(`R2 authentication error detected, reinitializing client`);
+            retryError.message?.includes('SignatureDoesNotMatch') ||
+            retryError.message?.includes('ExpiredToken') ||
+            retryError.message?.includes('TokenRefreshRequired')) {
+          logger.warn(`R2 authentication/token error detected, reinitializing client`);
           try {
             await r2Storage.reinitializeClient();
           } catch (reinitError) {
@@ -114,37 +140,55 @@ router.get('/r2-images/*', async (req, res) => {
       }
     }
     
-    // Set appropriate headers with more conservative caching
-    const contentType = response.ContentType || 'image/jpeg';
-    const contentLength = response.ContentLength;
+    // CRITICAL FIX: Convert stream to buffer for Safari compatibility
+    // Safari/WebKit has issues with Node.js streams, so we convert to buffer
+    const chunks = [];
+    for await (const chunk of response.Body) {
+      chunks.push(chunk);
+    }
+    const buffer = Buffer.concat(chunks);
+    
+    // Detect content type more reliably
+    let contentType = response.ContentType;
+    if (!contentType) {
+      // Fallback content type detection based on file extension
+      const ext = key.toLowerCase().split('.').pop();
+      const mimeTypes = {
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'png': 'image/png',
+        'gif': 'image/gif',
+        'webp': 'image/webp',
+        'avif': 'image/avif',
+        'svg': 'image/svg+xml'
+      };
+      contentType = mimeTypes[ext] || 'image/jpeg';
+    }
+    
+    const contentLength = buffer.length;
     const lastModified = response.LastModified;
     const etag = response.ETag;
 
-    // More conservative caching to avoid stale data issues
+    // Safari-specific headers with proper CORS
     res.set({
       'Content-Type': contentType,
       'Content-Length': contentLength,
       'Last-Modified': lastModified,
       'ETag': etag,
-      'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800', // 1 day cache, 7 days stale
+      'Cache-Control': 'public, max-age=3600, must-revalidate', // Shorter cache for better reliability
+      // Enhanced CORS headers for Safari/WebKit compatibility
       'Access-Control-Allow-Origin': '*',
-      'Vary': 'Accept-Encoding'
+      'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+      'Access-Control-Allow-Headers': 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, Pragma',
+      'Access-Control-Allow-Credentials': 'false',
+      'Cross-Origin-Resource-Policy': 'cross-origin',
+      'X-Content-Type-Options': 'nosniff',
+      'Vary': 'Accept-Encoding, Origin'
     });
 
-    // Handle streaming with proper error handling
-    response.Body.on('error', (streamError) => {
-      logger.error('Stream error while serving R2 image:', streamError);
-      if (!res.headersSent) {
-        res.status(500).json({ error: 'Failed to stream image' });
-      }
-    });
-
-    response.Body.on('end', () => {
-      logger.info(`Successfully served R2 image: ${key}`);
-    });
-
-    // Stream the image data
-    response.Body.pipe(res);
+    // Send buffer directly instead of streaming (Safari compatible)
+    logger.info(`Successfully served R2 image: ${key} (${contentLength} bytes)`);
+    res.send(buffer);
 
   } catch (error) {
     logger.error('Error serving R2 image:', error);
