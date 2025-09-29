@@ -11,7 +11,9 @@ class R2StorageService {
     this.publicUrl = process.env.R2_PUBLIC_URL;
     this.lastInitialization = null;
     this.initializationErrors = 0;
+    this.tokenRefreshTimer = null;
     this.initializeClient();
+    this.setupTokenRefresh();
   }
 
   initializeClient() {
@@ -32,8 +34,21 @@ class R2StorageService {
           secretAccessKey: process.env.R2_SECRET_KEY,
         },
         forcePathStyle: true, // Required for R2
-        maxAttempts: 3, // Built-in retry mechanism
-        retryMode: 'adaptive'
+        maxAttempts: 5, // Increased retry attempts for better reliability
+        retryMode: 'adaptive',
+        // Additional configuration for Safari/mobile compatibility
+        requestHandler: {
+          requestTimeout: 30000, // 30 second timeout
+          httpsAgent: undefined, // Let SDK manage connections
+        },
+        // Force fresh connections to prevent timeout issues
+        tls: true,
+        logger: {
+          debug: (msg) => logger.debug(`R2 SDK: ${msg}`),
+          info: (msg) => logger.info(`R2 SDK: ${msg}`),
+          warn: (msg) => logger.warn(`R2 SDK: ${msg}`),
+          error: (msg) => logger.error(`R2 SDK: ${msg}`)
+        }
       });
 
       this.lastInitialization = new Date();
@@ -47,12 +62,41 @@ class R2StorageService {
   }
 
   /**
+   * Setup automatic token refresh to prevent 30-minute timeout issues
+   */
+  setupTokenRefresh() {
+    // Clear existing timer
+    if (this.tokenRefreshTimer) {
+      clearInterval(this.tokenRefreshTimer);
+    }
+    
+    // Refresh client every 25 minutes (before 30min AWS token expiration)
+    this.tokenRefreshTimer = setInterval(() => {
+      logger.info('Proactive R2 client refresh (preventing token expiration)');
+      this.reinitializeClient();
+    }, 25 * 60 * 1000); // 25 minutes
+  }
+  
+  /**
    * Reinitialize client if needed (e.g., after authentication errors)
    */
   async reinitializeClient() {
     logger.info('Reinitializing R2 client due to potential token expiration');
+    
+    // Clear old client
+    if (this.client) {
+      try {
+        this.client.destroy();
+      } catch (e) {
+        // Ignore errors during cleanup
+      }
+    }
+    
     this.client = null;
     this.initializeClient();
+    
+    // Reset the refresh timer
+    this.setupTokenRefresh();
   }
 
   /**
@@ -251,7 +295,7 @@ class R2StorageService {
   }
 
   /**
-   * Get MIME type from file extension
+   * Get MIME type from file extension with enhanced Safari compatibility
    */
   getMimeType(extension) {
     const mimeTypes = {
@@ -260,9 +304,32 @@ class R2StorageService {
       '.png': 'image/png',
       '.gif': 'image/gif',
       '.webp': 'image/webp',
-      '.avif': 'image/avif'
+      '.avif': 'image/avif',
+      '.svg': 'image/svg+xml',
+      '.bmp': 'image/bmp',
+      '.tiff': 'image/tiff',
+      '.ico': 'image/x-icon'
     };
     return mimeTypes[extension.toLowerCase()] || 'image/jpeg';
+  }
+  
+  /**
+   * Cleanup method to clear timers
+   */
+  destroy() {
+    if (this.tokenRefreshTimer) {
+      clearInterval(this.tokenRefreshTimer);
+      this.tokenRefreshTimer = null;
+    }
+    
+    if (this.client) {
+      try {
+        this.client.destroy();
+      } catch (e) {
+        // Ignore cleanup errors
+      }
+      this.client = null;
+    }
   }
 }
 

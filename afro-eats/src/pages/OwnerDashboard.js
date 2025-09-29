@@ -5,7 +5,7 @@ import { Navigate, useNavigate, Link } from "react-router-dom";
 import ToggleSwitch from "../Components/ToggleSwitch";
 import { toast } from 'react-toastify';
 import { API_BASE_URL } from "../config/api";
-import { getImageUrl, handleImageError } from "../utils/imageUtils";
+import { getImageUrl, handleImageError, isSafariOrWebKit, loadImageSafari } from "../utils/imageUtils";
 import { setupImageRefreshInterval, enhanceExistingImages } from "../utils/imageRefresh";
 
 function OwnerDashboard() {
@@ -177,12 +177,27 @@ function OwnerDashboard() {
     fetchOrders();
     fetchNotifications();
 
-    // Setup image refresh to handle temporary availability issues
-    const imageRefreshInterval = setupImageRefreshInterval(15); // Refresh every 15 minutes
+    // Setup Safari-optimized image refresh to handle temporary availability issues
+    const imageRefreshInterval = setupImageRefreshInterval(); // Auto-detects Safari and uses optimal interval
     
-    // Enhance existing images after initial load
+    // Enhance existing images after initial load with Safari compatibility
     setTimeout(() => {
       enhanceExistingImages();
+      
+      // Safari-specific: add extra refresh on page visibility change
+      if (isSafariOrWebKit()) {
+        const handleVisibilityChange = () => {
+          if (!document.hidden) {
+            setTimeout(() => {
+              enhanceExistingImages();
+            }, 500);
+          }
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        
+        // Cleanup on unmount
+        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+      }
     }, 2000); // Wait 2 seconds for images to load
     
     // Cleanup interval on unmount
@@ -1028,9 +1043,14 @@ function OwnerDashboard() {
                     aria-label="Change restaurant logo"
                   >
                     <img
-                      src={`${getImageUrl(restaurant.image_url, "Logo")}?t=${logoTimestamp}`}
+                      src={`${getImageUrl(restaurant.image_url, "Logo")}?t=${logoTimestamp}${isSafariOrWebKit() ? '&safari=1' : ''}`}
                       alt="Restaurant Logo"
                       className="w-full h-full object-cover"
+                      loading="lazy"
+                      decoding={isSafariOrWebKit() ? "async" : "auto"}
+                      data-image-type="restaurant-logo"
+                      data-original-src={restaurant.image_url}
+                      style={isSafariOrWebKit() ? { imageRendering: 'auto', transform: 'translateZ(0)' } : {}}
                       onError={(e) => {
                         handleImageError(e, "Logo");
                         e.target.parentNode.nextSibling.style.display = 'block';
@@ -1251,6 +1271,10 @@ function OwnerDashboard() {
                       className="w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-lg mx-auto sm:mx-0 bg-gray-100"
                       onError={(e) => handleImageError(e, dish.name)}
                       loading="lazy"
+                      decoding={isSafariOrWebKit() ? "async" : "auto"}
+                      data-image-type="dish"
+                      data-original-src={dish.image_url}
+                      style={isSafariOrWebKit() ? { imageRendering: 'auto', transform: 'translateZ(0)' } : {}}
                       data-original-src={dish.image_url}
                     />
                   </div>

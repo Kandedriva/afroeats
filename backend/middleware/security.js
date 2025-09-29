@@ -38,7 +38,15 @@ export const rateLimits = {
   upload: createRateLimit(15 * 60 * 1000, 10, 'Too many upload attempts')
 };
 
-// CORS configuration with comprehensive origin handling
+// Safari user-agent detection helper
+const isSafariRequest = (userAgent) => {
+  if (!userAgent) return false;
+  return (/Safari/.test(userAgent) && !/Chrome/.test(userAgent)) ||
+         (/WebKit/.test(userAgent) && !/Chrome/.test(userAgent)) ||
+         /iPad|iPhone|iPod/.test(userAgent);
+};
+
+// CORS configuration with Safari/mobile browser compatibility
 export const corsOptions = {
   origin: function (origin, callback) {
     // Get all possible frontend URLs from environment variables
@@ -117,6 +125,7 @@ export const corsOptions = {
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'],
+  // Enhanced headers for Safari/WebKit compatibility
   allowedHeaders: [
     'Content-Type', 
     'Authorization', 
@@ -125,12 +134,29 @@ export const corsOptions = {
     'Origin',
     'Pragma',
     'Cache-Control',
-    'X-File-Name'
+    'X-File-Name',
+    'User-Agent',
+    'DNT',
+    'Sec-Fetch-Mode', 
+    'Sec-Fetch-Site', 
+    'Sec-Fetch-Dest',
+    'X-Safari-No-Cache',
+    'X-Webkit-CSP'
   ],
-  exposedHeaders: ['Set-Cookie'],
-  maxAge: 86400, // 24 hours
+  // Expose additional headers for Safari image handling
+  exposedHeaders: [
+    'Set-Cookie', 
+    'Content-Type', 
+    'Content-Length', 
+    'ETag', 
+    'Last-Modified',
+    'Cache-Control', 
+    'Cross-Origin-Resource-Policy',
+    'Access-Control-Allow-Origin'
+  ],
+  maxAge: 600, // Shorter cache for Safari compatibility (10 minutes)
   preflightContinue: false,
-  optionsSuccessStatus: 200 // For legacy mobile browser support
+  optionsSuccessStatus: 204 // Safari prefers 204 for OPTIONS requests
 };
 
 // Helmet configuration for security headers
