@@ -5,6 +5,22 @@
 
 import { getImageUrl } from './imageUtils.js';
 
+// Simple logger that respects NODE_ENV
+const logger = {
+  log: (...args) => {
+    if (process.env.NODE_ENV === 'development') {
+      // eslint-disable-next-line no-console
+      console.log(...args);
+    }
+  },
+  info: (...args) => {
+    if (process.env.NODE_ENV === 'development') {
+      // eslint-disable-next-line no-console
+      console.log(...args);
+    }
+  }
+};
+
 /**
  * Refresh all images on the page that match a selector
  */
@@ -26,7 +42,7 @@ export const refreshImagesOnPage = (selector = 'img[src*="/api/r2-images/"]') =>
     }
   });
   
-  console.log(`🔄 Refreshed ${refreshedCount} images`);
+  logger.log(`🔄 Refreshed ${refreshedCount} images`);
   return refreshedCount;
 };
 
@@ -37,7 +53,7 @@ export const setupImageRefreshInterval = (intervalMinutes = 30) => {
   const intervalMs = intervalMinutes * 60 * 1000;
   
   const refreshInterval = setInterval(() => {
-    console.log('🕐 Performing scheduled image refresh');
+    logger.log('🕐 Performing scheduled image refresh');
     refreshImagesOnPage();
   }, intervalMs);
   
@@ -46,7 +62,7 @@ export const setupImageRefreshInterval = (intervalMinutes = 30) => {
     clearInterval(refreshInterval);
   });
   
-  console.log(`⏰ Image refresh interval set for every ${intervalMinutes} minutes`);
+  logger.log(`⏰ Image refresh interval set for every ${intervalMinutes} minutes`);
   return refreshInterval;
 };
 
@@ -61,7 +77,7 @@ export const createRefreshableImage = (originalImageUrl, fallbackText, className
   img.dataset.originalSrc = originalImageUrl;
   
   // Add error handler that can retry
-  img.onerror = (event) => {
+  img.onerror = (_event) => {
     if (!img.dataset.retryCount) {
       img.dataset.retryCount = '0';
     }
@@ -76,17 +92,17 @@ export const createRefreshableImage = (originalImageUrl, fallbackText, className
         const newSrc = getImageUrl(originalImageUrl, fallbackText);
         const separator = newSrc.includes('?') ? '&' : '?';
         img.src = `${newSrc}${separator}retry=${retryCount + 1}&t=${Date.now()}`;
-        console.log(`🔄 Retrying image load (attempt ${retryCount + 1}/${maxRetries}): ${fallbackText}`);
+        logger.log(`🔄 Retrying image load (attempt ${retryCount + 1}/${maxRetries}): ${fallbackText}`);
       }, Math.pow(2, retryCount) * 1000); // Exponential backoff
     } else {
-      console.log(`❌ Image failed to load after ${maxRetries} retries: ${fallbackText}`);
+      logger.log(`❌ Image failed to load after ${maxRetries} retries: ${fallbackText}`);
       // Fall back to placeholder
       img.src = getImageUrl(null, fallbackText);
     }
   };
   
   img.onload = () => {
-    console.log(`✅ Image loaded successfully: ${fallbackText}`);
+    logger.log(`✅ Image loaded successfully: ${fallbackText}`);
     // Reset retry count on successful load
     delete img.dataset.retryCount;
   };
