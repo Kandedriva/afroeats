@@ -9,29 +9,50 @@ class R2StorageService {
     this.client = null;
     this.bucketName = process.env.R2_BUCKET;
     this.publicUrl = process.env.R2_PUBLIC_URL;
+    this.lastInitialization = null;
+    this.initializationErrors = 0;
     this.initializeClient();
   }
 
   initializeClient() {
-    // R2 initialization check
-    logger.info(`R2 initialization: bucket=${process.env.R2_BUCKET}, endpoint configured=${!!process.env.R2_ENDPOINT}`);
-    
-    if (!process.env.R2_ACCESS_KEY || !process.env.R2_SECRET_KEY || !process.env.R2_ENDPOINT) {
-      logger.warn('R2 credentials not configured, falling back to local storage');
-      return;
+    try {
+      // R2 initialization check
+      logger.info(`R2 initialization: bucket=${process.env.R2_BUCKET}, endpoint configured=${!!process.env.R2_ENDPOINT}`);
+      
+      if (!process.env.R2_ACCESS_KEY || !process.env.R2_SECRET_KEY || !process.env.R2_ENDPOINT) {
+        logger.warn('R2 credentials not configured, falling back to local storage');
+        return;
+      }
+
+      this.client = new S3Client({
+        region: 'auto', // Cloudflare R2 uses 'auto' region
+        endpoint: process.env.R2_ENDPOINT,
+        credentials: {
+          accessKeyId: process.env.R2_ACCESS_KEY,
+          secretAccessKey: process.env.R2_SECRET_KEY,
+        },
+        forcePathStyle: true, // Required for R2
+        maxAttempts: 3, // Built-in retry mechanism
+        retryMode: 'adaptive'
+      });
+
+      this.lastInitialization = new Date();
+      this.initializationErrors = 0;
+      logger.info('R2 Storage service initialized successfully');
+    } catch (error) {
+      this.initializationErrors++;
+      logger.error('Failed to initialize R2 client:', error);
+      throw error;
     }
+  }
 
-    this.client = new S3Client({
-      region: 'auto', // Cloudflare R2 uses 'auto' region
-      endpoint: process.env.R2_ENDPOINT,
-      credentials: {
-        accessKeyId: process.env.R2_ACCESS_KEY,
-        secretAccessKey: process.env.R2_SECRET_KEY,
-      },
-      forcePathStyle: true, // Required for R2
-    });
-
-    logger.info('R2 Storage service initialized successfully');
+  /**
+   * Reinitialize client if needed (e.g., after authentication errors)
+   */
+  async reinitializeClient() {
+    logger.info('Reinitializing R2 client due to potential token expiration');
+    this.client = null;
+    this.initializeClient();
   }
 
   /**
