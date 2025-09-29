@@ -1,5 +1,5 @@
 // src/pages/RegisterOwner.jsx
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useOwnerAuth } from "../context/OwnerAuthContext";
 import { API_BASE_URL } from "../config/api";
@@ -19,6 +19,21 @@ const RegisterOwner = () => {
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const { refreshAuth } = useOwnerAuth();
   const navigate = useNavigate();
+
+  // Ensure terms and conditions links are visible immediately
+  useEffect(() => {
+    // Force visibility of terms and privacy links
+    const timer = setTimeout(() => {
+      const termsLinks = document.querySelectorAll('a[href="/terms"], a[href="/privacy"]');
+      termsLinks.forEach(link => {
+        link.style.display = 'inline';
+        link.style.visibility = 'visible';
+        link.style.opacity = '1';
+      });
+    }, 0);
+    
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleChange = (e) => {
     if (e.target.name === "logo") {
@@ -167,18 +182,32 @@ const RegisterOwner = () => {
             I agree to the{" "}
             <Link 
               to="/terms" 
-              className="text-blue-600 hover:text-blue-800 underline"
+              className="text-blue-600 hover:text-blue-800 underline inline-block"
               target="_blank"
               rel="noopener noreferrer"
+              style={{ 
+                color: '#2563eb', 
+                textDecoration: 'underline', 
+                display: 'inline',
+                visibility: 'visible',
+                opacity: 1
+              }}
             >
               Terms and Conditions
             </Link>{" "}
             and{" "}
             <Link 
               to="/privacy" 
-              className="text-blue-600 hover:text-blue-800 underline"
+              className="text-blue-600 hover:text-blue-800 underline inline-block"
               target="_blank"
               rel="noopener noreferrer"
+              style={{ 
+                color: '#2563eb', 
+                textDecoration: 'underline', 
+                display: 'inline',
+                visibility: 'visible',
+                opacity: 1
+              }}
             >
               Privacy Policy
             </Link>
