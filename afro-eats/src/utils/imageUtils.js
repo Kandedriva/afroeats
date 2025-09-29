@@ -83,6 +83,24 @@ export const handleImageError = (event, fallbackText = "No Image") => {
   if (currentSrc.startsWith('data:image/svg+xml')) {
     return;
   }
+
+  // Check if this is a temporary failure and retry once
+  if (!event.target.dataset.retried) {
+    event.target.dataset.retried = 'true';
+    
+    // Add cache-busting parameter to force fresh request
+    const separator = currentSrc.includes('?') ? '&' : '?';
+    const cacheBustSrc = `${currentSrc}${separator}t=${Date.now()}`;
+    
+    console.log(`🔄 Retrying failed image load for "${fallbackText}": ${cacheBustSrc}`);
+    
+    // Retry loading the image with cache-busting
+    setTimeout(() => {
+      event.target.src = cacheBustSrc;
+    }, 1000); // Wait 1 second before retry
+    
+    return;
+  }
   
   // In development: If we're trying R2 images and it fails, try local images as fallback
   if (API_BASE_URL.includes('localhost')) {

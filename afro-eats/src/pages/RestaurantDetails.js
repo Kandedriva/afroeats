@@ -5,6 +5,7 @@ import { useCart } from "../context/CartContext";
 import { toast } from 'react-toastify';
 import { API_BASE_URL } from "../config/api";
 import { getImageUrl, handleImageError } from "../utils/imageUtils";
+import { setupImageRefreshInterval, enhanceExistingImages } from "../utils/imageRefresh";
 
 export default function RestaurantDetails() {
   const { id } = useParams();
@@ -31,6 +32,21 @@ export default function RestaurantDetails() {
     };
 
     fetchRestaurantDetails();
+
+    // Setup image refresh to handle temporary availability issues
+    const imageRefreshInterval = setupImageRefreshInterval(15); // Refresh every 15 minutes
+    
+    // Enhance existing images after initial load
+    setTimeout(() => {
+      enhanceExistingImages();
+    }, 2000); // Wait 2 seconds for images to load
+    
+    // Cleanup interval on unmount
+    return () => {
+      if (imageRefreshInterval) {
+        clearInterval(imageRefreshInterval);
+      }
+    };
   }, [id]);
 
   async function handleAddToCart(dish) {

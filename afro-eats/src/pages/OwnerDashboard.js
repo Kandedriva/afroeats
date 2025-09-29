@@ -6,6 +6,7 @@ import ToggleSwitch from "../Components/ToggleSwitch";
 import { toast } from 'react-toastify';
 import { API_BASE_URL } from "../config/api";
 import { getImageUrl, handleImageError } from "../utils/imageUtils";
+import { setupImageRefreshInterval, enhanceExistingImages } from "../utils/imageRefresh";
 
 function OwnerDashboard() {
   const { owner, loading: authLoading } = useContext(OwnerAuthContext);
@@ -175,6 +176,21 @@ function OwnerDashboard() {
     fetchStripeConnectStatus();
     fetchOrders();
     fetchNotifications();
+
+    // Setup image refresh to handle temporary availability issues
+    const imageRefreshInterval = setupImageRefreshInterval(15); // Refresh every 15 minutes
+    
+    // Enhance existing images after initial load
+    setTimeout(() => {
+      enhanceExistingImages();
+    }, 2000); // Wait 2 seconds for images to load
+    
+    // Cleanup interval on unmount
+    return () => {
+      if (imageRefreshInterval) {
+        clearInterval(imageRefreshInterval);
+      }
+    };
   }, [owner, authLoading, navigate]);
 
   const fetchStripeConnectStatus = async () => {
@@ -1235,6 +1251,7 @@ function OwnerDashboard() {
                       className="w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-lg mx-auto sm:mx-0 bg-gray-100"
                       onError={(e) => handleImageError(e, dish.name)}
                       loading="lazy"
+                      data-original-src={dish.image_url}
                     />
                   </div>
                   <div className="text-center sm:text-left">
@@ -1585,6 +1602,7 @@ function OwnerDashboard() {
                     className="w-20 h-20 object-cover rounded-lg border-2 border-gray-200 bg-gray-100"
                     onError={(e) => handleImageError(e, editingDish.name)}
                     loading="lazy"
+                    data-original-src={editingDish.image_url}
                   />
                 </div>
               </div>
@@ -1723,6 +1741,7 @@ function OwnerDashboard() {
                   className="w-16 h-16 object-cover rounded-lg border-2 border-gray-200 bg-gray-100"
                   onError={(e) => handleImageError(e, showDeleteConfirm.name)}
                   loading="lazy"
+                  data-original-src={showDeleteConfirm.image_url}
                 />
               </div>
               <p className="text-gray-600 mb-4 text-sm sm:text-base">

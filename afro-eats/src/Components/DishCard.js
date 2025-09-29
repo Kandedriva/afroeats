@@ -66,6 +66,7 @@ function DishCard({ dish }) {
             alt={dish.name}
             className={`w-full h-40 sm:h-48 object-cover transition-transform duration-300 ease-in-out ${dish.is_available ? 'group-hover:scale-110' : 'group-hover:scale-105'}`}
             onError={(e) => handleImageError(e, "No Dish Image")}
+            data-original-src={dish.image_url}
           />
           <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-opacity duration-300 flex items-center justify-center">
             <div className="text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 text-sm font-medium px-3 py-1 bg-black bg-opacity-50 rounded-full">
@@ -131,6 +132,7 @@ function DishCard({ dish }) {
                 alt={dish.name}
                 className="max-w-full max-h-full object-contain rounded-lg"
                 onError={(e) => handleImageError(e, "No Dish Image")}
+                data-original-src={dish.image_url}
               />
             </div>
             <button
