@@ -112,14 +112,19 @@ function OwnerDashboard() {
         const data = await res.json();
         setDishes(data.dishes);
         
-        // Get restaurant info separately
-        const restaurantRes = await fetch(`${API_BASE_URL}/api/owners/restaurant`, {
-          credentials: "include",
-        });
-        
-        if (restaurantRes.ok) {
-          const restaurantData = await restaurantRes.json();
-          setRestaurant(restaurantData);
+        // Restaurant data is now included in dashboard response
+        if (data.restaurant) {
+          setRestaurant(data.restaurant);
+        } else {
+          // Fallback: Get restaurant info separately if not included in dashboard
+          const restaurantRes = await fetch(`${API_BASE_URL}/api/owners/restaurant`, {
+            credentials: "include",
+          });
+          
+          if (restaurantRes.ok) {
+            const restaurantData = await restaurantRes.json();
+            setRestaurant(restaurantData);
+          }
         }
         
         return Promise.resolve(); // Explicit return for successful execution

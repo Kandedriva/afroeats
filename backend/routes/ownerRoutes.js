@@ -267,7 +267,7 @@ router.get("/dashboard", requireOwnerAuth, async (req, res) => {
 
   try {
     const restaurantRes = await pool.query(
-      "SELECT id, name FROM restaurants WHERE owner_id = $1",
+      "SELECT id, name, address, phone_number, image_url, delivery_fee FROM restaurants WHERE owner_id = $1",
       [ownerId]
     );
 
@@ -311,6 +311,11 @@ router.get("/dashboard", requireOwnerAuth, async (req, res) => {
     );
 
     res.json({
+      restaurant: {
+        ...restaurant,
+        image_url: restaurant.image_url ? restaurant.image_url.replace(/\\/g, "/") : null,
+        delivery_fee: restaurant.delivery_fee || 0.00
+      },
       dishes: formattedDishes,
       orders: ordersRes.rows.map(order => ({
         ...order,
