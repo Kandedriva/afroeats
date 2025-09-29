@@ -92,7 +92,11 @@ export const handleImageError = (event, fallbackText = "No Image") => {
     const separator = currentSrc.includes('?') ? '&' : '?';
     const cacheBustSrc = `${currentSrc}${separator}t=${Date.now()}`;
     
-    console.log(`🔄 Retrying failed image load for "${fallbackText}": ${cacheBustSrc}`);
+    // Log retry attempt only in development
+    if (process.env.NODE_ENV === 'development') {
+      // eslint-disable-next-line no-console
+      console.log(`🔄 Retrying failed image load for "${fallbackText}": ${cacheBustSrc}`);
+    }
     
     // Retry loading the image with cache-busting
     setTimeout(() => {

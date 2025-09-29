@@ -42,7 +42,7 @@ function OwnerDashboard() {
   useEffect(() => {
     // Only fetch data if owner is loaded and authenticated
     if (!owner || authLoading) {
-      return;
+      return undefined;
     }
 
     // Handle Stripe Connect returns
