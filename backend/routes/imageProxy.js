@@ -73,27 +73,74 @@ router.get('/r2-images/*', async (req, res) => {
 
     logger.info(`Serving R2 image: ${key}`);
 
-    // Get the object from R2
+    // Get the object from R2 with retry mechanism
     const command = new GetObjectCommand({
       Bucket: process.env.R2_BUCKET,
       Key: key,
     });
 
-    const response = await r2Storage.client.send(command);
+    let response;
+    let retryCount = 0;
+    const maxRetries = 3;
+
+    while (retryCount < maxRetries) {
+      try {
+        response = await r2Storage.client.send(command);
+        break; // Success, exit retry loop
+      } catch (retryError) {
+        retryCount++;
+        logger.warn(`R2 request attempt ${retryCount} failed for ${key}:`, retryError.message);
+        
+        // Check if it's an authentication error and try to reinitialize client
+        if (retryError.name === 'UnauthorizedError' || 
+            retryError.name === 'InvalidAccessKeyId' ||
+            retryError.name === 'SignatureDoesNotMatch' ||
+            retryError.message?.includes('InvalidAccessKeyId') ||
+            retryError.message?.includes('SignatureDoesNotMatch')) {
+          logger.warn(`R2 authentication error detected, reinitializing client`);
+          try {
+            await r2Storage.reinitializeClient();
+          } catch (reinitError) {
+            logger.error('Failed to reinitialize R2 client:', reinitError);
+          }
+        }
+        
+        if (retryCount >= maxRetries) {
+          throw retryError; // Re-throw if max retries reached
+        }
+        
+        // Wait before retry (exponential backoff)
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000));
+      }
+    }
     
-    // Set appropriate headers
+    // Set appropriate headers with more conservative caching
     const contentType = response.ContentType || 'image/jpeg';
     const contentLength = response.ContentLength;
     const lastModified = response.LastModified;
     const etag = response.ETag;
 
+    // More conservative caching to avoid stale data issues
     res.set({
       'Content-Type': contentType,
       'Content-Length': contentLength,
       'Last-Modified': lastModified,
       'ETag': etag,
-      'Cache-Control': 'public, max-age=31536000', // Cache for 1 year
-      'Access-Control-Allow-Origin': '*', // Allow cross-origin requests
+      'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800', // 1 day cache, 7 days stale
+      'Access-Control-Allow-Origin': '*',
+      'Vary': 'Accept-Encoding'
+    });
+
+    // Handle streaming with proper error handling
+    response.Body.on('error', (streamError) => {
+      logger.error('Stream error while serving R2 image:', streamError);
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Failed to stream image' });
+      }
+    });
+
+    response.Body.on('end', () => {
+      logger.info(`Successfully served R2 image: ${key}`);
     });
 
     // Stream the image data
