@@ -184,7 +184,9 @@ export const loadImageSafari = (imgElement, src, fallbackText = "No Image") => {
 
 // Check if current browser is Safari/WebKit
 export const isSafariOrWebKit = () => {
-  if (typeof navigator === 'undefined') return false;
+  if (typeof navigator === 'undefined') {
+    return false;
+  }
   const userAgent = navigator.userAgent;
   return (
     /Safari/.test(userAgent) && !/Chrome/.test(userAgent) ||

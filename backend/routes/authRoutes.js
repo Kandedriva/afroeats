@@ -108,43 +108,51 @@ router.post("/login", checkAccountLockout, async (req, res) => {
       // 3. Clear failed attempts on successful login
       await handleSuccessfulLogin(req, res, () => {});
   
-      // 4. Set session data with production-friendly settings
-      req.session.userId = user.id;
-      req.session.userName = user.name.split(" ")[0]; // just first name for greeting
-      req.session.userEmail = user.email; // Store email for reference
-      req.session.loginTime = new Date().toISOString();
-      
-      // Mark session as mobile if detected
-      if (req.isMobile) {
-        req.session.isMobile = true;
-      }
-      
-      // Force session save for production reliability
-      req.session.save((err) => {
+      // 4. Regenerate session ID for security (like owner login)
+      req.session.regenerate((err) => {
         if (err) {
-          console.error('Session save error:', err);
-          return res.status(500).json({ error: "Session save failed" });
+          console.error('Session regeneration error:', err);
+          return res.status(500).json({ error: "Session error during login" });
+        }
+
+        // 5. Set session data with production-friendly settings
+        req.session.userId = user.id;
+        req.session.userName = user.name.split(" ")[0]; // just first name for greeting
+        req.session.userEmail = user.email; // Store email for reference
+        req.session.loginTime = new Date().toISOString();
+        
+        // Mark session as mobile if detected
+        if (req.isMobile) {
+          req.session.isMobile = true;
         }
         
-        console.log('✅ Session saved successfully for user:', user.id, 'SessionID:', req.sessionID);
-        
-        // 5. Respond with user info and production-friendly headers
-        res.set({
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Access-Control-Allow-Credentials': 'true'
-        });
-        
-        res.json({ 
-          user: { 
-            id: user.id, 
-            name: user.name, 
-            email: user.email 
-          },
-          sessionInfo: {
-            sessionId: req.sessionID,
-            loginTime: req.session.loginTime
+        // Force session save and respond only after successful save
+        req.session.save((saveErr) => {
+          if (saveErr) {
+            console.error('Session save error:', saveErr);
+            return res.status(500).json({ error: "Session save error during login" });
           }
+          
+          console.log('✅ User session saved successfully. ID:', req.sessionID, 'User:', user.name);
+          
+          // 6. Respond with user info and production-friendly headers
+          res.set({
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Access-Control-Allow-Credentials': 'true'
+          });
+          
+          res.json({ 
+            user: { 
+              id: user.id, 
+              name: user.name, 
+              email: user.email 
+            },
+            sessionInfo: {
+              sessionId: req.sessionID,
+              loginTime: req.session.loginTime
+            }
+          });
         });
       });
   
@@ -154,41 +162,50 @@ router.post("/login", checkAccountLockout, async (req, res) => {
     }
   });
 
-  // Enhanced /me endpoint with mobile session handling
+// Check current user session (simplified like owner /me endpoint)
 router.get("/me", async (req, res) => {
-    // Set mobile-friendly headers
-    res.set({
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'Pragma': 'no-cache',
-      'Expires': '0'
-    });
-
-    if (req.session.userId) {
-      try {
-        // Get full user info from database
-        const userResult = await pool.query("SELECT id, name, email FROM users WHERE id = $1", [req.session.userId]);
-        
-        if (userResult.rows.length > 0) {
-          // Extend session on successful auth check for mobile users
-          if (req.isMobile && req.session) {
-            req.session.touch(); // This refreshes the session expiry
-          }
-          res.json(userResult.rows[0]);
-        } else {
-          // User exists in session but not in DB - clear session
-          req.session.destroy((err) => {
-            if (err) console.error('Session destroy error:', err);
-          });
-          res.status(401).json({ error: "User not found" });
-        }
-      } catch (err) {
-        console.error('Auth check error:', err);
-        res.status(500).json({ error: "Server error" });
-      }
-    } else {
-      res.status(401).json({ error: "Not authenticated" });
+  try {
+    // Log minimal session info for debugging in development
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔍 User /me check - Session ID:', req.sessionID, 'User ID:', req.session?.userId, 'Has Cookie:', !!req.headers.cookie);
     }
-  });
+    
+    if (!req.session || !req.session.userId) {
+      return res.status(401).json({ error: "Not logged in" });
+    }
+
+    // Validate that the user still exists in the database
+    const userResult = await pool.query(
+      "SELECT id, name, email FROM users WHERE id = $1",
+      [req.session.userId]
+    );
+
+    if (userResult.rows.length === 0) {
+      // User no longer exists in database, clear session
+      req.session.destroy((err) => {
+        if (err) console.error('Session destroy error:', err);
+      });
+      return res.status(401).json({ error: "User not found" });
+    }
+
+    const user = userResult.rows[0];
+    
+    // Touch session to extend its life
+    if (req.session.touch) {
+      req.session.touch();
+    }
+
+    res.json({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      loginTime: req.session.loginTime,
+    });
+  } catch (err) {
+    console.error('User /me endpoint error:', err);
+    res.status(500).json({ error: "Server error checking authentication" });
+  }
+});
 
 // GET /api/auth/profile - Get user's full profile including address and phone
 router.get("/profile", async (req, res) => {
@@ -221,55 +238,45 @@ router.get("/profile", async (req, res) => {
   }
 });
 
-  router.post("/logout", (req, res) => {
-    // Mobile-friendly logout with proper cookie clearing
-    req.session.destroy((err) => {
+router.post("/logout", (req, res) => {
+  req.session.destroy((err) => {
+    if (err) {
+      console.error('Session destruction error:', err);
+      return res.status(500).json({ error: "Failed to log out" });
+    }
+
+    res.clearCookie("orderdabaly.sid", {
+      path: '/',
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
+    });
+    
+    console.log('✅ User logged out successfully');
+    res.json({ message: "Logged out successfully" });
+  });
+});
+
+// Session refresh endpoint (simplified)
+router.post("/refresh-session", (req, res) => {
+  if (req.session.userId) {
+    // Touch the session to extend its life
+    req.session.touch();
+    req.session.save((err) => {
       if (err) {
-        console.error('Logout session destroy error:', err);
-        return res.status(500).json({ error: "Logout failed" });
+        console.error('Session refresh error:', err);
+        return res.status(500).json({ error: "Session refresh failed" });
       }
       
-      // Clear cookie with proper mobile-friendly settings
-      res.clearCookie("orderdabaly.sid", {
-        path: '/',
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-        domain: null
+      res.json({ 
+        message: "Session refreshed", 
+        sessionId: req.sessionID
       });
-      
-      // Set headers to prevent caching
-      res.set({
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0'
-      });
-      
-      res.json({ message: "Logout successful" });
     });
-  });
-
-  // Session refresh endpoint for mobile browsers
-  router.post("/refresh-session", (req, res) => {
-    if (req.session.userId) {
-      // Touch the session to extend its life
-      req.session.touch();
-      req.session.save((err) => {
-        if (err) {
-          console.error('Session refresh error:', err);
-          return res.status(500).json({ error: "Session refresh failed" });
-        }
-        
-        res.json({ 
-          message: "Session refreshed", 
-          sessionId: req.sessionID,
-          isMobile: req.isMobile 
-        });
-      });
-    } else {
-      res.status(401).json({ error: "No active session to refresh" });
-    }
-  });
+  } else {
+    res.status(401).json({ error: "No active session to refresh" });
+  }
+});
   
   
 

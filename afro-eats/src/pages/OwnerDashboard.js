@@ -5,7 +5,7 @@ import { Navigate, useNavigate, Link } from "react-router-dom";
 import ToggleSwitch from "../Components/ToggleSwitch";
 import { toast } from 'react-toastify';
 import { API_BASE_URL } from "../config/api";
-import { getImageUrl, handleImageError, isSafariOrWebKit, loadImageSafari } from "../utils/imageUtils";
+import { getImageUrl, handleImageError, isSafariOrWebKit } from "../utils/imageUtils";
 import { setupImageRefreshInterval, enhanceExistingImages } from "../utils/imageRefresh";
 
 function OwnerDashboard() {
@@ -186,6 +186,7 @@ function OwnerDashboard() {
     const imageRefreshInterval = setupImageRefreshInterval(); // Auto-detects Safari and uses optimal interval
     
     // Enhance existing images after initial load with Safari compatibility
+    let visibilityCleanup = null;
     setTimeout(() => {
       enhanceExistingImages();
       
@@ -200,8 +201,8 @@ function OwnerDashboard() {
         };
         document.addEventListener('visibilitychange', handleVisibilityChange);
         
-        // Cleanup on unmount
-        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+        // Store cleanup function
+        visibilityCleanup = () => document.removeEventListener('visibilitychange', handleVisibilityChange);
       }
     }, 2000); // Wait 2 seconds for images to load
     
@@ -209,6 +210,9 @@ function OwnerDashboard() {
     return () => {
       if (imageRefreshInterval) {
         clearInterval(imageRefreshInterval);
+      }
+      if (visibilityCleanup) {
+        visibilityCleanup();
       }
     };
   }, [owner, authLoading, navigate]);
@@ -1280,7 +1284,6 @@ function OwnerDashboard() {
                       data-image-type="dish"
                       data-original-src={dish.image_url}
                       style={isSafariOrWebKit() ? { imageRendering: 'auto', transform: 'translateZ(0)' } : {}}
-                      data-original-src={dish.image_url}
                     />
                   </div>
                   <div className="text-center sm:text-left">
