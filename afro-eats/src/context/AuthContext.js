@@ -8,77 +8,36 @@ export const AuthContext = createContext();
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const navigate = useNavigate();
 
-  // Check user session on load with mobile-friendly retry logic
+  // Check if user is already logged in (simplified like OwnerAuthContext)
   useEffect(() => {
-    const fetchUser = async (retryCount = 0) => {
+    const fetchUser = async () => {
       try {
-        setLoading(true);
-        setError(null);
-        
-        // First, test basic connectivity
-        
-        // Test basic fetch first
-        try {
-          // Test with minimal fetch options first
-          const _testResponse = await fetch(`${API_BASE_URL}/api/health`, {
-            method: 'GET'
-          });
-        } catch (testError) {
-          throw new Error(`Cannot reach backend server at ${API_BASE_URL}: ${testError.message}`);
-        }
-        
-        // Add timeout to prevent hanging
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
-        
         const res = await fetch(`${API_BASE_URL}/api/auth/me`, {
           credentials: "include",
-          signal: controller.signal,
-          headers: {
-            'Cache-Control': 'no-cache',
-            'Pragma': 'no-cache',
-            'Content-Type': 'application/json'
-          }
         });
 
-        clearTimeout(timeoutId);
-
-        if (res.status === 401) {
-          setUser(null);
-          return;
-        }
-
-        if (!res.ok) {
-          // Retry once for mobile network issues
-          if (retryCount < 2) {
-            setTimeout(() => fetchUser(retryCount + 1), 2000);
-            return;
-          }
-          throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-        }
-
-        const data = await res.json();
-        setUser(data);
-      } catch (err) {
-        
-        // Handle specific error types
-        if (err.name === 'AbortError') {
-          setError('Connection timeout - please check your internet connection');
-        } else if (err.message.includes('Failed to fetch')) {
-          setError('Unable to connect to server - please try again later');
-          // Try one more time after a longer delay for network issues
-          if (retryCount < 1) {
-            setTimeout(() => fetchUser(retryCount + 1), 5000);
-            return;
-          }
+        if (res.ok) {
+          const data = await res.json();
+          setUser(data);
         } else {
-          setError('Authentication check failed');
+          if (res.status === 401) {
+            // Only clear user data if we don't already have user data
+            // This prevents clearing the user state right after login while session is being established
+            setUser(prevUser => {
+              if (prevUser) {
+                return prevUser;
+              }
+              return null;
+            });
+          } else {
+            // Network or server error - keep current state
+          }
         }
-        
-        setUser(null);
+      } catch (err) {
+        // Network error - don't clear user data immediately
+        // Let user try to continue if they were logged in
       } finally {
         setLoading(false);
       }
@@ -87,75 +46,48 @@ export const AuthProvider = ({ children }) => {
     fetchUser();
   }, []);
 
-  // Separate effect for visibility change listener to avoid infinite loops
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && user) {
-        // Refresh auth when app becomes visible (mobile browser switching)
-        // Use a flag to prevent setting loading to true again if already authenticated
-        fetch(`${API_BASE_URL}/api/auth/me`, {
-          credentials: "include",
-          headers: {
-            'Cache-Control': 'no-cache',
-            'Pragma': 'no-cache',
-            'Content-Type': 'application/json'
-          }
-        }).then(res => {
-          if (res.ok) {
-            return res.json();
-          } else if (res.status === 401) {
-            setUser(null);
-            return null;
-          }
-          return null;
-        }).then(data => {
-          if (data) {
-            setUser(data);
-          }
-        }).catch(err => {
-          // Log auth refresh errors for debugging but don't disrupt user experience
-          if (process.env.NODE_ENV === 'development') {
-            // eslint-disable-next-line no-console
-            console.warn('Auth refresh failed during visibility change:', err.message);
-          }
-        });
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [user]);
-
   const logout = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/auth/logout`, {
+      await fetch(`${API_BASE_URL}/api/auth/logout`, {
         method: "POST",
         credentials: "include",
       });
-
-      // Always clear user state, even if server request fails
-      setUser(null);
-      
-      if (res.ok) {
-        // Logout successful
-      } else {
-        // Logout failed but we still clear local state
-      }
-      
-      // Navigate to login page
-      navigate("/login");
     } catch (err) {
-      // Still clear user state and redirect even if request fails
-      setUser(null);
-      navigate("/login");
+      // Logout request failed, but we'll still clear the user state
+    }
+    
+    // Clear user state regardless of response
+    setUser(null);
+    
+    // Navigate to login page
+    navigate("/login");
+  };
+
+  const refreshAuth = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/auth/me`, {
+        credentials: "include",
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setUser(data);
+      } else {
+        if (res.status === 401) {
+          // Only clear if explicitly requested (like from logout)
+          // Don't automatically clear on 401 to prevent logout loops
+        }
+      }
+    } catch (err) {
+      // Don't clear user data on network errors, let user retry
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <AuthContext.Provider value={{ user, setUser, logout, loading, error }}>
+    <AuthContext.Provider value={{ user, setUser, logout, loading, refreshAuth }}>
       {children}
     </AuthContext.Provider>
   );
