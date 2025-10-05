@@ -281,11 +281,12 @@ app.use(session(sessionConfig));
 
 // Session debugging middleware
 app.use((req, res, next) => {
-  if (req.path.startsWith('/api/auth/')) {
+  if (req.path.startsWith('/api/auth/') || req.path.startsWith('/api/owners/')) {
     console.log('🔍 Session Debug for', req.method, req.path, {
       sessionID: req.sessionID,
       hasSession: !!req.session,
       userId: req.session?.userId,
+      ownerId: req.session?.ownerId,
       cookieHeader: req.headers.cookie ? 'present' : 'missing',
       origin: req.get('Origin'),
       userAgent: req.get('User-Agent')?.substring(0, 50)
