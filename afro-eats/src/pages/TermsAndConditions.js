@@ -87,6 +87,7 @@ const TermsAndConditions = () => {
                   <li>Restaurants receive payouts directly to their Stripe account.</li>
                   <li>OrderDabaly charges a commission per order (e.g., $1.20 per completed transaction).</li>
                   <li>Customers are responsible for all applicable taxes and delivery fees, which are determined by the restaurant.</li>
+                  <li>Restaurants using OrderDabaly are solely responsible for determining, collecting, and remitting any applicable taxes on their sales.</li>
                   <li>Refunds, cancellations, and disputes are subject to the restaurant&apos;s policy, not OrderDabaly. We may assist in resolving disputes but are not liable for refunds.</li>
                 </ul>
               </section>
