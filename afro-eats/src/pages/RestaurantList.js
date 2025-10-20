@@ -149,43 +149,15 @@ export default function RestaurantList() {
 
   return (
     <div className="max-w-6xl mx-auto mt-4 p-4">
-      {/* Coming Soon Notice */}
-      <div className="mb-8 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg shadow-lg overflow-hidden">
-        <div className="px-6 py-8 text-center">
-          <div className="text-4xl mb-4">🚀</div>
-          <h2 className="text-2xl sm:text-3xl font-bold mb-3">Coming Soon!</h2>
-          <p className="text-lg sm:text-xl mb-2 opacity-90">
-            Our platform is currently in development
-          </p>
-          <p className="text-sm sm:text-base opacity-80">
-            We&apos;re working hard to bring you the best food delivery experience. 
-            Stay tuned for our official launch!
-          </p>
-          <p className="text-xs sm:text-sm opacity-70 mt-2 italic">
-            Note: The restaurants shown below are for testing purposes only and are not real establishments.
-          </p>
-          <div className="mt-6 flex flex-col sm:flex-row gap-4 justify-center">
-            <div className="bg-white/20 rounded-lg px-4 py-2 backdrop-blur-sm">
-              <span className="text-sm font-medium">🍽️ Delicious Cuisine</span>
-            </div>
-            <div className="bg-white/20 rounded-lg px-4 py-2 backdrop-blur-sm">
-              <span className="text-sm font-medium">🚚 Fast Delivery</span>
-            </div>
-            <div className="bg-white/20 rounded-lg px-4 py-2 backdrop-blur-sm">
-              <span className="text-sm font-medium">💳 Secure Payment</span>
-            </div>
-          </div>
-          
-          {/* Contact Support Button */}
-          <div className="mt-6 text-center">
-            <button
-              onClick={() => setShowSupportForm(true)}
-              className="bg-white text-green-600 px-6 py-3 rounded-lg font-medium hover:bg-gray-50 transition-colors shadow-lg hover:shadow-xl transform hover:scale-105 duration-200"
-            >
-              📞 Need Help? Contact Support
-            </button>
-          </div>
-        </div>
+      {/* Contact Support Button */}
+      <div className="mb-6 flex justify-end">
+        <button
+          onClick={() => setShowSupportForm(true)}
+          className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-2"
+        >
+          <span>📞</span>
+          Contact Support
+        </button>
       </div>
 
       {/* Restaurant Grid */}
