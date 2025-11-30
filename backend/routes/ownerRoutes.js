@@ -706,10 +706,11 @@ router.get("/orders", requireOwnerAuth, async (req, res) => {
         COALESCE(o.delivery_address, u.address, 'No address provided') as delivery_address,
         COALESCE(o.delivery_phone, u.phone, 'No phone provided') as delivery_phone,
         COALESCE(o.delivery_type, 'delivery') as delivery_type,
-        u.name as customer_name,
-        u.email as customer_email,
-        COALESCE(u.address, 'No address provided') as customer_address,
-        COALESCE(u.phone, 'No phone provided') as customer_phone,
+        COALESCE(o.guest_name, u.name, 'Guest Customer') as customer_name,
+        COALESCE(o.guest_email, u.email, 'guest@orderdabaly.com') as customer_email,
+        COALESCE(o.delivery_address, u.address, 'No address provided') as customer_address,
+        COALESCE(o.delivery_phone, u.phone, 'No phone provided') as customer_phone,
+        COALESCE(o.is_guest_order, false) as is_guest_order,
         oi.id as item_id,
         oi.name as item_name,
         oi.price as item_price,
@@ -724,9 +725,9 @@ router.get("/orders", requireOwnerAuth, async (req, res) => {
       LEFT JOIN dishes d ON oi.dish_id = d.id
       LEFT JOIN restaurants r ON COALESCE(oi.restaurant_id, d.restaurant_id) = r.id
       LEFT JOIN restaurant_order_status ros ON (o.id = ros.order_id AND r.id = ros.restaurant_id)
-      JOIN users u ON o.user_id = u.id
+      LEFT JOIN users u ON o.user_id = u.id
       WHERE r.owner_id = $1 
-        AND (o.status = 'paid' OR o.status = 'completed')
+        AND (o.status IN ('paid', 'completed', 'received'))
         AND COALESCE(ros.status, 'active') NOT IN ('cancelled', 'removed')
       ORDER BY o.created_at DESC
     `, [ownerId]);
@@ -764,6 +765,7 @@ router.get("/orders", requireOwnerAuth, async (req, res) => {
           customer_email: row.customer_email,
           customer_address: row.customer_address,
           customer_phone: row.customer_phone,
+          is_guest_order: row.is_guest_order,
           items: [],
           restaurant_subtotal: 0,
           original_total: row.original_total,
@@ -1443,6 +1445,308 @@ router.get("/restaurant/details", requireOwnerAuth, async (req, res) => {
   } catch (err) {
     console.error('Restaurant details fetch error:', err);
     res.status(500).json({ error: "Failed to fetch restaurant details" });
+  }
+});
+
+// ========= UPDATE OWNER EMAIL ==========
+router.put("/profile/email", requireOwnerAuth, async (req, res) => {
+  try {
+    const { email } = req.body;
+    const ownerId = req.owner.id;
+
+    if (!email || !email.trim()) {
+      return res.status(400).json({ error: "Email is required" });
+    }
+
+    const trimmedEmail = email.trim().toLowerCase();
+    
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmedEmail)) {
+      return res.status(400).json({ error: "Invalid email format" });
+    }
+
+    // Check if email is already taken by another owner
+    const existingOwner = await pool.query(
+      "SELECT id FROM restaurant_owners WHERE email = $1 AND id != $2",
+      [trimmedEmail, ownerId]
+    );
+
+    if (existingOwner.rows.length > 0) {
+      return res.status(400).json({ error: "Email is already taken by another account" });
+    }
+
+    // Get current owner data
+    const currentOwner = await pool.query(
+      "SELECT email FROM restaurant_owners WHERE id = $1",
+      [ownerId]
+    );
+
+    if (currentOwner.rows.length === 0) {
+      return res.status(404).json({ error: "Owner not found" });
+    }
+
+    // Check if email is actually changing
+    if (currentOwner.rows[0].email === trimmedEmail) {
+      return res.json({ 
+        success: true, 
+        message: "Email is already up to date",
+        email: trimmedEmail 
+      });
+    }
+
+    // Update email
+    await pool.query(
+      "UPDATE restaurant_owners SET email = $1 WHERE id = $2",
+      [trimmedEmail, ownerId]
+    );
+
+    // Update session email
+    req.session.ownerEmail = trimmedEmail;
+
+    res.json({ 
+      success: true, 
+      message: "Email updated successfully",
+      email: trimmedEmail 
+    });
+
+  } catch (err) {
+    console.error('Email update error:', err);
+    res.status(500).json({ error: "Failed to update email" });
+  }
+});
+
+// ========= UPDATE RESTAURANT ADDRESS ==========
+router.put("/restaurant/address", requireOwnerAuth, async (req, res) => {
+  try {
+    const { address } = req.body;
+    const ownerId = req.owner.id;
+
+    if (!address || !address.trim()) {
+      return res.status(400).json({ error: "Address is required" });
+    }
+
+    const trimmedAddress = address.trim();
+    
+    if (trimmedAddress.length > 255) {
+      return res.status(400).json({ error: "Address must be 255 characters or less" });
+    }
+
+    // Check if owner owns a restaurant
+    const restaurantResult = await pool.query(
+      "SELECT id, address FROM restaurants WHERE owner_id = $1",
+      [ownerId]
+    );
+
+    if (restaurantResult.rows.length === 0) {
+      return res.status(404).json({ error: "No restaurant found for this owner" });
+    }
+
+    const restaurant = restaurantResult.rows[0];
+
+    // Check if address is actually changing
+    if (restaurant.address === trimmedAddress) {
+      return res.json({ 
+        success: true, 
+        message: "Address is already up to date",
+        address: trimmedAddress 
+      });
+    }
+
+    // Update restaurant address
+    await pool.query(
+      "UPDATE restaurants SET address = $1 WHERE owner_id = $2",
+      [trimmedAddress, ownerId]
+    );
+
+    res.json({ 
+      success: true, 
+      message: "Restaurant address updated successfully",
+      address: trimmedAddress 
+    });
+
+  } catch (err) {
+    console.error('Restaurant address update error:', err);
+    res.status(500).json({ error: "Failed to update restaurant address" });
+  }
+});
+
+// ========= CHANGE PASSWORD (authenticated) ==========
+router.put("/profile/password", requireOwnerAuth, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    const ownerId = req.owner.id;
+
+    // Validate input
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: "Current password and new password are required" });
+    }
+
+    if (newPassword.length < 12) {
+      return res.status(400).json({ error: "New password must be at least 12 characters long" });
+    }
+
+    // Enhanced password strength validation
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])/;
+    if (!passwordRegex.test(newPassword)) {
+      return res.status(400).json({ 
+        error: "Password must contain at least one uppercase letter, lowercase letter, number, and special character (@$!%*?&)" 
+      });
+    }
+
+    // Get current owner data
+    const ownerResult = await pool.query(
+      "SELECT password FROM restaurant_owners WHERE id = $1",
+      [ownerId]
+    );
+
+    if (ownerResult.rows.length === 0) {
+      return res.status(404).json({ error: "Owner not found" });
+    }
+
+    const owner = ownerResult.rows[0];
+
+    // Verify current password
+    const currentPasswordMatch = await bcryptjs.compare(currentPassword, owner.password);
+    if (!currentPasswordMatch) {
+      return res.status(400).json({ error: "Current password is incorrect" });
+    }
+
+    // Check if new password is different from current
+    const samePassword = await bcryptjs.compare(newPassword, owner.password);
+    if (samePassword) {
+      return res.status(400).json({ error: "New password must be different from current password" });
+    }
+
+    // Hash new password
+    const hashedNewPassword = await bcryptjs.hash(newPassword, 10);
+
+    // Update password
+    await pool.query(
+      "UPDATE restaurant_owners SET password = $1 WHERE id = $2",
+      [hashedNewPassword, ownerId]
+    );
+
+    res.json({ 
+      success: true, 
+      message: "Password changed successfully" 
+    });
+
+  } catch (err) {
+    console.error('Password change error:', err);
+    res.status(500).json({ error: "Server error during password change" });
+  }
+});
+
+// ========= CLOSE ACCOUNT ==========
+router.delete("/profile/close", requireOwnerAuth, async (req, res) => {
+  try {
+    const { password, confirmText } = req.body;
+    const ownerId = req.owner.id;
+
+    // Validate confirmation text
+    if (confirmText !== "CLOSE MY ACCOUNT") {
+      return res.status(400).json({ error: "Please type 'CLOSE MY ACCOUNT' exactly to confirm" });
+    }
+
+    if (!password) {
+      return res.status(400).json({ error: "Password is required to close account" });
+    }
+
+    // Get owner data
+    const ownerResult = await pool.query(
+      "SELECT password, email, name FROM restaurant_owners WHERE id = $1",
+      [ownerId]
+    );
+
+    if (ownerResult.rows.length === 0) {
+      return res.status(404).json({ error: "Owner not found" });
+    }
+
+    const owner = ownerResult.rows[0];
+
+    // Verify password
+    const passwordMatch = await bcryptjs.compare(password, owner.password);
+    if (!passwordMatch) {
+      return res.status(400).json({ error: "Password is incorrect" });
+    }
+
+    // Check for pending orders
+    const pendingOrdersResult = await pool.query(`
+      SELECT COUNT(*) as order_count 
+      FROM orders o
+      JOIN order_items oi ON o.id = oi.order_id
+      LEFT JOIN dishes d ON oi.dish_id = d.id
+      LEFT JOIN restaurants r ON COALESCE(oi.restaurant_id, d.restaurant_id) = r.id
+      WHERE r.owner_id = $1 AND o.status IN ('pending', 'paid', 'received')
+    `, [ownerId]);
+
+    const pendingOrderCount = parseInt(pendingOrdersResult.rows[0].order_count);
+    if (pendingOrderCount > 0) {
+      return res.status(400).json({ 
+        error: `Cannot close account with ${pendingOrderCount} pending order${pendingOrderCount !== 1 ? 's' : ''}. Please complete or cancel all orders first.` 
+      });
+    }
+
+    // Start transaction for account closure
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Get restaurant ID for cleanup
+      const restaurantResult = await client.query(
+        "SELECT id FROM restaurants WHERE owner_id = $1",
+        [ownerId]
+      );
+
+      if (restaurantResult.rows.length > 0) {
+        const restaurantId = restaurantResult.rows[0].id;
+
+        // Mark all dishes as unavailable
+        await client.query(
+          "UPDATE dishes SET is_available = false WHERE restaurant_id = $1",
+          [restaurantId]
+        );
+
+        // Soft delete restaurant (mark as inactive)
+        await client.query(
+          "UPDATE restaurants SET active = false, closed_at = NOW() WHERE id = $1",
+          [restaurantId]
+        );
+      }
+
+      // Soft delete owner account (anonymize data)
+      const anonymizedEmail = `deleted_${ownerId}_${Date.now()}@deleted.local`;
+      await client.query(
+        `UPDATE restaurant_owners 
+         SET email = $1, name = 'Deleted User', password = 'deleted', 
+             secret_word = 'deleted', active = false, deleted_at = NOW() 
+         WHERE id = $2`,
+        [anonymizedEmail, ownerId]
+      );
+
+      await client.query('COMMIT');
+      
+      // Destroy session
+      req.session.destroy((err) => {
+        if (err) console.error('Error destroying session during account closure:', err);
+      });
+
+      res.json({ 
+        success: true, 
+        message: "Account has been closed successfully. You will be logged out." 
+      });
+
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+
+  } catch (err) {
+    console.error('Account closure error:', err);
+    res.status(500).json({ error: "Failed to close account" });
   }
 });
 

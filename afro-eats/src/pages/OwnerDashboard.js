@@ -37,6 +37,21 @@ function OwnerDashboard() {
   const [deliveryFeeForm, setDeliveryFeeForm] = useState('');
   const [updatingDeliveryFee, setUpdatingDeliveryFee] = useState(false);
   const deliveryFeeInputRef = useRef(null);
+  const [editingAddress, setEditingAddress] = useState(false);
+  const [addressForm, setAddressForm] = useState('');
+  const [updatingAddress, setUpdatingAddress] = useState(false);
+  const addressInputRef = useRef(null);
+  const [editingEmail, setEditingEmail] = useState(false);
+  const [emailForm, setEmailForm] = useState('');
+  const [updatingEmail, setUpdatingEmail] = useState(false);
+  const emailInputRef = useRef(null);
+  const [showAccountClosureModal, setShowAccountClosureModal] = useState(false);
+  const [closureConfirmation, setClosureConfirmation] = useState('');
+  const [closurePassword, setClosurePassword] = useState('');
+  const [closingAccount, setClosingAccount] = useState(false);
+  const [showPasswordChangeModal, setShowPasswordChangeModal] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+  const [updatingPassword, setUpdatingPassword] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -788,6 +803,18 @@ function OwnerDashboard() {
     }
   }, [editingDeliveryFee]);
 
+  useEffect(() => {
+    if (editingAddress && addressInputRef.current) {
+      addressInputRef.current.focus();
+    }
+  }, [editingAddress]);
+
+  useEffect(() => {
+    if (editingEmail && emailInputRef.current) {
+      emailInputRef.current.focus();
+    }
+  }, [editingEmail]);
+
   const handleCancelEditDeliveryFee = () => {
     setEditingDeliveryFee(false);
     setDeliveryFeeForm('');
@@ -888,6 +915,243 @@ function OwnerDashboard() {
     }
   };
 
+  // Address Management Functions
+  const handleEditAddress = () => {
+    setAddressForm(restaurant.address || '');
+    setEditingAddress(true);
+  };
+
+  const handleCancelEditAddress = () => {
+    setEditingAddress(false);
+    setAddressForm('');
+  };
+
+  const handleUpdateAddress = async () => {
+    if (!addressForm.trim()) {
+      toast.warning("Please enter a valid restaurant address.");
+      return;
+    }
+
+    if (addressForm.trim() === restaurant.address) {
+      setEditingAddress(false);
+      return;
+    }
+
+    setUpdatingAddress(true);
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/owners/restaurant/address`, {
+        method: "PUT",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          address: addressForm.trim(),
+        }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to update restaurant address");
+      }
+
+      // Update local state
+      setRestaurant(prev => ({
+        ...prev,
+        address: addressForm.trim()
+      }));
+
+      toast.success("Restaurant address updated successfully!");
+      setEditingAddress(false);
+    } catch (err) {
+      toast.error(`Error updating restaurant address: ${err.message}`);
+    } finally {
+      setUpdatingAddress(false);
+    }
+  };
+
+  // Email Management Functions
+  const handleEditEmail = () => {
+    setEmailForm(owner.email || '');
+    setEditingEmail(true);
+  };
+
+  const handleCancelEditEmail = () => {
+    setEditingEmail(false);
+    setEmailForm('');
+  };
+
+  const handleUpdateEmail = async () => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    
+    if (!emailForm.trim()) {
+      toast.warning("Please enter a valid email address.");
+      return;
+    }
+
+    if (!emailRegex.test(emailForm.trim())) {
+      toast.warning("Please enter a valid email format.");
+      return;
+    }
+
+    if (emailForm.trim() === owner.email) {
+      setEditingEmail(false);
+      return;
+    }
+
+    setUpdatingEmail(true);
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/owners/profile/email`, {
+        method: "PUT",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: emailForm.trim(),
+        }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to update email");
+      }
+
+      toast.success("Email updated successfully! Please log in again.");
+      setEditingEmail(false);
+      
+      // Refresh page after a short delay
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
+    } catch (err) {
+      toast.error(`Error updating email: ${err.message}`);
+    } finally {
+      setUpdatingEmail(false);
+    }
+  };
+
+  // Password Change Functions
+  const handleShowPasswordChange = () => {
+    setShowPasswordChangeModal(true);
+  };
+
+  const handleClosePasswordChange = () => {
+    setShowPasswordChangeModal(false);
+    setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+  };
+
+  const handlePasswordChange = async (e) => {
+    e.preventDefault();
+    
+    if (!passwordForm.currentPassword || !passwordForm.newPassword || !passwordForm.confirmPassword) {
+      toast.warning("Please fill in all password fields.");
+      return;
+    }
+
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      toast.warning("New passwords do not match.");
+      return;
+    }
+
+    if (passwordForm.newPassword.length < 12) {
+      toast.warning("New password must be at least 12 characters long.");
+      return;
+    }
+
+    // Enhanced password strength validation
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])/;
+    if (!passwordRegex.test(passwordForm.newPassword)) {
+      toast.warning("Password must contain at least one uppercase letter, lowercase letter, number, and special character (@$!%*?&)");
+      return;
+    }
+
+    setUpdatingPassword(true);
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/owners/profile/password`, {
+        method: "PUT",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          currentPassword: passwordForm.currentPassword,
+          newPassword: passwordForm.newPassword,
+        }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to change password");
+      }
+
+      toast.success("Password changed successfully!");
+      handleClosePasswordChange();
+    } catch (err) {
+      toast.error(`Error changing password: ${err.message}`);
+    } finally {
+      setUpdatingPassword(false);
+    }
+  };
+
+  // Account Closure Functions
+  const handleShowAccountClosure = () => {
+    setShowAccountClosureModal(true);
+  };
+
+  const handleCloseAccountClosure = () => {
+    setShowAccountClosureModal(false);
+    setClosureConfirmation('');
+    setClosurePassword('');
+  };
+
+  const handleAccountClosure = async () => {
+    if (closureConfirmation !== 'CLOSE MY ACCOUNT') {
+      toast.warning('Please type "CLOSE MY ACCOUNT" to confirm account closure.');
+      return;
+    }
+
+    if (!closurePassword) {
+      toast.warning('Please enter your password to confirm account closure.');
+      return;
+    }
+
+    setClosingAccount(true);
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/owners/profile/close`, {
+        method: "DELETE",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          password: closurePassword,
+          confirmText: closureConfirmation,
+        }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to close account");
+      }
+
+      toast.success("Account closed successfully. You will be redirected to the home page.");
+      
+      // Clear local storage and redirect
+      setTimeout(() => {
+        navigate('/');
+      }, 2000);
+    } catch (err) {
+      toast.error(`Error closing account: ${err.message}`);
+    } finally {
+      setClosingAccount(false);
+    }
+  };
+
   if (authLoading || loading) {
     return <div className="text-center p-6">Loading dashboard...</div>;
   }
@@ -966,7 +1230,133 @@ function OwnerDashboard() {
                   </button>
                 </div>
               )}
-              <p className="text-gray-600 text-sm sm:text-base">📍 {restaurant.address}</p>
+              
+              {/* Restaurant Address Section */}
+              <div className="mt-2">
+                {editingAddress ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center space-x-2">
+                      <span className="text-gray-600">📍</span>
+                      <input
+                        ref={addressInputRef}
+                        type="text"
+                        value={addressForm}
+                        onChange={(e) => setAddressForm(e.target.value)}
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter') {
+                            handleUpdateAddress();
+                          } else if (e.key === 'Escape') {
+                            handleCancelEditAddress();
+                          }
+                        }}
+                        className="text-sm bg-white border-2 border-blue-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent flex-1"
+                        placeholder="Enter restaurant address"
+                        maxLength={200}
+                      />
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={handleUpdateAddress}
+                        disabled={updatingAddress}
+                        className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                          updatingAddress
+                            ? 'bg-gray-400 text-gray-700 cursor-not-allowed'
+                            : 'bg-green-600 text-white hover:bg-green-700'
+                        }`}
+                      >
+                        {updatingAddress ? 'Saving...' : 'Save'}
+                      </button>
+                      <button
+                        onClick={handleCancelEditAddress}
+                        disabled={updatingAddress}
+                        className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      {addressForm.length}/200 characters
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex items-center space-x-2">
+                    <p className="text-gray-600 text-sm sm:text-base">📍 {restaurant.address}</p>
+                    <button
+                      onClick={handleEditAddress}
+                      className="text-blue-600 hover:text-blue-800 transition-colors p-1"
+                      title="Edit restaurant address"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Owner Email Section */}
+              <div className="mt-4">
+                <h4 className="text-sm font-medium text-gray-700 mb-2">Account Email</h4>
+                {editingEmail ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center space-x-2">
+                      <span className="text-gray-600">✉️</span>
+                      <input
+                        ref={emailInputRef}
+                        type="email"
+                        value={emailForm}
+                        onChange={(e) => setEmailForm(e.target.value)}
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter') {
+                            handleUpdateEmail();
+                          } else if (e.key === 'Escape') {
+                            handleCancelEditEmail();
+                          }
+                        }}
+                        className="text-sm bg-white border-2 border-blue-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent flex-1"
+                        placeholder="Enter email address"
+                        maxLength={100}
+                      />
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={handleUpdateEmail}
+                        disabled={updatingEmail}
+                        className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                          updatingEmail
+                            ? 'bg-gray-400 text-gray-700 cursor-not-allowed'
+                            : 'bg-green-600 text-white hover:bg-green-700'
+                        }`}
+                      >
+                        {updatingEmail ? 'Saving...' : 'Save'}
+                      </button>
+                      <button
+                        onClick={handleCancelEditEmail}
+                        disabled={updatingEmail}
+                        className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      Changing email will require you to log in again
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex items-center space-x-2">
+                    <p className="text-gray-600 text-sm">✉️ {owner?.email}</p>
+                    <button
+                      onClick={handleEditEmail}
+                      className="text-blue-600 hover:text-blue-800 transition-colors p-1"
+                      title="Edit email address"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
+              </div>
               
               {/* Delivery Fee Section */}
               <div className="mt-4 p-3 bg-gray-50 rounded-lg">
@@ -1160,6 +1550,36 @@ function OwnerDashboard() {
             ) : (
               <p className="text-sm text-gray-500">Checking Stripe account status...</p>
             )}
+          </div>
+
+          {/* Account Management Section */}
+          <div className="mt-6 p-4 sm:p-6 border rounded-lg bg-gray-50">
+            <h4 className="text-base sm:text-lg font-medium text-gray-900 mb-3">Account Security</h4>
+            <div className="space-y-4">
+              <div>
+                <p className="text-sm text-gray-700 mb-3">
+                  🔐 Manage your account security settings and password.
+                </p>
+                <button
+                  onClick={handleShowPasswordChange}
+                  className="bg-blue-600 text-white px-4 py-3 sm:py-2 rounded hover:bg-blue-700 transition-colors text-sm font-medium w-full sm:w-auto min-h-[44px] sm:min-h-0"
+                >
+                  🔒 Change Password
+                </button>
+              </div>
+              
+              <div className="border-t pt-4">
+                <p className="text-sm text-red-700 mb-3">
+                  ⚠️ <strong>Danger Zone:</strong> Need to close your restaurant account? This action will permanently delete your account, restaurant, and all associated data.
+                </p>
+                <button
+                  onClick={handleShowAccountClosure}
+                  className="bg-red-600 text-white px-4 py-3 sm:py-2 rounded hover:bg-red-700 transition-colors text-sm font-medium w-full sm:w-auto min-h-[44px] sm:min-h-0"
+                >
+                  ⚠️ Close Account
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -1814,6 +2234,182 @@ function OwnerDashboard() {
                   </div>
                 ) : (
                   '🗑️ Delete Dish'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Password Change Modal */}
+      {showPasswordChangeModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-4 sm:p-6 max-w-md w-full">
+            <h3 className="text-lg sm:text-xl font-semibold mb-4 text-gray-800">
+              Change Password
+            </h3>
+            <form onSubmit={handlePasswordChange}>
+              <div className="space-y-4 mb-6">
+                <div>
+                  <label htmlFor="current-password" className="block text-sm font-medium text-gray-700 mb-1">
+                    Current Password
+                  </label>
+                  <input
+                    type="password"
+                    id="current-password"
+                    value={passwordForm.currentPassword}
+                    onChange={(e) => setPasswordForm(prev => ({ ...prev, currentPassword: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter current password"
+                    disabled={updatingPassword}
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label htmlFor="new-password" className="block text-sm font-medium text-gray-700 mb-1">
+                    New Password
+                  </label>
+                  <input
+                    type="password"
+                    id="new-password"
+                    value={passwordForm.newPassword}
+                    onChange={(e) => setPasswordForm(prev => ({ ...prev, newPassword: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter new password (min 12 characters)"
+                    disabled={updatingPassword}
+                    required
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Must be at least 12 characters with uppercase, lowercase, number, and special character
+                  </p>
+                </div>
+                
+                <div>
+                  <label htmlFor="confirm-password" className="block text-sm font-medium text-gray-700 mb-1">
+                    Confirm New Password
+                  </label>
+                  <input
+                    type="password"
+                    id="confirm-password"
+                    value={passwordForm.confirmPassword}
+                    onChange={(e) => setPasswordForm(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Confirm new password"
+                    disabled={updatingPassword}
+                    required
+                  />
+                </div>
+              </div>
+              
+              <div className="flex flex-col sm:flex-row gap-3 sm:justify-end">
+                <button
+                  type="button"
+                  onClick={handleClosePasswordChange}
+                  className="px-4 py-3 sm:py-2 text-gray-600 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors font-medium min-h-[44px] sm:min-h-0 order-2 sm:order-1"
+                  disabled={updatingPassword}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-3 sm:py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium min-h-[44px] sm:min-h-0 order-1 sm:order-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={updatingPassword}
+                >
+                  {updatingPassword ? (
+                    <div className="flex items-center justify-center gap-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Changing Password...
+                    </div>
+                  ) : (
+                    '🔒 Change Password'
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Account Closure Confirmation Modal */}
+      {showAccountClosureModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-4 sm:p-6 max-w-md w-full">
+            <h3 className="text-lg sm:text-xl font-semibold mb-4 text-red-800">
+              Close Account Permanently
+            </h3>
+            <div className="mb-6">
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                <div className="flex items-start">
+                  <div className="flex-shrink-0">
+                    <svg className="h-6 w-6 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <h4 className="text-sm font-medium text-red-800 mb-2">
+                      ⚠️ Warning: This action cannot be undone!
+                    </h4>
+                    <div className="text-sm text-red-700 space-y-1">
+                      <p>• Your restaurant account will be permanently deleted</p>
+                      <p>• All dishes and menu items will be removed</p>
+                      <p>• Order history will be archived</p>
+                      <p>• You will lose access to your dashboard</p>
+                      <p>• This action is irreversible</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="space-y-3">
+                <label htmlFor="closure-password" className="block text-sm font-medium text-gray-700">
+                  Enter your password to confirm:
+                </label>
+                <input
+                  type="password"
+                  id="closure-password"
+                  value={closurePassword}
+                  onChange={(e) => setClosurePassword(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                  placeholder="Your account password"
+                  disabled={closingAccount}
+                />
+                
+                <label htmlFor="closure-confirmation" className="block text-sm font-medium text-gray-700">
+                  To confirm account closure, type <strong>&quot;CLOSE MY ACCOUNT&quot;</strong> below:
+                </label>
+                <input
+                  type="text"
+                  id="closure-confirmation"
+                  value={closureConfirmation}
+                  onChange={(e) => setClosureConfirmation(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                  placeholder="Type: CLOSE MY ACCOUNT"
+                  disabled={closingAccount}
+                />
+              </div>
+            </div>
+            
+            <div className="flex flex-col sm:flex-row gap-3 sm:justify-end">
+              <button
+                onClick={handleCloseAccountClosure}
+                className="px-4 py-3 sm:py-2 text-gray-600 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors font-medium min-h-[44px] sm:min-h-0 order-2 sm:order-1"
+                disabled={closingAccount}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAccountClosure}
+                className="px-4 py-3 sm:py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium min-h-[44px] sm:min-h-0 order-1 sm:order-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={closingAccount || closureConfirmation !== 'CLOSE MY ACCOUNT' || !closurePassword}
+              >
+                {closingAccount ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Closing Account...
+                  </div>
+                ) : (
+                  '🗑️ Close Account Permanently'
                 )}
               </button>
             </div>
