@@ -45,10 +45,6 @@ function OwnerDashboard() {
   const [emailForm, setEmailForm] = useState('');
   const [updatingEmail, setUpdatingEmail] = useState(false);
   const emailInputRef = useRef(null);
-  const [showAccountClosureModal, setShowAccountClosureModal] = useState(false);
-  const [closureConfirmation, setClosureConfirmation] = useState('');
-  const [closurePassword, setClosurePassword] = useState('');
-  const [closingAccount, setClosingAccount] = useState(false);
   const [showPasswordChangeModal, setShowPasswordChangeModal] = useState(false);
   const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [updatingPassword, setUpdatingPassword] = useState(false);
@@ -1097,60 +1093,6 @@ function OwnerDashboard() {
     }
   };
 
-  // Account Closure Functions
-  const handleShowAccountClosure = () => {
-    setShowAccountClosureModal(true);
-  };
-
-  const handleCloseAccountClosure = () => {
-    setShowAccountClosureModal(false);
-    setClosureConfirmation('');
-    setClosurePassword('');
-  };
-
-  const handleAccountClosure = async () => {
-    if (closureConfirmation !== 'CLOSE MY ACCOUNT') {
-      toast.warning('Please type "CLOSE MY ACCOUNT" to confirm account closure.');
-      return;
-    }
-
-    if (!closurePassword) {
-      toast.warning('Please enter your password to confirm account closure.');
-      return;
-    }
-
-    setClosingAccount(true);
-
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/owners/profile/close`, {
-        method: "DELETE",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          password: closurePassword,
-          confirmText: closureConfirmation,
-        }),
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || "Failed to close account");
-      }
-
-      toast.success("Account closed successfully. You will be redirected to the home page.");
-      
-      // Clear local storage and redirect
-      setTimeout(() => {
-        navigate('/');
-      }, 2000);
-    } catch (err) {
-      toast.error(`Error closing account: ${err.message}`);
-    } finally {
-      setClosingAccount(false);
-    }
-  };
 
   if (authLoading || loading) {
     return <div className="text-center p-6">Loading dashboard...</div>;
@@ -1568,17 +1510,6 @@ function OwnerDashboard() {
                 </button>
               </div>
               
-              <div className="border-t pt-4">
-                <p className="text-sm text-red-700 mb-3">
-                  ⚠️ <strong>Danger Zone:</strong> Need to close your restaurant account? This action will permanently delete your account, restaurant, and all associated data.
-                </p>
-                <button
-                  onClick={handleShowAccountClosure}
-                  className="bg-red-600 text-white px-4 py-3 sm:py-2 rounded hover:bg-red-700 transition-colors text-sm font-medium w-full sm:w-auto min-h-[44px] sm:min-h-0"
-                >
-                  ⚠️ Close Account
-                </button>
-              </div>
             </div>
           </div>
         </div>
@@ -2331,91 +2262,6 @@ function OwnerDashboard() {
         </div>
       )}
 
-      {/* Account Closure Confirmation Modal */}
-      {showAccountClosureModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-4 sm:p-6 max-w-md w-full">
-            <h3 className="text-lg sm:text-xl font-semibold mb-4 text-red-800">
-              Close Account Permanently
-            </h3>
-            <div className="mb-6">
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-                <div className="flex items-start">
-                  <div className="flex-shrink-0">
-                    <svg className="h-6 w-6 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                  <div className="ml-3">
-                    <h4 className="text-sm font-medium text-red-800 mb-2">
-                      ⚠️ Warning: This action cannot be undone!
-                    </h4>
-                    <div className="text-sm text-red-700 space-y-1">
-                      <p>• Your restaurant account will be permanently deleted</p>
-                      <p>• All dishes and menu items will be removed</p>
-                      <p>• Order history will be archived</p>
-                      <p>• You will lose access to your dashboard</p>
-                      <p>• This action is irreversible</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="space-y-3">
-                <label htmlFor="closure-password" className="block text-sm font-medium text-gray-700">
-                  Enter your password to confirm:
-                </label>
-                <input
-                  type="password"
-                  id="closure-password"
-                  value={closurePassword}
-                  onChange={(e) => setClosurePassword(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                  placeholder="Your account password"
-                  disabled={closingAccount}
-                />
-                
-                <label htmlFor="closure-confirmation" className="block text-sm font-medium text-gray-700">
-                  To confirm account closure, type <strong>&quot;CLOSE MY ACCOUNT&quot;</strong> below:
-                </label>
-                <input
-                  type="text"
-                  id="closure-confirmation"
-                  value={closureConfirmation}
-                  onChange={(e) => setClosureConfirmation(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                  placeholder="Type: CLOSE MY ACCOUNT"
-                  disabled={closingAccount}
-                />
-              </div>
-            </div>
-            
-            <div className="flex flex-col sm:flex-row gap-3 sm:justify-end">
-              <button
-                onClick={handleCloseAccountClosure}
-                className="px-4 py-3 sm:py-2 text-gray-600 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors font-medium min-h-[44px] sm:min-h-0 order-2 sm:order-1"
-                disabled={closingAccount}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleAccountClosure}
-                className="px-4 py-3 sm:py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium min-h-[44px] sm:min-h-0 order-1 sm:order-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={closingAccount || closureConfirmation !== 'CLOSE MY ACCOUNT' || !closurePassword}
-              >
-                {closingAccount ? (
-                  <div className="flex items-center justify-center gap-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    Closing Account...
-                  </div>
-                ) : (
-                  '🗑️ Close Account Permanently'
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
