@@ -39,6 +39,8 @@ import AdminLogin from "./pages/AdminLogin";
 import AdminDashboard from "./pages/AdminDashboard";
 import TermsAndConditions from "./pages/TermsAndConditions";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
+import DemoOrderCheckout from "./pages/DemoOrderCheckout";
+import OwnerAccount from "./pages/OwnerAccount";
 
 
 function AppContent() {
@@ -114,6 +116,10 @@ function AppContent() {
           path="/order-success" 
           element={<OrderSuccess />} 
         />
+        <Route 
+          path="/demo-order-checkout" 
+          element={<DemoOrderCheckout />} 
+        />
 
         {/* ✅ Protected Owner Routes */}
         <Route
@@ -153,6 +159,14 @@ function AppContent() {
           element={
             <ProtectedOwnerRoute>
               <OwnerOrders />
+            </ProtectedOwnerRoute>
+          }
+        />
+        <Route
+          path="/owner/account"
+          element={
+            <ProtectedOwnerRoute>
+              <OwnerAccount />
             </ProtectedOwnerRoute>
           }
         />
