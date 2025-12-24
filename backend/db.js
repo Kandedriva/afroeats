@@ -5,8 +5,8 @@ dotenv.config();
 
 const { Pool } = pkg;
 
-// SSL configuration for Neon (only for production)
-const sslConfig = process.env.NODE_ENV === 'production' ? {
+// SSL configuration for Neon (required for both development and production when using Neon)
+const sslConfig = process.env.PGHOST && process.env.PGHOST.includes('neon.tech') ? {
   ssl: {
     rejectUnauthorized: false // Neon requires SSL but doesn't need strict cert validation
   }

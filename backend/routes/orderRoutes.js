@@ -2,8 +2,133 @@ import express from "express";
 import pool from "../db.js";
 import stripe from "../stripe.js";
 import { requireAuth } from "../middleware/authMiddleware.js";
+import { jobs } from "../services/queue.js";
 
 const router = express.Router();
+
+// Helper function to send order notifications in demo mode
+async function sendDemoOrderNotifications(orderId, items, customerInfo, isGuestOrder = false) {
+  try {
+    console.log(`🔔 Sending demo order notifications for order #${orderId}`);
+    
+    // Get restaurant information for all items
+    const restaurantIds = [...new Set(items.map(item => item.restaurantId || item.restaurant_id))].filter(id => id);
+    
+    if (restaurantIds.length === 0) {
+      console.warn("No restaurant IDs found in order items");
+      return;
+    }
+    
+    // Fetch restaurant and owner information
+    const restaurantResults = await pool.query(`
+      SELECT r.id, r.name, r.phone_number, r.address, ro.id as owner_id, ro.name as owner_name, ro.email as owner_email
+      FROM restaurants r 
+      JOIN restaurant_owners ro ON r.owner_id = ro.id 
+      WHERE r.id = ANY($1)
+    `, [restaurantIds]);
+    
+    const restaurants = restaurantResults.rows;
+    
+    // Group items by restaurant
+    const restaurantOrders = {};
+    items.forEach(item => {
+      const restaurantId = item.restaurantId || item.restaurant_id;
+      if (!restaurantOrders[restaurantId]) {
+        const restaurant = restaurants.find(r => r.id == restaurantId);
+        restaurantOrders[restaurantId] = {
+          restaurant,
+          items: [],
+          total: 0
+        };
+      }
+      restaurantOrders[restaurantId].items.push(item);
+      restaurantOrders[restaurantId].total += item.price * item.quantity;
+    });
+    
+    // Send notifications to each restaurant
+    for (const [restaurantId, orderData] of Object.entries(restaurantOrders)) {
+      const { restaurant, items: restaurantItems, total } = orderData;
+      
+      if (!restaurant) {
+        console.warn(`Restaurant not found for ID ${restaurantId}`);
+        continue;
+      }
+      
+      // Create notification data
+      const notificationData = {
+        type: 'new_order',
+        title: `New Order #${orderId}`,
+        message: `You have received a new ${isGuestOrder ? 'guest' : 'customer'} order for $${total.toFixed(2)}`,
+        orderId,
+        metadata: {
+          customerName: isGuestOrder ? customerInfo.name : `${customerInfo.name || 'Customer'}`,
+          customerEmail: customerInfo.email,
+          customerPhone: customerInfo.phone,
+          items: restaurantItems.map(item => ({
+            name: item.name,
+            quantity: item.quantity,
+            price: item.price
+          })),
+          total: total.toFixed(2),
+          isGuestOrder,
+          orderDate: new Date().toISOString()
+        }
+      };
+      
+      // Ensure notifications table exists
+      try {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS notifications (
+            id SERIAL PRIMARY KEY,
+            owner_id INTEGER REFERENCES restaurant_owners(id),
+            order_id INTEGER REFERENCES orders(id),
+            type VARCHAR(50) NOT NULL,
+            title VARCHAR(255) NOT NULL,
+            message TEXT NOT NULL,
+            data JSONB,
+            read BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
+      } catch (err) {
+        console.warn("Notifications table creation warning:", err.message);
+      }
+
+      // Add notification to database directly (since we're in demo mode)
+      await pool.query(`
+        INSERT INTO notifications (owner_id, order_id, type, title, message, data, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, NOW())
+      `, [
+        restaurant.owner_id, 
+        orderId, 
+        'new_order', 
+        notificationData.title, 
+        notificationData.message, 
+        JSON.stringify(notificationData.metadata)
+      ]);
+      
+      // Also send via the queue system for email notifications
+      await jobs.sendNotification('new_order', 
+        { type: 'owner', id: restaurant.owner_id }, 
+        notificationData
+      );
+      
+      // Send order confirmation email
+      await jobs.sendOrderConfirmation(
+        { id: orderId, total }, 
+        customerInfo,
+        [restaurant]
+      );
+      
+      console.log(`✅ Notification sent to ${restaurant.name} (${restaurant.owner_email})`);
+    }
+    
+    console.log(`🎉 All demo order notifications sent for order #${orderId}`);
+    
+  } catch (error) {
+    console.error("Error sending demo order notifications:", error);
+  }
+}
 
 router.post("/", async (req, res) => {
   const { userId, items, orderDetails, deliveryAddress, deliveryPhone } = req.body;
@@ -97,12 +222,105 @@ router.post("/checkout-session", requireAuth, async (req, res) => {
     });
     
     if (!stripe) {
-      console.error("❌ STRIPE NOT CONFIGURED - This is required for production");
-      return res.status(503).json({ 
-        error: "Payment processing unavailable", 
-        message: "Stripe is not configured. Please contact support.",
-        code: "STRIPE_NOT_CONFIGURED"
-      });
+      console.log("ℹ️ Stripe not configured - entering demo mode for authenticated checkout");
+      
+      try {
+        // Calculate totals
+        const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+        const platformFee = 1.20;
+        const total = subtotal + platformFee;
+
+        // Ensure necessary columns exist
+        try {
+          await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS order_details TEXT");
+          await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_address TEXT");
+          await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_phone VARCHAR(20)");
+          await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_type VARCHAR(20) DEFAULT 'delivery'");
+          await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS restaurant_instructions JSONB");
+          await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS platform_fee DECIMAL(10,2) DEFAULT 0");
+          await pool.query("ALTER TABLE order_items ADD COLUMN IF NOT EXISTS restaurant_id INTEGER REFERENCES restaurants(id)");
+        } catch (err) {
+          console.error("ERROR: Database column creation failed:", err);
+          throw err;
+        }
+
+        // Extract delivery information
+        const finalDeliveryType = deliveryPreferences?.type || 'delivery';
+        const finalDeliveryAddress = deliveryPreferences?.address || deliveryAddress;
+        const finalDeliveryPhone = deliveryPreferences?.phone || deliveryPhone;
+
+        // Combine restaurant instructions into a single string for legacy support
+        let combinedOrderDetails = orderDetails || '';
+        try {
+          if (restaurantInstructions && typeof restaurantInstructions === 'object') {
+            const instructionEntries = Object.entries(restaurantInstructions)
+              .filter(([restaurant, instructions]) => instructions && typeof instructions === 'string' && instructions.trim())
+              .map(([restaurant, instructions]) => `${restaurant}: ${instructions.trim()}`);
+            
+            if (instructionEntries.length > 0) {
+              combinedOrderDetails = instructionEntries.join(' | ');
+            }
+          }
+        } catch (err) {
+          console.error("Error processing restaurant instructions:", err);
+          combinedOrderDetails = orderDetails || '';
+        }
+
+        // Create order in database (mark as paid immediately for demo mode)
+        const orderResult = await pool.query(
+          "INSERT INTO orders (user_id, total, order_details, delivery_address, delivery_phone, delivery_type, restaurant_instructions, status, platform_fee, paid_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW()) RETURNING id",
+          [
+            userId,
+            total,
+            combinedOrderDetails,
+            finalDeliveryAddress,
+            finalDeliveryPhone,
+            finalDeliveryType,
+            JSON.stringify(restaurantInstructions),
+            'received', // Demo mode - order received by restaurant
+            platformFee
+          ]
+        );
+        const orderId = orderResult.rows[0].id;
+
+        // Insert order items with restaurant_id
+        const itemPromises = items.map(item => {
+          return pool.query(
+            "INSERT INTO order_items (order_id, dish_id, name, price, quantity, restaurant_id) VALUES ($1, $2, $3, $4, $5, $6)",
+            [orderId, item.id, item.name, item.price, item.quantity, item.restaurantId || item.restaurant_id]
+          );
+        });
+
+        await Promise.all(itemPromises);
+
+        // Clear the user's cart after creating the order
+        await pool.query("DELETE FROM carts WHERE user_id = $1", [userId]);
+
+        console.log(`Demo authenticated order created: ${orderId} for user ${userId}`);
+
+        // Get customer information for notifications
+        const customerResult = await pool.query("SELECT name, email, phone FROM users WHERE id = $1", [userId]);
+        const customerInfo = customerResult.rows[0] || { 
+          name: 'Customer', 
+          email: 'customer@example.com', 
+          phone: finalDeliveryPhone || 'N/A' 
+        };
+
+        // Send order notifications to restaurants
+        await sendDemoOrderNotifications(orderId, items, customerInfo, false);
+
+        // Get the frontend URL dynamically
+        const frontendUrl = req.headers.origin || req.headers.referer?.replace(/\/$/, '') || 'http://localhost:3000';
+        
+        return res.json({ 
+          url: `${frontendUrl}/demo-order-checkout?order_id=${orderId}`,
+          demo_mode: true,
+          order_id: orderId
+        });
+      } catch (err) {
+        console.error("Demo authenticated order creation error:", err);
+        return res.status(500).json({ error: "Failed to create demo order" });
+      }
     }
 
     console.log("4. Proceeding with Stripe checkout session creation...");
@@ -300,14 +518,63 @@ router.post("/checkout-session", requireAuth, async (req, res) => {
           orderData: JSON.stringify(essentialOrderData),
           userId: userId.toString(),
           platformFee: platformFee.toString()
-        },
+        }
       });
     } catch (stripeError) {
       console.error("❌ Stripe session creation failed:", stripeError.message);
       console.error("❌ Stripe error type:", stripeError.type);
       console.error("❌ Stripe error code:", stripeError.code);
       
-      // Return proper error for production - no fallback
+      // If Stripe fails due to setup issues, fallback to demo mode
+      console.log("Checking if should fallback to demo mode:", stripeError.message);
+      if (stripeError.message.includes('account') || stripeError.message.includes('business') || stripeError.message.includes('Checkout')) {
+        console.log("Falling back to demo mode due to Stripe setup requirement");
+        
+        // Create demo order directly
+        try {
+          const orderResult = await pool.query(
+            "INSERT INTO orders (user_id, total, order_details, delivery_address, delivery_phone, delivery_type, status, platform_fee) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id",
+            [
+              userId,
+              subtotal + platformFee,
+              orderDetails || '',
+              deliveryAddress,
+              deliveryPhone,
+              finalDeliveryType,
+              'received', // Demo orders start as 'received'
+              platformFee
+            ]
+          );
+          const orderId = orderResult.rows[0].id;
+
+          // Insert order items
+          const itemPromises = items.map(item => {
+            return pool.query(
+              "INSERT INTO order_items (order_id, dish_id, name, price, quantity, restaurant_id) VALUES ($1, $2, $3, $4, $5, $6)",
+              [orderId, item.id, item.name, item.price, item.quantity, item.restaurantId]
+            );
+          });
+          await Promise.all(itemPromises);
+
+          console.log(`Demo order created: ${orderId} for user ${userId}`);
+
+          // Return demo mode response
+          return res.json({
+            url: `${frontendUrl}/demo-order-checkout?order_id=${orderId}`,
+            demo_mode: true,
+            order_id: orderId
+          });
+        } catch (demoError) {
+          console.error("Demo order creation failed:", demoError);
+          return res.status(500).json({ 
+            error: "Failed to create demo order", 
+            details: demoError.message,
+            timestamp: new Date().toISOString()
+          });
+        }
+      }
+      
+      // Return proper error for other Stripe issues
       return res.status(503).json({
         error: "Payment processing failed",
         message: "Unable to create checkout session. Please try again or contact support.",
@@ -720,7 +987,7 @@ router.post("/checkout-session-ORIGINAL", requireAuth, async (req, res) => {
         sessionData: JSON.stringify(essentialSessionData),
         orderId: orderId.toString(),
         userId: userId.toString()
-      },
+      }
     });
 
     // Store the full restaurant groups data temporarily in database for webhook processing
@@ -831,8 +1098,10 @@ router.get("/:id", async (req, res) => {
 router.post("/guest-checkout-session", async (req, res) => {
   console.log("=== GUEST CHECKOUT SESSION START ===");
   
+  // Extract variables outside try block so they're accessible in catch block
+  const { guestInfo, items, orderDetails, deliveryType = "delivery" } = req.body;
+  
   try {
-    const { guestInfo, items, orderDetails, deliveryType = "delivery" } = req.body;
 
     console.log("Guest checkout session request data:", {
       guestInfo: guestInfo ? { name: guestInfo.name, email: guestInfo.email } : null,
@@ -936,7 +1205,7 @@ router.post("/guest-checkout-session", async (req, res) => {
             guestInfo.email,
             true, // is_guest_order = true
             deliveryType,
-            'paid' // Demo mode - mark as paid immediately
+            'received' // Demo mode - order received by restaurant
           ]
         );
         const orderId = result.rows[0].id;
@@ -952,6 +1221,9 @@ router.post("/guest-checkout-session", async (req, res) => {
         await Promise.all(itemPromises);
 
         console.log(`Demo guest order created: ${orderId} for ${guestInfo.name} (${guestInfo.email})`);
+
+        // Send order notifications to restaurants
+        await sendDemoOrderNotifications(orderId, items, guestInfo, true);
 
         // Get the frontend URL dynamically
         const frontendUrl = req.headers.origin || req.headers.referer?.replace(/\/$/, '') || 'http://localhost:3000';
@@ -1082,7 +1354,7 @@ router.post("/guest-checkout-session", async (req, res) => {
       metadata: {
         orderData: JSON.stringify(essentialOrderData),
         isGuestOrder: 'true'
-      },
+      }
     });
 
     // Store the full order data temporarily in database for webhook processing
@@ -1115,6 +1387,89 @@ router.post("/guest-checkout-session", async (req, res) => {
       name: err.name
     });
     console.error("=== END ERROR ===");
+    
+    // If Stripe fails due to setup issues, fallback to demo mode
+    console.log("Checking if should fallback to demo mode:", err.message);
+    if (err.message.includes('account') || err.message.includes('business') || err.message.includes('Checkout')) {
+      console.log("Falling back to demo mode due to Stripe setup requirement");
+      
+      // Create demo order directly
+      try {
+        // Recalculate totals for fallback demo mode
+        const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+        const platformFee = 1.20;
+        
+        // Get delivery fee from restaurant (for delivery orders only)
+        let deliveryFee = 0;
+        if (deliveryType === "delivery" && items.length > 0) {
+          const restaurantId = items[0].restaurantId || items[0].restaurant_id;
+          if (restaurantId) {
+            try {
+              await pool.query("ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS delivery_fee DECIMAL(10, 2) DEFAULT 0.00");
+              const deliveryFeeRes = await pool.query(
+                "SELECT delivery_fee FROM restaurants WHERE id = $1",
+                [restaurantId]
+              );
+              if (deliveryFeeRes.rows.length > 0) {
+                deliveryFee = parseFloat(deliveryFeeRes.rows[0].delivery_fee) || 0;
+              }
+            } catch (err) {
+              console.warn("Could not fetch delivery fee:", err);
+            }
+          }
+        }
+        
+        const total = subtotal + platformFee + deliveryFee;
+        
+        const orderResult = await pool.query(
+          `INSERT INTO orders (user_id, total, order_details, delivery_address, delivery_phone, delivery_type, status, platform_fee, guest_name, guest_email, is_guest_order)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
+          [
+            null, // user_id is null for guest orders
+            total,
+            orderDetails || '',
+            guestInfo.address,
+            guestInfo.phone,
+            deliveryType,
+            'received', // Demo orders start as 'received'
+            platformFee,
+            guestInfo.name,
+            guestInfo.email,
+            true
+          ]
+        );
+        const orderId = orderResult.rows[0].id;
+
+        // Insert order items
+        const itemPromises = items.map(item => {
+          return pool.query(
+            "INSERT INTO order_items (order_id, dish_id, name, price, quantity, restaurant_id) VALUES ($1, $2, $3, $4, $5, $6)",
+            [orderId, item.id, item.name, item.price, item.quantity, item.restaurantId]
+          );
+        });
+        await Promise.all(itemPromises);
+
+        console.log(`Demo guest order created: ${orderId} for ${guestInfo.name} (${guestInfo.email})`);
+
+        // Get the frontend URL dynamically
+        const frontendUrl = req.headers.origin || req.headers.referer?.replace(/\/$/, '') || 'http://localhost:3000';
+        
+        // Return demo mode response
+        return res.json({
+          url: `${frontendUrl}/demo-order-checkout?order_id=${orderId}`,
+          demo_mode: true,
+          order_id: orderId
+        });
+      } catch (demoError) {
+        console.error("Demo order creation failed:", demoError);
+        return res.status(500).json({ 
+          error: "Failed to create demo order", 
+          details: demoError.message,
+          timestamp: new Date().toISOString()
+        });
+      }
+    }
+    
     res.status(500).json({ 
       error: "Failed to create guest checkout session", 
       details: err.message,
@@ -1173,7 +1528,7 @@ router.post("/guest", async (req, res) => {
         guestInfo.name,
         guestInfo.email,
         true, // is_guest_order = true
-        'paid' // Demo mode - mark as paid immediately
+        'received' // Demo mode - order received by restaurant
       ]
     );
     const orderId = result.rows[0].id;

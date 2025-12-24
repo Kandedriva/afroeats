@@ -93,10 +93,14 @@ export default function Checkout({ user }) {
       const data = await res.json();
       if (res.ok) {
         if (data.demo_mode) {
+          // Store order info for demo checkout
+          localStorage.setItem('demo_order_total', total.toFixed(2));
+          localStorage.setItem('demo_order_items', JSON.stringify(cart));
+          
           // Demo mode - redirect to demo checkout (cart will be cleared after payment)
           navigate(`/demo-order-checkout?order_id=${data.order_id}`);
         } else {
-          // Real Stripe checkout - redirect to Stripe (cart will be cleared after payment)
+          // Stripe test mode checkout - redirect to Stripe (cart will be cleared after payment)
           window.location.href = data.url;
         }
       } else {
