@@ -348,6 +348,54 @@ router.get('/restaurants', requireAdminAuth, async (req, res) => {
   }
 });
 
+// Get single order by ID (for demo checkout and admin use)
+router.get('/orders/:id', requireAdminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Get order with details and items
+    const orderResult = await pool.query(`
+      SELECT 
+        o.*,
+        u.name as customer_name,
+        u.email as customer_email,
+        COUNT(DISTINCT oi.id) as total_items,
+        COUNT(DISTINCT r.id) as restaurants_count,
+        STRING_AGG(DISTINCT r.name, ', ') as restaurant_names
+      FROM orders o
+      LEFT JOIN users u ON o.user_id = u.id
+      LEFT JOIN order_items oi ON o.id = oi.order_id
+      LEFT JOIN restaurants r ON r.id = COALESCE(oi.restaurant_id, (SELECT restaurant_id FROM dishes WHERE id = oi.dish_id))
+      WHERE o.id = $1
+      GROUP BY o.id, u.name, u.email
+    `, [id]);
+    
+    if (orderResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    
+    // Get order items with restaurant info
+    const itemsResult = await pool.query(`
+      SELECT 
+        oi.*,
+        r.name as restaurant_name,
+        r.phone_number as restaurant_phone
+      FROM order_items oi
+      LEFT JOIN restaurants r ON oi.restaurant_id = r.id
+      WHERE oi.order_id = $1
+      ORDER BY oi.id
+    `, [id]);
+    
+    const order = orderResult.rows[0];
+    order.items = itemsResult.rows;
+    
+    res.json(order);
+  } catch (error) {
+    console.error('Get order details error:', error);
+    res.status(500).json({ error: 'Failed to get order details' });
+  }
+});
+
 // Get orders list with pagination and filters
 router.get('/orders', requireAdminAuth, async (req, res) => {
   try {
