@@ -107,10 +107,14 @@ export default function GuestCheckout() {
       
       if (res.ok) {
         if (data.demo_mode) {
+          // Store order info for demo checkout
+          localStorage.setItem('demo_order_total', guestTotal.toFixed(2));
+          localStorage.setItem('demo_order_items', JSON.stringify(guestCart));
+          
           // Demo mode - redirect to demo checkout
           navigate(`/demo-order-checkout?order_id=${data.order_id}`);
         } else {
-          // Real Stripe checkout - redirect to Stripe
+          // Stripe test mode checkout - redirect to Stripe
           // Don't clear cart here - it will be cleared after successful payment
           window.location.href = data.url;
         }
