@@ -151,16 +151,51 @@ afro-eats/.env
 *password*
 
 # Development documentation (may contain sensitive setup information)
-*STRIPE*
-*AUTHENTICATION*
-*DEVELOPMENT*
-*SETUP*
-*GUIDE*
-*.md
+# Keep README.md but ignore development/setup guides
+*STRIPE*.md
+*AUTHENTICATION*.md
+*DEVELOPMENT*.md
+*SETUP*.md
+*GUIDE*.md
+*NOTIFICATION*.md
+*IMPLEMENTED*.md
+*COMPLETE*.md
+*CHECKLIST*.md
+IMPROVEMENTS_GUIDE.md
+IMPROVEMENTS_SUMMARY.md
+ORDER_SYSTEM_*.md
+PAYMENT_FLOW_*.md
+PLATFORM_FEE_*.md
+TODO_*.md
+DEPLOY-NOW.md
+DEPLOYMENT-NOTES.md
+DEPLOYMENT-STRATEGY.md
+ENVIRONMENT-VARIABLES.md
+NETLIFY-*.md
+SAFARI-*.md
+SECURITY-SETUP.md
+PRODUCTION-TROUBLESHOOTING.md
+RENDER-*.md
+R2-*.md
 
 # Upload directories with user content
 backend/uploads/
 afro-eats/build/
+
+# Temporary files and backups
+*_BACKUP.js
+*_BACKUP.json
+*.backup
+*.bak
+/tmp/
+*.tmp
+
+# Example and template files (keep .env.example for production reference)
+# but ignore other examples
+*example.json
+*example.js
+*template.json
+*template.js
 
 # IDE and Editor files
 .vscode/

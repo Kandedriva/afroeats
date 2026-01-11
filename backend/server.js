@@ -23,6 +23,7 @@ import debugRoutes from "./routes/debugRoutes.js";
 import supportRoutes from "./routes/supportRoutes.js";
 import migrationRoutes from "./routes/migrationRoutes.js";
 import debugImageRoutes from "./routes/debugImageRoutes.js";
+import NotificationService from './services/NotificationService.js';
 
 // Import security and analytics
 import { 
@@ -358,6 +359,49 @@ app.post('/api/test-session-create', (req, res) => {
       timestamp: new Date().toISOString()
     });
   });
+});
+
+// Test notification endpoints
+// Test SMS endpoint
+app.get('/test-sms', async (req, res) => {
+  try {
+    const testPhone = req.query.phone;
+    if (!testPhone) {
+      return res.status(400).json({
+        error: 'Missing phone number',
+        usage: 'GET /test-sms?phone=+15551234567'
+      });
+    }
+
+    const result = await NotificationService.testSMSConfig(testPhone);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Test email endpoint
+app.get('/test-email', async (req, res) => {
+  try {
+    const testEmail = req.query.email;
+    if (!testEmail) {
+      return res.status(400).json({
+        error: 'Missing email address',
+        usage: 'GET /test-email?email=test@example.com'
+      });
+    }
+
+    const result = await NotificationService.testEmailConfig(testEmail);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
 });
 
 // Remove test endpoints in production
