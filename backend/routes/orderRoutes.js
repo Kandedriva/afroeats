@@ -366,8 +366,7 @@ router.post("/checkout-session", requireAuth, async (req, res) => {
     
     // Calculate totals
     const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-    const platformFeeRate = 0.05; // 5% platform fee
-    const platformFee = Math.round(subtotal * platformFeeRate * 100) / 100;
+    const platformFee = 1.20; // Flat $1.20 platform fee per order
     const total = subtotal + platformFee;
     console.log("20. Totals calculated:", { subtotal, platformFee, total });
 
@@ -484,7 +483,7 @@ router.post("/checkout-session", requireAuth, async (req, res) => {
       price_data: {
         currency: 'usd',
         product_data: {
-          name: 'Platform Fee (5%)',
+          name: 'Platform Fee',
           description: 'Service fee for using OrderDabaly platform',
         },
         unit_amount: Math.round(platformFee * 100),
@@ -592,13 +591,23 @@ router.post("/checkout-session", requireAuth, async (req, res) => {
           created_at TIMESTAMP DEFAULT NOW()
         )
       `);
-      
+
+      // ✅ FIXED: Include restaurantTotals in stored data for webhook
+      const completeOrderData = {
+        ...orderData,
+        restaurantTotals, // Critical: Include restaurant breakdown for notifications
+      };
+
       await pool.query(
         "INSERT INTO temp_order_data (session_id, order_data, created_at) VALUES ($1, $2, NOW()) ON CONFLICT (session_id) DO UPDATE SET order_data = $2",
-        [session.id, JSON.stringify(orderData)]
+        [session.id, JSON.stringify(completeOrderData)]
       );
+
+      console.log(`✅ Stored complete order data for session: ${session.id}`);
     } catch (tempStorageError) {
-      console.warn("Failed to store temporary order data:", tempStorageError.message);
+      console.error("❌ Failed to store temporary order data:", tempStorageError.message);
+      // This is critical - if we can't store data, webhook won't work
+      throw new Error("Failed to store order data for payment processing");
     }
 
     // No order created yet - it will be created in payment success handler
