@@ -80,7 +80,7 @@ OrderDabaly charges a commission per order (e.g., $1.20 per completed transactio
 
 Customers are responsible for all applicable taxes and delivery fees, which are determined by the restaurant.
 
-Refunds, cancellations, and disputes are subject to the restaurant’s policy, not OrderDabaly. We may assist in resolving disputes but are not liable for refunds.
+Refunds, cancellations, and disputes are subject to the restaurant&apos;s policy, not OrderDabaly. We may assist in resolving disputes but are not liable for refunds.
 
 7. Delivery
 
@@ -115,7 +115,7 @@ These are transactional messages necessary for the operation of your restaurant 
 
 9.3 Message Frequency
 
-Message frequency varies based on your restaurant's order volume. You may receive multiple messages per day during peak business hours when orders are placed.
+Message frequency varies based on your restaurant&apos;s order volume. You may receive multiple messages per day during peak business hours when orders are placed.
 
 9.4 Message and Data Rates
 
@@ -128,7 +128,7 @@ You may opt out of SMS notifications at any time by:
 • Updating your notification preferences in your restaurant owner dashboard under Settings → Notifications
 • Contacting our support team at storeshopify825@gmail.com with your request to opt out
 
-Please note that opting out of SMS notifications may impact your ability to receive timely order notifications, which could affect your restaurant's service quality and customer satisfaction.
+Please note that opting out of SMS notifications may impact your ability to receive timely order notifications, which could affect your restaurant&apos;s service quality and customer satisfaction.
 
 9.6 Privacy and Data Security
 
