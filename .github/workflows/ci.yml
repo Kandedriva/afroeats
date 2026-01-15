@@ -1,0 +1,254 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  NODE_VERSION: '18.x'
+
+jobs:
+  # Backend tests
+  backend-test:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: afroeats_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install backend dependencies
+        working-directory: ./backend
+        run: npm ci
+
+      - name: Run ESLint
+        working-directory: ./backend
+        run: npm run lint
+        continue-on-error: true
+
+      - name: Run backend tests
+        working-directory: ./backend
+        env:
+          NODE_ENV: test
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGHOST: localhost
+          PGPORT: 5432
+          PGDATABASE: afroeats_test
+          SESSION_SECRET: test-secret-key-for-ci
+        run: npm test
+
+      - name: Generate test coverage
+        working-directory: ./backend
+        env:
+          NODE_ENV: test
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGHOST: localhost
+          PGPORT: 5432
+          PGDATABASE: afroeats_test
+          SESSION_SECRET: test-secret-key-for-ci
+        run: npm run test:coverage
+
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./backend/coverage/coverage-final.json
+          flags: backend
+          name: backend-coverage
+
+  # Frontend tests
+  frontend-test:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: afro-eats/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: ./afro-eats
+        run: npm ci
+
+      - name: Run frontend tests
+        working-directory: ./afro-eats
+        run: npm test -- --coverage --watchAll=false
+
+      - name: Build frontend
+        working-directory: ./afro-eats
+        run: npm run build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: frontend-build
+          path: afro-eats/build
+          retention-days: 7
+
+  # Security audit
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Run npm audit (backend)
+        working-directory: ./backend
+        run: npm audit --audit-level=high
+        continue-on-error: true
+
+      - name: Run npm audit (frontend)
+        working-directory: ./afro-eats
+        run: npm audit --audit-level=high
+        continue-on-error: true
+
+  # Code quality checks
+  code-quality:
+    name: Code Quality
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install backend dependencies
+        working-directory: ./backend
+        run: npm ci
+
+      - name: Check code formatting (backend)
+        working-directory: ./backend
+        run: npm run format -- --check
+        continue-on-error: true
+
+      - name: Install frontend dependencies
+        working-directory: ./afro-eats
+        run: npm ci
+
+      - name: Check code formatting (frontend)
+        working-directory: ./afro-eats
+        run: npm run format -- --check
+        continue-on-error: true
+
+  # Database migrations check
+  migrations-check:
+    name: Database Migrations Check
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: afroeats_migration_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get install -y postgresql-client
+
+      - name: Run migrations
+        working-directory: ./backend/migrations
+        env:
+          PGPASSWORD: postgres
+        run: |
+          for file in *.sql; do
+            echo "Running migration: $file"
+            psql -h localhost -U postgres -d afroeats_migration_test -f "$file"
+          done
+
+      - name: Verify database schema
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d afroeats_migration_test -c "\dt" > schema.txt
+          cat schema.txt
+
+  # Deploy to staging (only on main branch)
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [backend-test, frontend-test, security-audit]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy notification
+        run: |
+          echo "🚀 Deploying to staging environment"
+          echo "This step would trigger deployment to Render/Netlify"
+          # Add actual deployment commands here
+          # Example: curl -X POST $RENDER_DEPLOY_HOOK_URL
+
+  # Notify on failure
+  notify-failure:
+    name: Notify on Failure
+    runs-on: ubuntu-latest
+    needs: [backend-test, frontend-test]
+    if: failure()
+
+    steps:
+      - name: Send failure notification
+        run: |
+          echo "❌ CI Pipeline failed"
+          echo "Check the workflow run for details"
+          # Add notification logic here (Slack, Discord, email, etc.)
