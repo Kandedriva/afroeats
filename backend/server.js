@@ -24,6 +24,7 @@ import supportRoutes from "./routes/supportRoutes.js";
 import migrationRoutes from "./routes/migrationRoutes.js";
 import debugImageRoutes from "./routes/debugImageRoutes.js";
 import NotificationService from './services/NotificationService.js';
+import webhookDebugRoutes from './routes/webhookDebug.js';
 
 // Import security and analytics
 import { 
@@ -320,6 +321,7 @@ app.use("/api/debug", debugRoutes);
 app.use("/api/debug", debugImageRoutes);
 app.use("/api/support", supportRoutes);
 app.use("/api/migration", migrationRoutes);
+app.use("/api/webhook-debug", webhookDebugRoutes);
 
 // Root route for deployment health checks
 app.get('/', (req, res) => {
@@ -362,6 +364,61 @@ app.post('/api/test-session-create', (req, res) => {
 });
 
 // Test notification endpoints
+// Test webhook processing endpoint
+app.get('/test-webhook-process', async (req, res) => {
+  try {
+    console.log('🧪 Manual webhook test triggered');
+
+    // Get the most recent temp_order_data
+    const tempDataResult = await pool.query(
+      'SELECT * FROM temp_order_data ORDER BY created_at DESC LIMIT 1'
+    );
+
+    if (tempDataResult.rows.length === 0) {
+      return res.status(404).json({
+        error: 'No temp order data found',
+        message: 'Place an order first to create temp data'
+      });
+    }
+
+    const tempData = tempDataResult.rows[0];
+    const sessionId = tempData.session_id;
+    const orderData = tempData.order_data;
+
+    console.log(`📦 Processing temp order for session: ${sessionId}`);
+    console.log('Order data:', JSON.stringify(orderData, null, 2));
+
+    // Check if order already exists
+    const existingOrder = await pool.query(
+      'SELECT id FROM orders WHERE stripe_session_id = $1',
+      [sessionId]
+    );
+
+    if (existingOrder.rows.length > 0) {
+      return res.json({
+        success: false,
+        message: 'Order already exists for this session',
+        orderId: existingOrder.rows[0].id,
+        sessionId: sessionId
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Temp order data found',
+      sessionId: sessionId,
+      orderData: orderData,
+      note: 'This would be processed by the webhook. Use Stripe CLI or dashboard to test actual webhook.'
+    });
+  } catch (error) {
+    console.error('❌ Test webhook error:', error);
+    res.status(500).json({
+      error: error.message,
+      stack: error.stack
+    });
+  }
+});
+
 // Test SMS endpoint
 app.get('/test-sms', async (req, res) => {
   try {
