@@ -171,7 +171,7 @@ Use the Platform for illegal purposes.
 
 Register with false or stolen information.
 
-Interfere with the Platform's security or functionality.
+Interfere with the Platform&apos;s security or functionality.
 
 Copy, modify, or resell the Platform without authorization.
 
