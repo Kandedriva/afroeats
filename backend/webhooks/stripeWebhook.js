@@ -255,8 +255,12 @@ export const handleStripeWebhook = async (req, res) => {
             const totalPlatformFee = platformFee || 1.20;
             const totalOrderAmount = Object.values(restaurantTotals).reduce((sum, r) => sum + r.total, 0);
 
+            console.log(`📊 Order totals - Total: $${totalOrderAmount.toFixed(2)}, Platform fee: $${totalPlatformFee.toFixed(2)}, Restaurants: ${Object.keys(restaurantTotals).length}`);
+
             for (const [restaurantId, restaurantData] of Object.entries(restaurantTotals)) {
               const { restaurant, total: restaurantTotal } = restaurantData;
+
+              console.log(`🏪 Processing restaurant: ${restaurant.name}, Order total: $${restaurantTotal.toFixed(2)}`);
 
               if (restaurant.stripe_account_id) {
                 try {
@@ -265,6 +269,20 @@ export const handleStripeWebhook = async (req, res) => {
                   const restaurantPercentage = restaurantTotal / totalOrderAmount;
                   const restaurantPlatformFee = Math.round(totalPlatformFee * restaurantPercentage * 100); // in cents
                   const restaurantAmount = Math.round(restaurantTotal * 100) - restaurantPlatformFee;
+
+                  // Validate transfer amount (must be at least 1 cent)
+                  if (restaurantAmount < 1) {
+                    console.warn(
+                      `⚠️ Skipping transfer to ${restaurant.name}: Amount too small ($${(restaurantAmount / 100).toFixed(2)}). Order total: $${restaurantTotal.toFixed(2)}, Platform fee share: $${(restaurantPlatformFee / 100).toFixed(2)}`
+                    );
+
+                    // Mark payment as completed with note about small amount
+                    await pool.query(
+                      'UPDATE restaurant_payments SET status = $1, processed_at = NOW() WHERE order_id = $2 AND restaurant_id = $3',
+                      ['completed_no_transfer', orderId, restaurantId]
+                    );
+                    continue;
+                  }
 
                   console.log(
                     `💸 Transferring $${(restaurantAmount / 100).toFixed(2)} to restaurant ${restaurant.name} (Their share of $1.20 platform fee: $${(restaurantPlatformFee / 100).toFixed(2)})`
