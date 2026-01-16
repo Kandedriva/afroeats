@@ -52,6 +52,7 @@ export const handleStripeWebhook = async (req, res) => {
           } = orderData;
 
           console.log(`📦 Creating order with ${items.length} items from ${Object.keys(restaurantTotals || {}).length} restaurant(s)`);
+          console.log(`👤 User ID from order data: ${userId} (type: ${typeof userId})`);
 
           // Create the order in database
           const orderResult = await pool.query(
@@ -89,7 +90,12 @@ export const handleStripeWebhook = async (req, res) => {
           console.log(`✅ Inserted ${items.length} order items`);
 
           // ✅ Create customer notification for order confirmation
-          if (userId) {
+          console.log(`🔔 Checking if should create customer notification. userId: ${userId}, type: ${typeof userId}`);
+
+          // Handle userId as either number or string
+          const numericUserId = userId ? parseInt(userId, 10) : null;
+
+          if (numericUserId && !isNaN(numericUserId)) {
             try {
               // Ensure customer_notifications table exists
               await pool.query(`
@@ -116,7 +122,7 @@ export const handleStripeWebhook = async (req, res) => {
                 `INSERT INTO customer_notifications (user_id, order_id, type, title, message, data)
                  VALUES ($1, $2, $3, $4, $5, $6)`,
                 [
-                  userId,
+                  numericUserId,
                   orderId,
                   'order_confirmed',
                   'Order Confirmed! 🎉',
@@ -130,10 +136,13 @@ export const handleStripeWebhook = async (req, res) => {
                 ]
               );
 
-              console.log(`✅ Customer notification created for user ${userId}, order ${orderId}`);
+              console.log(`✅ Customer notification created for user ${numericUserId}, order ${orderId}`);
             } catch (notifError) {
               console.error('❌ Failed to create customer notification:', notifError.message);
+              console.error('❌ Notification error details:', notifError.stack);
             }
+          } else {
+            console.log(`⚠️ Skipping customer notification - no valid userId (userId: ${userId})`);
           }
 
           // ✅ CRITICAL FIX: Send notifications to restaurant owners
