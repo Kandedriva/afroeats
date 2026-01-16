@@ -157,4 +157,63 @@ router.post('/test-notification', async (req, res) => {
   }
 });
 
+// Test customer notification creation
+router.post('/test-customer-notification', async (req, res) => {
+  try {
+    const userId = req.session?.userId || req.body.userId;
+
+    if (!userId) {
+      return res.status(400).json({
+        error: 'No userId provided. Either log in or provide userId in request body.'
+      });
+    }
+
+    // Ensure customer_notifications table exists
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS customer_notifications (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        order_id INTEGER REFERENCES orders(id) ON DELETE CASCADE,
+        type VARCHAR(50) NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        message TEXT NOT NULL,
+        data JSONB DEFAULT '{}',
+        read BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+    // Create test notification
+    const result = await pool.query(
+      `INSERT INTO customer_notifications (user_id, order_id, type, title, message, data)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [
+        userId,
+        null, // No specific order
+        'test_notification',
+        'Test Notification 🧪',
+        'This is a test notification to verify your notification system is working correctly!',
+        JSON.stringify({
+          testTime: new Date().toISOString(),
+          source: 'debug-endpoint'
+        })
+      ]
+    );
+
+    res.json({
+      success: true,
+      message: 'Test notification created successfully!',
+      notification: result.rows[0],
+      instructions: 'Check your notifications page at /my-notifications to see this notification.'
+    });
+  } catch (error) {
+    console.error('❌ Test customer notification failed:', error);
+    res.status(500).json({
+      error: 'Test customer notification failed',
+      message: error.message,
+      stack: error.stack
+    });
+  }
+});
+
 export default router;
