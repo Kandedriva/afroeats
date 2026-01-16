@@ -104,7 +104,12 @@ function CustomerNotifications() {
       return notifications.filter(n => n.type.startsWith('refund_'));
     }
     if (filterType === 'order_update') {
-      return notifications.filter(n => n.type === 'order_update' || n.type === 'order_completed');
+      return notifications.filter(n =>
+        n.type === 'order_update' ||
+        n.type === 'order_completed' ||
+        n.type === 'order_confirmed' ||
+        n.type === 'order_ready'
+      );
     }
     return notifications;
   };
@@ -116,8 +121,14 @@ function CustomerNotifications() {
     if (type.startsWith('refund_deny')) {
       return '❌';
     }
-    if (type === 'order_completed') {
+    if (type === 'order_confirmed') {
+      return '🎉';
+    }
+    if (type === 'order_ready') {
       return '🍽️';
+    }
+    if (type === 'order_completed') {
+      return '✅';
     }
     if (type === 'order_update') {
       return '📋';
@@ -132,8 +143,14 @@ function CustomerNotifications() {
     if (type.startsWith('refund_deny')) {
       return 'bg-red-50 border-red-200';
     }
-    if (type === 'order_completed') {
+    if (type === 'order_confirmed') {
+      return 'bg-green-50 border-green-200';
+    }
+    if (type === 'order_ready') {
       return 'bg-blue-50 border-blue-200';
+    }
+    if (type === 'order_completed') {
+      return 'bg-green-50 border-green-200';
     }
     if (type === 'order_update') {
       return 'bg-yellow-50 border-yellow-200';
@@ -143,7 +160,12 @@ function CustomerNotifications() {
 
   const filteredNotifications = getFilteredNotifications();
   const refundNotifications = notifications.filter(n => n.type.startsWith('refund_'));
-  const orderNotifications = notifications.filter(n => n.type === 'order_update' || n.type === 'order_completed');
+  const orderNotifications = notifications.filter(n =>
+    n.type === 'order_update' ||
+    n.type === 'order_completed' ||
+    n.type === 'order_confirmed' ||
+    n.type === 'order_ready'
+  );
 
   if (authLoading || loading) {
     return (
