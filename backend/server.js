@@ -76,17 +76,24 @@ app.use(cors(corsOptions));
 // Body parsing middleware with comprehensive error handling
 app.use((req, res, next) => {
   const contentType = req.headers['content-type'] || '';
-  
+
+  // CRITICAL: Skip body parsing for Stripe webhook endpoint
+  // Stripe webhooks need the raw body buffer for signature verification
+  if (req.url === '/api/webhook' || req.url.startsWith('/api/webhook?')) {
+    console.log('⚡ Skipping body parsing for Stripe webhook:', req.url);
+    return next();
+  }
+
   // Skip ALL body parsing for multipart/form-data (handled by multer)
   if (contentType.toLowerCase().includes('multipart/form-data')) {
     console.log('Skipping body parsing for multipart request:', req.url);
     req.body = {}; // Ensure req.body exists
     return next();
   }
-  
+
   // Only parse JSON for explicit JSON content type
   if (contentType.toLowerCase().includes('application/json')) {
-    express.json({ 
+    express.json({
       limit: '10mb',
       strict: false,
       type: 'application/json'
