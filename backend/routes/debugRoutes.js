@@ -219,6 +219,27 @@ router.post('/test-customer-notification', async (req, res) => {
 // Check recent orders and their notifications
 router.get('/check-order-notifications', async (req, res) => {
   try {
+    // First, ensure the customer_notifications table has all required columns
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS customer_notifications (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        order_id INTEGER REFERENCES orders(id) ON DELETE CASCADE,
+        type VARCHAR(50) NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        message TEXT NOT NULL,
+        data JSONB DEFAULT '{}',
+        read BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+    // Add order_id column if it doesn't exist
+    await pool.query(`
+      ALTER TABLE customer_notifications
+      ADD COLUMN IF NOT EXISTS order_id INTEGER REFERENCES orders(id) ON DELETE CASCADE
+    `);
+
     // Get recent orders with user info
     const ordersResult = await pool.query(`
       SELECT
