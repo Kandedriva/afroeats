@@ -216,4 +216,75 @@ router.post('/test-customer-notification', async (req, res) => {
   }
 });
 
+// Check recent orders and their notifications
+router.get('/check-order-notifications', async (req, res) => {
+  try {
+    // Get recent orders with user info
+    const ordersResult = await pool.query(`
+      SELECT
+        o.id as order_id,
+        o.user_id,
+        o.created_at as order_created,
+        o.status,
+        o.stripe_session_id,
+        u.name as customer_name,
+        u.email as customer_email
+      FROM orders o
+      LEFT JOIN users u ON o.user_id = u.id
+      ORDER BY o.created_at DESC
+      LIMIT 5
+    `);
+
+    // For each order, check if notifications exist
+    const ordersWithNotifications = await Promise.all(
+      ordersResult.rows.map(async (order) => {
+        if (!order.user_id) {
+          return {
+            ...order,
+            notifications: [],
+            notificationCount: 0,
+            issue: 'No user_id - guest order or missing user association'
+          };
+        }
+
+        const notifResult = await pool.query(
+          'SELECT * FROM customer_notifications WHERE user_id = $1 AND (order_id = $2 OR order_id IS NULL) ORDER BY created_at DESC',
+          [order.user_id, order.order_id]
+        );
+
+        return {
+          ...order,
+          notifications: notifResult.rows,
+          notificationCount: notifResult.rows.length,
+          issue: notifResult.rows.length === 0 ? 'No notifications created for this order' : null
+        };
+      })
+    );
+
+    // Get total notification count
+    const totalNotifResult = await pool.query(
+      'SELECT COUNT(*) as count FROM customer_notifications'
+    );
+
+    res.json({
+      success: true,
+      totalNotifications: parseInt(totalNotifResult.rows[0].count),
+      recentOrders: ordersWithNotifications,
+      summary: {
+        ordersChecked: ordersResult.rows.length,
+        ordersWithNotifications: ordersWithNotifications.filter(o => o.notificationCount > 0).length,
+        ordersWithoutNotifications: ordersWithNotifications.filter(o => o.notificationCount === 0).length,
+        guestOrders: ordersWithNotifications.filter(o => !o.user_id).length
+      }
+    });
+  } catch (error) {
+    console.error('❌ Check order notifications failed:', error);
+    res.status(500).json({
+      error: 'Failed to check order notifications',
+      message: error.message,
+      stack: error.stack
+    });
+  }
+});
+
 export default router;
