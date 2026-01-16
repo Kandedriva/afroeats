@@ -88,6 +88,54 @@ export const handleStripeWebhook = async (req, res) => {
 
           console.log(`✅ Inserted ${items.length} order items`);
 
+          // ✅ Create customer notification for order confirmation
+          if (userId) {
+            try {
+              // Ensure customer_notifications table exists
+              await pool.query(`
+                CREATE TABLE IF NOT EXISTS customer_notifications (
+                  id SERIAL PRIMARY KEY,
+                  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                  order_id INTEGER REFERENCES orders(id) ON DELETE CASCADE,
+                  type VARCHAR(50) NOT NULL,
+                  title VARCHAR(255) NOT NULL,
+                  message TEXT NOT NULL,
+                  data JSONB DEFAULT '{}',
+                  read BOOLEAN DEFAULT FALSE,
+                  created_at TIMESTAMP DEFAULT NOW()
+                )
+              `);
+
+              // Get restaurant names for the notification message
+              const restaurantNames = Object.values(restaurantTotals || {})
+                .map(r => r.restaurant.name)
+                .join(', ');
+
+              // Create notification
+              await pool.query(
+                `INSERT INTO customer_notifications (user_id, order_id, type, title, message, data)
+                 VALUES ($1, $2, $3, $4, $5, $6)`,
+                [
+                  userId,
+                  orderId,
+                  'order_confirmed',
+                  'Order Confirmed! 🎉',
+                  `Your order #${orderId} from ${restaurantNames} has been confirmed and is being prepared. You will be notified when it's ready.`,
+                  JSON.stringify({
+                    orderId,
+                    total,
+                    restaurantNames,
+                    itemCount: items.length
+                  })
+                ]
+              );
+
+              console.log(`✅ Customer notification created for user ${userId}, order ${orderId}`);
+            } catch (notifError) {
+              console.error('❌ Failed to create customer notification:', notifError.message);
+            }
+          }
+
           // ✅ CRITICAL FIX: Send notifications to restaurant owners
           if (restaurantTotals && Object.keys(restaurantTotals).length > 0) {
             console.log(`🔔 Sending notifications to ${Object.keys(restaurantTotals).length} restaurant(s)`);

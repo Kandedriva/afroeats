@@ -940,9 +940,67 @@ router.post("/orders/:id/complete", requireOwnerAuth, async (req, res) => {
     await pool.query(`
       INSERT INTO restaurant_order_status (order_id, restaurant_id, status, completed_at)
       VALUES ($1, $2, 'completed', NOW())
-      ON CONFLICT (order_id, restaurant_id) 
+      ON CONFLICT (order_id, restaurant_id)
       DO UPDATE SET status = 'completed', completed_at = NOW()
     `, [orderId, restaurantId]);
+
+    // ✅ Create customer notification that restaurant portion is ready
+    try {
+      // Get order details for notification
+      const orderResult = await pool.query(
+        'SELECT user_id FROM orders WHERE id = $1',
+        [orderId]
+      );
+
+      if (orderResult.rows.length > 0 && orderResult.rows[0].user_id) {
+        const userId = orderResult.rows[0].user_id;
+
+        // Get restaurant name
+        const restaurantNameResult = await pool.query(
+          'SELECT name FROM restaurants WHERE id = $1',
+          [restaurantId]
+        );
+        const restaurantName = restaurantNameResult.rows[0]?.name || 'Restaurant';
+
+        // Ensure customer_notifications table exists
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS customer_notifications (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+            order_id INTEGER REFERENCES orders(id) ON DELETE CASCADE,
+            type VARCHAR(50) NOT NULL,
+            title VARCHAR(255) NOT NULL,
+            message TEXT NOT NULL,
+            data JSONB DEFAULT '{}',
+            read BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
+
+        // Create notification
+        await pool.query(
+          `INSERT INTO customer_notifications (user_id, order_id, type, title, message, data)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [
+            userId,
+            orderId,
+            'order_ready',
+            'Order Ready! 🍽️',
+            `Your order #${orderId} from ${restaurantName} is ready!`,
+            JSON.stringify({
+              orderId,
+              restaurantId,
+              restaurantName
+            })
+          ]
+        );
+
+        console.log(`✅ Customer notification created: Order ${orderId} ready at ${restaurantName}`);
+      }
+    } catch (notifError) {
+      console.error('❌ Failed to create customer notification:', notifError.message);
+      // Don't fail the main operation if notification fails
+    }
 
     // Check if all restaurants in the order have completed their portions
     const allRestaurantsResult = await pool.query(`
@@ -974,11 +1032,43 @@ router.post("/orders/:id/complete", requireOwnerAuth, async (req, res) => {
         "UPDATE orders SET status = $1 WHERE id = $2",
         ['completed', orderId]
       );
+
+      // ✅ Send final notification that entire order is complete
+      try {
+        const orderResult = await pool.query(
+          'SELECT user_id FROM orders WHERE id = $1',
+          [orderId]
+        );
+
+        if (orderResult.rows.length > 0 && orderResult.rows[0].user_id) {
+          const userId = orderResult.rows[0].user_id;
+
+          await pool.query(
+            `INSERT INTO customer_notifications (user_id, order_id, type, title, message, data)
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            [
+              userId,
+              orderId,
+              'order_completed',
+              'Order Complete! ✅',
+              `Your entire order #${orderId} is now complete. Enjoy your meal!`,
+              JSON.stringify({
+                orderId,
+                completedRestaurants: completedRestaurantsResult.rows.length
+              })
+            ]
+          );
+
+          console.log(`✅ Customer notification created: Order ${orderId} fully completed`);
+        }
+      } catch (notifError) {
+        console.error('❌ Failed to create completion notification:', notifError.message);
+      }
     }
 
-    res.json({ 
-      success: true, 
-      message: "Your restaurant's portion of the order has been marked as completed" 
+    res.json({
+      success: true,
+      message: "Your restaurant's portion of the order has been marked as completed"
     });
   } catch (err) {
     console.error('Complete order error:', err);
