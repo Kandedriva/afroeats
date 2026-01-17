@@ -179,71 +179,70 @@ function CustomerNotifications() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
+    <div className="max-w-4xl mx-auto px-4 py-4 sm:px-6 sm:py-6">
       {/* Header */}
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 sm:mb-6 gap-3">
         <div>
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">My Notifications</h1>
-          <p className="text-gray-600">Stay updated on your orders and refund requests</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-1 sm:mb-2">My Notifications</h1>
+          <p className="text-sm sm:text-base text-gray-600">Stay updated on your orders and refund requests</p>
         </div>
-        <Link 
+        <Link
           to="/my-orders"
-          className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
+          className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm sm:text-base text-center whitespace-nowrap"
         >
           ← Back to Orders
         </Link>
       </div>
 
       {/* Stats Bar */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-        <div className="bg-white p-4 rounded-lg border shadow-sm">
-          <h3 className="text-lg font-semibold text-gray-800">Total</h3>
-          <p className="text-2xl font-bold text-blue-600">{notifications.length}</p>
-          <p className="text-sm text-gray-500 mt-1">All notifications</p>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
+        <div className="bg-white p-3 sm:p-4 rounded-lg border shadow-sm">
+          <h3 className="text-sm sm:text-lg font-semibold text-gray-800">Total</h3>
+          <p className="text-xl sm:text-2xl font-bold text-blue-600">{notifications.length}</p>
+          <p className="text-xs sm:text-sm text-gray-500 mt-1">All notifications</p>
         </div>
-        <div className="bg-white p-4 rounded-lg border shadow-sm">
-          <h3 className="text-lg font-semibold text-gray-800">Unread</h3>
-          <p className="text-2xl font-bold text-orange-600">{unreadCount}</p>
-          <p className="text-sm text-gray-500 mt-1">Need attention</p>
+        <div className="bg-white p-3 sm:p-4 rounded-lg border shadow-sm">
+          <h3 className="text-sm sm:text-lg font-semibold text-gray-800">Unread</h3>
+          <p className="text-xl sm:text-2xl font-bold text-orange-600">{unreadCount}</p>
+          <p className="text-xs sm:text-sm text-gray-500 mt-1">Need attention</p>
         </div>
-        <div className="bg-white p-4 rounded-lg border shadow-sm">
-          <h3 className="text-lg font-semibold text-gray-800">Refund Updates</h3>
-          <p className="text-2xl font-bold text-purple-600">{refundNotifications.length}</p>
-          <p className="text-sm text-gray-500 mt-1">Refund responses</p>
+        <div className="bg-white p-3 sm:p-4 rounded-lg border shadow-sm">
+          <h3 className="text-sm sm:text-lg font-semibold text-gray-800">Refunds</h3>
+          <p className="text-xl sm:text-2xl font-bold text-purple-600">{refundNotifications.length}</p>
+          <p className="text-xs sm:text-sm text-gray-500 mt-1">Refund responses</p>
         </div>
-        <div className="bg-white p-4 rounded-lg border shadow-sm">
-          <h3 className="text-lg font-semibold text-gray-800">Order Updates</h3>
-          <p className="text-2xl font-bold text-green-600">{orderNotifications.length}</p>
-          <p className="text-sm text-gray-500 mt-1">Order status changes</p>
+        <div className="bg-white p-3 sm:p-4 rounded-lg border shadow-sm">
+          <h3 className="text-sm sm:text-lg font-semibold text-gray-800">Orders</h3>
+          <p className="text-xl sm:text-2xl font-bold text-green-600">{orderNotifications.length}</p>
+          <p className="text-xs sm:text-sm text-gray-500 mt-1">Status changes</p>
         </div>
       </div>
 
       {/* Actions and Filters */}
       {notifications.length > 0 && (
-        <div className="bg-white p-4 rounded-lg border mb-6">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0">
-            <div className="flex flex-wrap gap-4">
-              {/* Filter */}
-              <div>
-                <label htmlFor="filterType" className="block text-sm font-medium text-gray-700 mb-1">Filter by Type</label>
-                <select
-                  id="filterType"
-                  value={filterType}
-                  onChange={(e) => setFilterType(e.target.value)}
-                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                >
-                  <option value="all">All Notifications ({notifications.length})</option>
-                  <option value="refund">Refund Updates ({refundNotifications.length})</option>
-                  <option value="order_update">Order Updates ({orderNotifications.length})</option>
-                </select>
-              </div>
+        <div className="bg-white p-3 sm:p-4 rounded-lg border mb-4 sm:mb-6">
+          <div className="flex flex-col space-y-3 sm:space-y-4">
+            {/* Filter */}
+            <div className="w-full">
+              <label htmlFor="filterType" className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Filter by Type</label>
+              <select
+                id="filterType"
+                value={filterType}
+                onChange={(e) => setFilterType(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-xs sm:text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              >
+                <option value="all">All Notifications ({notifications.length})</option>
+                <option value="refund">Refund Updates ({refundNotifications.length})</option>
+                <option value="order_update">Order Updates ({orderNotifications.length})</option>
+              </select>
             </div>
 
-            <div className="flex space-x-3">
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
               {unreadCount > 0 && (
                 <button
                   onClick={markAllAsRead}
-                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                  className="w-full sm:w-auto bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-xs sm:text-sm"
                 >
                   Mark All Read ({unreadCount})
                 </button>
@@ -251,49 +250,49 @@ function CustomerNotifications() {
               {notifications.filter(n => n.read).length > 0 && (
                 <button
                   onClick={() => setShowConfirmModal(true)}
-                  className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors text-sm"
+                  className="w-full sm:w-auto bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors text-xs sm:text-sm"
                 >
-                  Clear Read Notifications
+                  Clear Read
                 </button>
               )}
             </div>
-          </div>
 
-          <div className="text-sm text-gray-500 mt-2">
-            Showing {filteredNotifications.length} of {notifications.length} notifications
+            <div className="text-xs sm:text-sm text-gray-500">
+              Showing {filteredNotifications.length} of {notifications.length} notifications
+            </div>
           </div>
         </div>
       )}
 
       {/* Notifications List */}
       {filteredNotifications.length === 0 ? (
-        <div className="text-center py-12 bg-gray-50 rounded-lg">
-          <div className="text-6xl mb-4">🔔</div>
-          <h3 className="text-xl font-semibold text-gray-800 mb-2">
-            {filterType === 'all' ? 'No Notifications' : 
+        <div className="text-center py-8 sm:py-12 bg-gray-50 rounded-lg px-4">
+          <div className="text-4xl sm:text-6xl mb-3 sm:mb-4">🔔</div>
+          <h3 className="text-lg sm:text-xl font-semibold text-gray-800 mb-2">
+            {filterType === 'all' ? 'No Notifications' :
              filterType === 'refund' ? 'No Refund Updates' : 'No Order Updates'}
           </h3>
-          <p className="text-gray-500 mb-6">
+          <p className="text-sm sm:text-base text-gray-500 mb-4 sm:mb-6">
             {filterType === 'all' ? "You're all caught up! New notifications will appear here." :
              filterType === 'refund' ? "No refund responses yet." : "No order status updates yet."}
           </p>
-          <Link 
+          <Link
             to="/my-orders"
-            className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors"
+            className="inline-block bg-green-600 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg hover:bg-green-700 transition-colors text-sm sm:text-base"
           >
             View My Orders
           </Link>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3 sm:space-y-4">
           {filteredNotifications.map((notification) => {
             const data = notification.data || {};
             const isRefundNotification = notification.type.startsWith('refund_');
-            
+
             return (
-              <div 
-                key={notification.id} 
-                className={`border rounded-lg p-6 transition-all hover:shadow-md cursor-pointer ${
+              <div
+                key={notification.id}
+                className={`border rounded-lg p-3 sm:p-4 md:p-6 transition-all hover:shadow-md cursor-pointer ${
                   !notification.read ? 'bg-blue-50 border-blue-200 shadow-sm' : 'bg-white'
                 } ${getNotificationColor(notification.type)}`}
                 onClick={() => !notification.read && markNotificationRead(notification.id)}
@@ -307,51 +306,51 @@ function CustomerNotifications() {
                 tabIndex={!notification.read ? 0 : -1}
                 aria-label={!notification.read ? "Mark notification as read" : "Notification already read"}
               >
-                <div className="flex justify-between items-start mb-3">
-                  <div className="flex items-center space-x-3">
-                    <div className={`w-3 h-3 rounded-full ${!notification.read ? 'bg-blue-500' : 'bg-gray-300'}`}></div>
-                    <div className="text-2xl">{getNotificationIcon(notification.type)}</div>
-                    <div>
-                      <h4 className="font-semibold text-lg text-gray-800">
+                {/* Header */}
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2 mb-3">
+                  <div className="flex items-start space-x-2 sm:space-x-3 flex-1">
+                    <div className={`w-2 h-2 sm:w-3 sm:h-3 rounded-full mt-1 flex-shrink-0 ${!notification.read ? 'bg-blue-500' : 'bg-gray-300'}`}></div>
+                    <div className="text-xl sm:text-2xl flex-shrink-0">{getNotificationIcon(notification.type)}</div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-semibold text-sm sm:text-base md:text-lg text-gray-800 break-words">
                         {notification.title}
                       </h4>
                       {isRefundNotification && data.restaurantName && (
-                        <p className="text-sm text-gray-600">From: {data.restaurantName}</p>
+                        <p className="text-xs sm:text-sm text-gray-600">From: {data.restaurantName}</p>
                       )}
                     </div>
                   </div>
-                  <span className="text-sm text-gray-500">
-                    {new Date(notification.created_at).toLocaleDateString()} at{' '}
-                    {new Date(notification.created_at).toLocaleTimeString()}
+                  <span className="text-xs sm:text-sm text-gray-500 whitespace-nowrap">
+                    {new Date(notification.created_at).toLocaleDateString()}
                   </span>
                 </div>
-                
-                <p className="text-gray-600 mb-4 leading-relaxed">{notification.message}</p>
+
+                <p className="text-xs sm:text-sm md:text-base text-gray-600 mb-3 sm:mb-4 leading-relaxed break-words">{notification.message}</p>
                 
                 {/* Refund Details */}
                 {isRefundNotification && (
-                  <div className={`p-4 rounded-lg mb-4 ${
-                    notification.type === 'refund_approve' 
-                      ? 'bg-green-100 border border-green-200' 
+                  <div className={`p-3 sm:p-4 rounded-lg mb-3 sm:mb-4 ${
+                    notification.type === 'refund_approve'
+                      ? 'bg-green-100 border border-green-200'
                       : 'bg-red-100 border border-red-200'
                   }`}>
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="font-medium text-gray-800">
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-2">
+                      <span className="font-medium text-sm sm:text-base text-gray-800">
                         {notification.type === 'refund_approve' ? 'Refund Approved' : 'Refund Denied'}
                       </span>
                       {data.restaurantTotal && (
-                        <span className="text-lg font-bold">
+                        <span className="text-base sm:text-lg font-bold">
                           ${Number(data.restaurantTotal).toFixed(2)}
                         </span>
                       )}
                     </div>
                     {data.itemCount && (
-                      <div className="text-sm text-gray-600 mb-2">
+                      <div className="text-xs sm:text-sm text-gray-600 mb-2">
                         For {data.itemCount} item{data.itemCount !== 1 ? 's' : ''} from your order
                       </div>
                     )}
                     {data.refundNotes && (
-                      <div className="text-sm text-gray-700 mt-2 p-2 bg-white rounded border-l-4 border-gray-400">
+                      <div className="text-xs sm:text-sm text-gray-700 mt-2 p-2 bg-white rounded border-l-4 border-gray-400 break-words">
                         <strong>Restaurant Notes:</strong> {data.refundNotes}
                       </div>
                     )}
@@ -360,18 +359,18 @@ function CustomerNotifications() {
 
                 {/* Order Details */}
                 {data.orderId && (
-                  <div className="bg-gray-50 p-3 rounded-lg">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium text-gray-700">Order #{data.orderId}</span>
-                      <Link 
+                  <div className="bg-gray-50 p-2 sm:p-3 rounded-lg">
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+                      <span className="text-xs sm:text-sm font-medium text-gray-700">Order #{data.orderId}</span>
+                      <Link
                         to={`/order-details/${data.orderId}`}
-                        className="text-sm bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 transition-colors"
+                        className="text-xs sm:text-sm bg-green-600 text-white px-3 py-1.5 sm:py-1 rounded hover:bg-green-700 transition-colors text-center whitespace-nowrap"
                       >
                         View Order →
                       </Link>
                     </div>
                     {data.orderTotal && (
-                      <div className="text-sm text-gray-600 mt-1">
+                      <div className="text-xs sm:text-sm text-gray-600 mt-1">
                         Order Total: ${Number(data.orderTotal).toFixed(2)}
                       </div>
                     )}
@@ -385,26 +384,26 @@ function CustomerNotifications() {
 
       {/* Delete Confirmation Modal */}
       {showConfirmModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold mb-4 text-gray-800">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-4 sm:p-6 max-w-md w-full">
+            <h3 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4 text-gray-800">
               Clear Read Notifications
             </h3>
-            <p className="text-gray-600 mb-6">
+            <p className="text-sm sm:text-base text-gray-600 mb-4 sm:mb-6">
               Are you sure you want to permanently delete all read notifications? This action cannot be undone.
             </p>
-            <div className="flex gap-3 justify-end">
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 sm:justify-end">
               <button
                 onClick={() => setShowConfirmModal(false)}
-                className="px-4 py-2 text-gray-600 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors"
+                className="w-full sm:w-auto px-4 py-2 text-sm sm:text-base text-gray-600 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={deleteAllRead}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                className="w-full sm:w-auto px-4 py-2 text-sm sm:text-base bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
               >
-                Delete Read Notifications
+                Delete Read
               </button>
             </div>
           </div>
