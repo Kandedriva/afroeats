@@ -432,8 +432,6 @@ function CustomerNotifications() {
             })}
           </div>
         )}
-      </div>
-    </div>
 
         {/* Delete Confirmation Modal */}
         {showConfirmModal && (
