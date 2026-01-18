@@ -179,236 +179,293 @@ function CustomerNotifications() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-4 sm:px-6 sm:py-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 sm:mb-6 gap-3">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-1 sm:mb-2">My Notifications</h1>
-          <p className="text-sm sm:text-base text-gray-600">Stay updated on your orders and refund requests</p>
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-5xl mx-auto px-3 py-4 sm:px-4 sm:py-6 lg:px-6">
+        {/* Header */}
+        <div className="bg-white rounded-xl shadow-sm p-4 sm:p-5 mb-4 sm:mb-6">
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <div className="flex-1 min-w-0">
+                <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 truncate">
+                  Notifications
+                </h1>
+                <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
+                  Stay updated on orders & refunds
+                </p>
+              </div>
+              <Link
+                to="/my-orders"
+                className="flex-shrink-0 bg-green-600 text-white px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg hover:bg-green-700 transition-all text-xs sm:text-sm font-medium shadow-sm"
+              >
+                ← Orders
+              </Link>
+            </div>
+          </div>
         </div>
-        <Link
-          to="/my-orders"
-          className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm sm:text-base text-center whitespace-nowrap"
-        >
-          ← Back to Orders
-        </Link>
-      </div>
 
-      {/* Stats Bar */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
-        <div className="bg-white p-3 sm:p-4 rounded-lg border shadow-sm">
-          <h3 className="text-sm sm:text-lg font-semibold text-gray-800">Total</h3>
-          <p className="text-xl sm:text-2xl font-bold text-blue-600">{notifications.length}</p>
-          <p className="text-xs sm:text-sm text-gray-500 mt-1">All notifications</p>
+        {/* Stats Bar */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 mb-4 sm:mb-5">
+          <div className="bg-white p-3 rounded-lg shadow-sm border border-gray-100">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <p className="text-xs text-gray-500 font-medium">Total</p>
+                <p className="text-2xl sm:text-3xl font-bold text-blue-600 mt-0.5">{notifications.length}</p>
+              </div>
+              <div className="text-2xl">📬</div>
+            </div>
+          </div>
+          <div className="bg-white p-3 rounded-lg shadow-sm border border-gray-100">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <p className="text-xs text-gray-500 font-medium">Unread</p>
+                <p className="text-2xl sm:text-3xl font-bold text-orange-600 mt-0.5">{unreadCount}</p>
+              </div>
+              <div className="text-2xl">🔔</div>
+            </div>
+          </div>
+          <div className="bg-white p-3 rounded-lg shadow-sm border border-gray-100">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <p className="text-xs text-gray-500 font-medium">Refunds</p>
+                <p className="text-2xl sm:text-3xl font-bold text-purple-600 mt-0.5">{refundNotifications.length}</p>
+              </div>
+              <div className="text-2xl">💰</div>
+            </div>
+          </div>
+          <div className="bg-white p-3 rounded-lg shadow-sm border border-gray-100">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <p className="text-xs text-gray-500 font-medium">Orders</p>
+                <p className="text-2xl sm:text-3xl font-bold text-green-600 mt-0.5">{orderNotifications.length}</p>
+              </div>
+              <div className="text-2xl">🍽️</div>
+            </div>
+          </div>
         </div>
-        <div className="bg-white p-3 sm:p-4 rounded-lg border shadow-sm">
-          <h3 className="text-sm sm:text-lg font-semibold text-gray-800">Unread</h3>
-          <p className="text-xl sm:text-2xl font-bold text-orange-600">{unreadCount}</p>
-          <p className="text-xs sm:text-sm text-gray-500 mt-1">Need attention</p>
-        </div>
-        <div className="bg-white p-3 sm:p-4 rounded-lg border shadow-sm">
-          <h3 className="text-sm sm:text-lg font-semibold text-gray-800">Refunds</h3>
-          <p className="text-xl sm:text-2xl font-bold text-purple-600">{refundNotifications.length}</p>
-          <p className="text-xs sm:text-sm text-gray-500 mt-1">Refund responses</p>
-        </div>
-        <div className="bg-white p-3 sm:p-4 rounded-lg border shadow-sm">
-          <h3 className="text-sm sm:text-lg font-semibold text-gray-800">Orders</h3>
-          <p className="text-xl sm:text-2xl font-bold text-green-600">{orderNotifications.length}</p>
-          <p className="text-xs sm:text-sm text-gray-500 mt-1">Status changes</p>
-        </div>
-      </div>
 
-      {/* Actions and Filters */}
-      {notifications.length > 0 && (
-        <div className="bg-white p-3 sm:p-4 rounded-lg border mb-4 sm:mb-6">
-          <div className="flex flex-col space-y-3 sm:space-y-4">
+        {/* Actions and Filters */}
+        {notifications.length > 0 && (
+          <div className="bg-white rounded-xl shadow-sm p-3 sm:p-4 mb-4">
             {/* Filter */}
-            <div className="w-full">
-              <label htmlFor="filterType" className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Filter by Type</label>
+            <div className="mb-3">
               <select
                 id="filterType"
                 value={filterType}
                 onChange={(e) => setFilterType(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-xs sm:text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent bg-gray-50 font-medium"
               >
-                <option value="all">All Notifications ({notifications.length})</option>
-                <option value="refund">Refund Updates ({refundNotifications.length})</option>
-                <option value="order_update">Order Updates ({orderNotifications.length})</option>
+                <option value="all">📋 All ({notifications.length})</option>
+                <option value="refund">💰 Refunds ({refundNotifications.length})</option>
+                <option value="order_update">🍽️ Orders ({orderNotifications.length})</option>
               </select>
             </div>
 
             {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+            <div className="flex flex-wrap gap-2">
               {unreadCount > 0 && (
                 <button
                   onClick={markAllAsRead}
-                  className="w-full sm:w-auto bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-xs sm:text-sm"
+                  className="flex-1 min-w-[140px] bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 transition-all text-xs sm:text-sm font-medium shadow-sm"
                 >
-                  Mark All Read ({unreadCount})
+                  ✓ Mark All Read
                 </button>
               )}
               {notifications.filter(n => n.read).length > 0 && (
                 <button
                   onClick={() => setShowConfirmModal(true)}
-                  className="w-full sm:w-auto bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors text-xs sm:text-sm"
+                  className="flex-1 min-w-[140px] bg-gray-600 text-white px-3 py-2 rounded-lg hover:bg-gray-700 transition-all text-xs sm:text-sm font-medium shadow-sm"
                 >
-                  Clear Read
+                  🗑️ Clear Read
                 </button>
               )}
             </div>
 
-            <div className="text-xs sm:text-sm text-gray-500">
-              Showing {filteredNotifications.length} of {notifications.length} notifications
+            <div className="text-xs text-gray-500 mt-2.5 text-center">
+              Showing {filteredNotifications.length} of {notifications.length}
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Notifications List */}
-      {filteredNotifications.length === 0 ? (
-        <div className="text-center py-8 sm:py-12 bg-gray-50 rounded-lg px-4">
-          <div className="text-4xl sm:text-6xl mb-3 sm:mb-4">🔔</div>
-          <h3 className="text-lg sm:text-xl font-semibold text-gray-800 mb-2">
-            {filterType === 'all' ? 'No Notifications' :
-             filterType === 'refund' ? 'No Refund Updates' : 'No Order Updates'}
-          </h3>
-          <p className="text-sm sm:text-base text-gray-500 mb-4 sm:mb-6">
-            {filterType === 'all' ? "You're all caught up! New notifications will appear here." :
-             filterType === 'refund' ? "No refund responses yet." : "No order status updates yet."}
-          </p>
-          <Link
-            to="/my-orders"
-            className="inline-block bg-green-600 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg hover:bg-green-700 transition-colors text-sm sm:text-base"
-          >
-            View My Orders
-          </Link>
-        </div>
-      ) : (
-        <div className="space-y-3 sm:space-y-4">
-          {filteredNotifications.map((notification) => {
-            const data = notification.data || {};
-            const isRefundNotification = notification.type.startsWith('refund_');
-
-            return (
-              <div
-                key={notification.id}
-                className={`border rounded-lg p-3 sm:p-4 md:p-6 transition-all hover:shadow-md cursor-pointer ${
-                  !notification.read ? 'bg-blue-50 border-blue-200 shadow-sm' : 'bg-white'
-                } ${getNotificationColor(notification.type)}`}
-                onClick={() => !notification.read && markNotificationRead(notification.id)}
-                onKeyDown={(e) => {
-                  if ((e.key === 'Enter' || e.key === ' ') && !notification.read) {
-                    e.preventDefault();
-                    markNotificationRead(notification.id);
-                  }
-                }}
-                role="button"
-                tabIndex={!notification.read ? 0 : -1}
-                aria-label={!notification.read ? "Mark notification as read" : "Notification already read"}
-              >
-                {/* Header */}
-                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2 mb-3">
-                  <div className="flex items-start space-x-2 sm:space-x-3 flex-1">
-                    <div className={`w-2 h-2 sm:w-3 sm:h-3 rounded-full mt-1 flex-shrink-0 ${!notification.read ? 'bg-blue-500' : 'bg-gray-300'}`}></div>
-                    <div className="text-xl sm:text-2xl flex-shrink-0">{getNotificationIcon(notification.type)}</div>
-                    <div className="flex-1 min-w-0">
-                      <h4 className="font-semibold text-sm sm:text-base md:text-lg text-gray-800 break-words">
-                        {notification.title}
-                      </h4>
-                      {isRefundNotification && data.restaurantName && (
-                        <p className="text-xs sm:text-sm text-gray-600">From: {data.restaurantName}</p>
-                      )}
-                    </div>
-                  </div>
-                  <span className="text-xs sm:text-sm text-gray-500 whitespace-nowrap">
-                    {new Date(notification.created_at).toLocaleDateString()}
-                  </span>
-                </div>
-
-                <p className="text-xs sm:text-sm md:text-base text-gray-600 mb-3 sm:mb-4 leading-relaxed break-words">{notification.message}</p>
-                
-                {/* Refund Details */}
-                {isRefundNotification && (
-                  <div className={`p-3 sm:p-4 rounded-lg mb-3 sm:mb-4 ${
-                    notification.type === 'refund_approve'
-                      ? 'bg-green-100 border border-green-200'
-                      : 'bg-red-100 border border-red-200'
-                  }`}>
-                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-2">
-                      <span className="font-medium text-sm sm:text-base text-gray-800">
-                        {notification.type === 'refund_approve' ? 'Refund Approved' : 'Refund Denied'}
-                      </span>
-                      {data.restaurantTotal && (
-                        <span className="text-base sm:text-lg font-bold">
-                          ${Number(data.restaurantTotal).toFixed(2)}
-                        </span>
-                      )}
-                    </div>
-                    {data.itemCount && (
-                      <div className="text-xs sm:text-sm text-gray-600 mb-2">
-                        For {data.itemCount} item{data.itemCount !== 1 ? 's' : ''} from your order
-                      </div>
-                    )}
-                    {data.refundNotes && (
-                      <div className="text-xs sm:text-sm text-gray-700 mt-2 p-2 bg-white rounded border-l-4 border-gray-400 break-words">
-                        <strong>Restaurant Notes:</strong> {data.refundNotes}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Order Details */}
-                {data.orderId && (
-                  <div className="bg-gray-50 p-2 sm:p-3 rounded-lg">
-                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
-                      <span className="text-xs sm:text-sm font-medium text-gray-700">Order #{data.orderId}</span>
-                      <Link
-                        to={`/order-details/${data.orderId}`}
-                        className="text-xs sm:text-sm bg-green-600 text-white px-3 py-1.5 sm:py-1 rounded hover:bg-green-700 transition-colors text-center whitespace-nowrap"
-                      >
-                        View Order →
-                      </Link>
-                    </div>
-                    {data.orderTotal && (
-                      <div className="text-xs sm:text-sm text-gray-600 mt-1">
-                        Order Total: ${Number(data.orderTotal).toFixed(2)}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Delete Confirmation Modal */}
-      {showConfirmModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-4 sm:p-6 max-w-md w-full">
-            <h3 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4 text-gray-800">
-              Clear Read Notifications
+        {/* Notifications List */}
+        {filteredNotifications.length === 0 ? (
+          <div className="bg-white rounded-xl shadow-sm text-center py-10 sm:py-16 px-4">
+            <div className="text-5xl sm:text-6xl mb-4">🔔</div>
+            <h3 className="text-lg sm:text-xl font-bold text-gray-800 mb-2">
+              {filterType === 'all' ? 'No Notifications' :
+               filterType === 'refund' ? 'No Refund Updates' : 'No Order Updates'}
             </h3>
-            <p className="text-sm sm:text-base text-gray-600 mb-4 sm:mb-6">
-              Are you sure you want to permanently delete all read notifications? This action cannot be undone.
+            <p className="text-sm text-gray-500 mb-6 max-w-sm mx-auto">
+              {filterType === 'all' ? "You're all caught up! New notifications will appear here." :
+               filterType === 'refund' ? "No refund responses yet." : "No order status updates yet."}
             </p>
-            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 sm:justify-end">
-              <button
-                onClick={() => setShowConfirmModal(false)}
-                className="w-full sm:w-auto px-4 py-2 text-sm sm:text-base text-gray-600 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={deleteAllRead}
-                className="w-full sm:w-auto px-4 py-2 text-sm sm:text-base bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-              >
-                Delete Read
-              </button>
+            <Link
+              to="/my-orders"
+              className="inline-block bg-green-600 text-white px-5 py-2.5 rounded-lg hover:bg-green-700 transition-all text-sm font-medium shadow-sm"
+            >
+              View My Orders
+            </Link>
+          </div>
+        ) : (
+          <div className="space-y-2.5 sm:space-y-3">
+            {filteredNotifications.map((notification) => {
+              const data = notification.data || {};
+              const isRefundNotification = notification.type.startsWith('refund_');
+
+              return (
+                <div
+                  key={notification.id}
+                  className={`rounded-xl border shadow-sm transition-all hover:shadow-md ${
+                    !notification.read
+                      ? 'bg-gradient-to-r from-blue-50 to-white border-blue-200'
+                      : 'bg-white border-gray-200'
+                  }`}
+                  onClick={() => !notification.read && markNotificationRead(notification.id)}
+                  onKeyDown={(e) => {
+                    if ((e.key === 'Enter' || e.key === ' ') && !notification.read) {
+                      e.preventDefault();
+                      markNotificationRead(notification.id);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={!notification.read ? 0 : -1}
+                  aria-label={!notification.read ? "Mark notification as read" : "Notification already read"}
+                >
+                  <div className="p-3 sm:p-4">
+                    {/* Header */}
+                    <div className="flex items-start gap-2.5 mb-2.5">
+                      {/* Icon Badge */}
+                      <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-xl ${
+                        !notification.read ? 'bg-blue-100' : 'bg-gray-100'
+                      }`}>
+                        {getNotificationIcon(notification.type)}
+                      </div>
+
+                      {/* Content */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2 mb-1">
+                          <h4 className="font-bold text-sm sm:text-base text-gray-900 leading-tight">
+                            {notification.title}
+                          </h4>
+                          {!notification.read && (
+                            <span className="flex-shrink-0 w-2 h-2 bg-blue-500 rounded-full mt-1"></span>
+                          )}
+                        </div>
+
+                        {isRefundNotification && data.restaurantName && (
+                          <p className="text-xs text-gray-500 mb-1.5">
+                            <span className="font-medium">From:</span> {data.restaurantName}
+                          </p>
+                        )}
+
+                        <p className="text-xs sm:text-sm text-gray-600 leading-relaxed mb-2">
+                          {notification.message}
+                        </p>
+
+                        <p className="text-xs text-gray-400">
+                          {new Date(notification.created_at).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Refund Details */}
+                    {isRefundNotification && (
+                      <div className={`rounded-lg p-3 border-l-4 ${
+                        notification.type === 'refund_approve'
+                          ? 'bg-green-50 border-green-500'
+                          : 'bg-red-50 border-red-500'
+                      }`}>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-bold text-sm text-gray-900">
+                            {notification.type === 'refund_approve' ? '✅ Approved' : '❌ Denied'}
+                          </span>
+                          {data.restaurantTotal && (
+                            <span className="text-lg font-bold text-gray-900">
+                              ${Number(data.restaurantTotal).toFixed(2)}
+                            </span>
+                          )}
+                        </div>
+                        {data.itemCount && (
+                          <p className="text-xs text-gray-600 mb-2">
+                            {data.itemCount} item{data.itemCount !== 1 ? 's' : ''}
+                          </p>
+                        )}
+                        {data.refundNotes && (
+                          <div className="text-xs text-gray-700 mt-2 p-2 bg-white rounded">
+                            <strong>Note:</strong> {data.refundNotes}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Order Details */}
+                    {data.orderId && (
+                      <div className="bg-gray-50 rounded-lg p-2.5 mt-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-gray-700">
+                              Order #{data.orderId}
+                            </p>
+                            {data.orderTotal && (
+                              <p className="text-xs text-gray-500">
+                                ${Number(data.orderTotal).toFixed(2)}
+                              </p>
+                            )}
+                          </div>
+                          <Link
+                            to={`/order-details/${data.orderId}`}
+                            className="flex-shrink-0 bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 transition-all text-xs font-medium"
+                          >
+                            View →
+                          </Link>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+
+        {/* Delete Confirmation Modal */}
+        {showConfirmModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl p-5 sm:p-6 max-w-sm w-full">
+              <div className="text-center mb-4">
+                <div className="text-4xl mb-3">🗑️</div>
+                <h3 className="text-lg font-bold text-gray-900 mb-2">
+                  Clear Read Notifications?
+                </h3>
+                <p className="text-sm text-gray-600">
+                  This will permanently delete all read notifications. This action cannot be undone.
+                </p>
+              </div>
+              <div className="flex gap-2.5">
+                <button
+                  onClick={() => setShowConfirmModal(false)}
+                  className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={deleteAllRead}
+                  className="flex-1 px-4 py-2.5 text-sm font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 transition-all shadow-sm"
+                >
+                  Delete
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
