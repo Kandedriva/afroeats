@@ -136,28 +136,6 @@ function CustomerNotifications() {
     return '📢';
   };
 
-  const getNotificationColor = (type) => {
-    if (type.startsWith('refund_approve')) {
-      return 'bg-green-50 border-green-200';
-    }
-    if (type.startsWith('refund_deny')) {
-      return 'bg-red-50 border-red-200';
-    }
-    if (type === 'order_confirmed') {
-      return 'bg-green-50 border-green-200';
-    }
-    if (type === 'order_ready') {
-      return 'bg-blue-50 border-blue-200';
-    }
-    if (type === 'order_completed') {
-      return 'bg-green-50 border-green-200';
-    }
-    if (type === 'order_update') {
-      return 'bg-yellow-50 border-yellow-200';
-    }
-    return 'bg-gray-50 border-gray-200';
-  };
-
   const filteredNotifications = getFilteredNotifications();
   const refundNotifications = notifications.filter(n => n.type.startsWith('refund_'));
   const orderNotifications = notifications.filter(n =>
