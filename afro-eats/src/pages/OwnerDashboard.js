@@ -7,6 +7,7 @@ import { toast } from 'react-toastify';
 import { API_BASE_URL } from "../config/api";
 import { getImageUrl, handleImageError, isSafariOrWebKit } from "../utils/imageUtils";
 import { setupImageRefreshInterval, enhanceExistingImages } from "../utils/imageRefresh";
+import NotificationBell from "../components/NotificationBell";
 
 function OwnerDashboard() {
   const { owner, loading: authLoading } = useContext(OwnerAuthContext);
@@ -1107,7 +1108,10 @@ function OwnerDashboard() {
 
   return (
     <div className="max-w-7xl mx-auto p-4 sm:p-6">
-      <h1 className="text-2xl sm:text-3xl font-bold mb-4 sm:mb-6">Welcome to your Dashboard</h1>
+      <div className="flex items-center justify-between mb-4 sm:mb-6">
+        <h1 className="text-2xl sm:text-3xl font-bold">Welcome to your Dashboard</h1>
+        <NotificationBell userRole="owner" restaurantId={restaurant?.id} />
+      </div>
 
 
       {restaurant && (
