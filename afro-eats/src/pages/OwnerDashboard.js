@@ -7,7 +7,7 @@ import { toast } from 'react-toastify';
 import { API_BASE_URL } from "../config/api";
 import { getImageUrl, handleImageError, isSafariOrWebKit } from "../utils/imageUtils";
 import { setupImageRefreshInterval, enhanceExistingImages } from "../utils/imageRefresh";
-import NotificationBell from "../components/NotificationBell";
+import NotificationBell from "../Components/NotificationBell";
 
 function OwnerDashboard() {
   const { owner, loading: authLoading } = useContext(OwnerAuthContext);
