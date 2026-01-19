@@ -5,7 +5,7 @@ import { API_BASE_URL } from '../config/api';
  * Custom hook for real-time order notifications with sound alerts
  * Polls the backend for new orders and plays a sound when detected
  */
-export const useOrderNotifications = (userRole = null, restaurantId = null) => {
+export const useOrderNotifications = (userRole = null, _restaurantId = null) => {
   const [newOrderCount, setNewOrderCount] = useState(0);
   const [lastOrderId, setLastOrderId] = useState(null);
   const [isEnabled, setIsEnabled] = useState(true);
@@ -80,8 +80,8 @@ export const useOrderNotifications = (userRole = null, restaurantId = null) => {
       let endpoint = '';
 
       // Different endpoints based on user role
-      if (userRole === 'owner' && restaurantId) {
-        endpoint = `${API_BASE_URL}/api/owner/restaurants/${restaurantId}/orders`;
+      if (userRole === 'owner') {
+        endpoint = `${API_BASE_URL}/api/owners/orders`;
       } else if (userRole === 'admin') {
         endpoint = `${API_BASE_URL}/api/admin/orders`;
       } else {
@@ -128,7 +128,7 @@ export const useOrderNotifications = (userRole = null, restaurantId = null) => {
       // eslint-disable-next-line no-console
       console.error('Error checking for new orders:', error);
     }
-  }, [isEnabled, userRole, restaurantId, lastOrderId, playNotificationSound, showBrowserNotification]);
+  }, [isEnabled, userRole, lastOrderId, playNotificationSound, showBrowserNotification]);
 
   // Start polling for new orders
   useEffect(() => {
