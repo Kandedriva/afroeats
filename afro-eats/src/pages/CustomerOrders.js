@@ -200,9 +200,9 @@ function CustomerOrders() {
 
   if (authLoading || ordersLoading) {
     return (
-      <div className="max-w-4xl mx-auto p-6">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
           <p className="text-gray-600">
             {authLoading ? "Checking authentication..." : "Loading your orders..."}
           </p>
@@ -212,51 +212,66 @@ function CustomerOrders() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-800">My Orders</h1>
-        <button
-          onClick={() => navigate("/")}
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors"
-        >
-          Browse Restaurants
-        </button>
-      </div>
-
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-          <p className="text-red-700">{error}</p>
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-5xl mx-auto px-3 py-4 sm:px-4 sm:py-6 lg:px-6">
+        {/* Header */}
+        <div className="bg-white rounded-xl shadow-sm p-4 sm:p-5 mb-4 sm:mb-6">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 truncate">
+                My Orders
+              </h1>
+              <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
+                Track and manage your orders
+              </p>
+            </div>
+            <button
+              onClick={() => navigate("/")}
+              className="flex-shrink-0 bg-green-600 text-white px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg hover:bg-green-700 transition-all text-xs sm:text-sm font-medium shadow-sm whitespace-nowrap"
+            >
+              🍽️ Browse
+            </button>
+          </div>
         </div>
-      )}
 
-      {/* Notifications Summary Section */}
-      <div className="mb-8 bg-white border rounded-lg p-4">
-        <div className="flex justify-between items-center">
-          <div>
-            <h3 className="text-lg font-semibold text-gray-800 mb-2">
-              📢 Notifications & Updates
-            </h3>
-            <div className="flex items-center space-x-6 text-sm">
-              <div className="flex items-center space-x-2">
-                <span className="text-gray-600">Total:</span>
-                <span className="font-semibold text-blue-600">{notifications.length}</span>
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-3 sm:p-4 mb-4">
+            <p className="text-sm text-red-700">{error}</p>
+          </div>
+        )}
+
+        {/* Notifications Summary Section */}
+        <div className="bg-white rounded-xl shadow-sm p-3 sm:p-4 mb-4">
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm sm:text-base font-bold text-gray-900">
+                📢 Notifications
+              </h3>
+              <Link
+                to="/my-notifications"
+                className="bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 transition-all text-xs font-medium shadow-sm whitespace-nowrap"
+              >
+                View All →
+              </Link>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              <div className="bg-blue-50 rounded-lg p-2 text-center">
+                <p className="text-xs text-blue-600 font-medium">Total</p>
+                <p className="text-lg sm:text-xl font-bold text-blue-700">{notifications.length}</p>
               </div>
-              {unreadCount > 0 && (
-                <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                  <span className="text-gray-600">Unread:</span>
-                  <span className="font-semibold text-red-600">{unreadCount}</span>
-                </div>
-              )}
-              <div className="flex items-center space-x-2">
-                <span className="text-gray-600">Refund Updates:</span>
-                <span className="font-semibold text-purple-600">
+              <div className="bg-orange-50 rounded-lg p-2 text-center">
+                <p className="text-xs text-orange-600 font-medium">Unread</p>
+                <p className="text-lg sm:text-xl font-bold text-orange-700">{unreadCount}</p>
+              </div>
+              <div className="bg-purple-50 rounded-lg p-2 text-center">
+                <p className="text-xs text-purple-600 font-medium">Refunds</p>
+                <p className="text-lg sm:text-xl font-bold text-purple-700">
                   {notifications.filter(n => n.type.startsWith('refund_')).length}
-                </span>
+                </p>
               </div>
             </div>
-          </div>
-          <div className="flex space-x-3">
+
             {unreadCount > 0 && (
               <button
                 onClick={async () => {
@@ -272,233 +287,218 @@ function CustomerOrders() {
                     toast.error("Failed to mark all notifications as read");
                   }
                 }}
-                className="text-sm bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 transition-colors"
+                className="w-full bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 transition-all text-xs sm:text-sm font-medium shadow-sm"
               >
-                Mark All Read
+                ✓ Mark All Read
               </button>
             )}
-            <Link 
-              to="/my-notifications"
-              className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
+          </div>
+
+          {/* Show only urgent unread notifications */}
+          {notifications.filter(n => !n.read && n.type.startsWith('refund_')).length > 0 && (
+            <div className="mt-3 pt-3 border-t border-gray-200">
+              <h4 className="text-xs sm:text-sm font-bold text-purple-700 mb-2">🚨 Refund Updates</h4>
+              <div className="space-y-2">
+                {notifications.filter(n => !n.read && n.type.startsWith('refund_')).slice(0, 2).map((notification) => {
+                  const data = notification.data || {};
+                  return (
+                    <div key={notification.id} className={`${notification.type === 'refund_approve' ? 'bg-green-50 border-l-4 border-green-500' : 'bg-red-50 border-l-4 border-red-500'} rounded-lg p-2.5`}>
+                      <div className="flex justify-between items-center gap-2">
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-xs sm:text-sm font-bold ${notification.type === 'refund_approve' ? 'text-green-900' : 'text-red-900'} truncate`}>
+                            {notification.title}
+                          </p>
+                          <p className={`text-xs ${notification.type === 'refund_approve' ? 'text-green-700' : 'text-red-700'} mt-0.5 truncate`}>
+                            {data.restaurantName} • ${Number(data.restaurantTotal || 0).toFixed(2)}
+                          </p>
+                        </div>
+                        <Link
+                          to="/my-notifications"
+                          className={`flex-shrink-0 text-xs text-white px-2.5 py-1 rounded-lg transition-all font-medium ${notification.type === 'refund_approve' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}`}
+                        >
+                          View
+                        </Link>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {orders.length === 0 ? (
+          <div className="bg-white rounded-xl shadow-sm text-center py-12 sm:py-16 px-4">
+            <div className="text-5xl sm:text-6xl mb-4">🍽️</div>
+            <h2 className="text-lg sm:text-xl font-bold text-gray-800 mb-2">No Orders Yet</h2>
+            <p className="text-sm text-gray-500 mb-6 max-w-sm mx-auto">
+              Start by browsing our delicious restaurants!
+            </p>
+            <button
+              onClick={() => navigate("/")}
+              className="bg-green-600 text-white px-5 py-2.5 rounded-lg hover:bg-green-700 transition-all text-sm font-medium shadow-sm"
             >
-              View All Notifications →
-            </Link>
+              Explore Restaurants
+            </button>
           </div>
-        </div>
-        
-        {/* Show only urgent unread notifications */}
-        {notifications.filter(n => !n.read && n.type.startsWith('refund_')).length > 0 && (
-          <div className="mt-4 pt-4 border-t">
-            <h4 className="text-sm font-medium text-purple-700 mb-3">🚨 New: Refund Updates Requiring Your Attention</h4>
-            <div className="space-y-2">
-              {notifications.filter(n => !n.read && n.type.startsWith('refund_')).slice(0, 2).map((notification) => {
-                const data = notification.data || {};
-                return (
-                  <div key={notification.id} className={`${notification.type === 'refund_approve' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'} border rounded-lg p-3`}>
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <p className={`text-sm font-medium ${notification.type === 'refund_approve' ? 'text-green-800' : 'text-red-800'}`}>
-                          {notification.title}
-                        </p>
-                        <p className={`text-xs ${notification.type === 'refund_approve' ? 'text-green-600' : 'text-red-600'} mt-1`}>
-                          {data.restaurantName} • ${Number(data.restaurantTotal || 0).toFixed(2)}
-                        </p>
-                      </div>
-                      <Link 
-                        to="/my-notifications"
-                        className={`text-xs text-white px-2 py-1 rounded transition-colors ${notification.type === 'refund_approve' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}`}
-                      >
-                        View →
-                      </Link>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {orders.length === 0 ? (
-        <div className="text-center py-12 bg-gray-50 rounded-lg">
-          <div className="text-6xl mb-4">🍽️</div>
-          <h2 className="text-xl font-semibold text-gray-700 mb-2">No orders yet</h2>
-          <p className="text-gray-500 mb-6">Start by browsing our delicious restaurants!</p>
-          <button
-            onClick={() => navigate("/")}
-            className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors"
-          >
-            Explore Restaurants
-          </button>
-        </div>
-      ) : (
-        <div className="space-y-6">
-          {orders.length > 0 && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-              <p className="text-sm text-blue-700">
-                💡 <strong>Tip:</strong> You can remove completed, delivered, or cancelled orders from your history using the Remove button. This action permanently deletes the order record.
-              </p>
-            </div>
-          )}
-
-          {/* TEMPORARY: Testing buttons for debugging remove functionality */}
-          {orders.length > 0 && (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
-              <p className="text-sm text-yellow-700 mb-3">
-                🔧 <strong>Debug Tools:</strong> Use these buttons to test the remove functionality by changing order status.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {orders.slice(0, 3).map((order) => (
-                  <div key={order.id} className="flex items-center space-x-2 bg-white p-2 rounded border">
-                    <span className="text-xs text-gray-600">Order #{order.id} ({order.status}):</span>
-                    <button
-                      onClick={() => updateOrderStatus(order.id, 'completed')}
-                      className="bg-green-500 text-white px-2 py-1 rounded text-xs hover:bg-green-600"
-                    >
-                      Mark Completed
-                    </button>
-                    <button
-                      onClick={() => updateOrderStatus(order.id, 'delivered')}
-                      className="bg-purple-500 text-white px-2 py-1 rounded text-xs hover:bg-purple-600"
-                    >
-                      Mark Delivered
-                    </button>
-                    <button
-                      onClick={() => updateOrderStatus(order.id, 'cancelled')}
-                      className="bg-red-500 text-white px-2 py-1 rounded text-xs hover:bg-red-600"
-                    >
-                      Mark Cancelled
-                    </button>
-                  </div>
-                ))}
+        ) : (
+          <div className="space-y-3 sm:space-y-4">
+            {orders.length > 0 && (
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
+                <p className="text-xs sm:text-sm text-blue-700">
+                  💡 <strong>Tip:</strong> Remove completed, delivered, or cancelled orders using the Remove button.
+                </p>
               </div>
-            </div>
-          )}
-          
-          {orders.map((order) => (
-            <div key={order.id} className="bg-white rounded-lg shadow-md border overflow-hidden">
-              {/* Order Header */}
-              <div className="bg-gray-50 px-6 py-4 border-b">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-800">
-                      Order #{order.id}
-                    </h3>
-                    <p className="text-sm text-gray-600">
-                      Placed on {new Date(order.created_at).toLocaleDateString()} at{' '}
-                      {new Date(order.created_at).toLocaleTimeString()}
-                    </p>
-                    {order.paid_at && (
-                      <p className="text-sm text-green-600">
-                        Paid on {new Date(order.paid_at).toLocaleDateString()}
-                      </p>
-                    )}
-                  </div>
-                  <div className="text-right">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}>
-                      {getStatusText(order.status)}
-                    </span>
-                    <div className="mt-1">
-                      <span className="text-lg font-bold text-gray-800">
-                        ${Number(order.total || 0).toFixed(2)}
-                      </span>
-                      <p className="text-xs text-gray-500">
-                        Including $${Number(order.platform_fee || 0).toFixed(2)} platform fee
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
+            )}
 
-              {/* Order Items */}
-              <div className="px-6 py-4">
-                <h4 className="font-medium text-gray-800 mb-3">Order Items</h4>
-                <div className="space-y-2">
-                  {order.items.map((item) => (
-                    <div key={item.id} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0">
-                      <div>
-                        <p className="font-medium text-gray-800">{item.name}</p>
-                        <p className="text-sm text-gray-500">
-                          From: {item.restaurant_name || 'Restaurant'}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-medium text-gray-800">
-                          ${(Number(item.price || 0) * Number(item.quantity || 1)).toFixed(2)}
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          ${Number(item.price || 0).toFixed(2)} x {item.quantity}
-                        </p>
-                      </div>
+
+            {/* Debug Tools - Hidden by default */}
+            {orders.length > 0 && process.env.NODE_ENV === 'development' && (
+              <details className="bg-yellow-50 border border-yellow-200 rounded-xl p-3">
+                <summary className="text-xs font-bold text-yellow-700 cursor-pointer">🔧 Debug Tools</summary>
+                <div className="mt-2 space-y-2">
+                  {orders.slice(0, 3).map((order) => (
+                    <div key={order.id} className="flex flex-wrap items-center gap-2 bg-white p-2 rounded border text-xs">
+                      <span className="text-gray-600">#{order.id} ({order.status}):</span>
+                      <button onClick={() => updateOrderStatus(order.id, 'completed')} className="bg-green-500 text-white px-2 py-1 rounded hover:bg-green-600">Completed</button>
+                      <button onClick={() => updateOrderStatus(order.id, 'delivered')} className="bg-purple-500 text-white px-2 py-1 rounded hover:bg-purple-600">Delivered</button>
+                      <button onClick={() => updateOrderStatus(order.id, 'cancelled')} className="bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600">Cancelled</button>
                     </div>
                   ))}
                 </div>
-              </div>
+              </details>
+            )}
 
-              {/* Special Instructions */}
-              {order.order_details && (
-                <div className="px-6 py-3 bg-blue-50 border-t">
-                  <p className="text-sm font-medium text-blue-800 mb-1">Special Instructions:</p>
-                  <p className="text-sm text-blue-700">{order.order_details}</p>
+            {orders.map((order) => (
+              <div key={order.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                {/* Order Header */}
+                <div className="bg-gradient-to-r from-gray-50 to-white px-3 sm:px-4 py-3 border-b border-gray-200">
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-sm sm:text-base font-bold text-gray-900">
+                        Order #{order.id}
+                      </h3>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {new Date(order.created_at).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </p>
+                      {order.paid_at && (
+                        <p className="text-xs text-green-600 mt-0.5">
+                          ✓ Paid {new Date(order.paid_at).toLocaleDateString()}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between sm:flex-col sm:items-end gap-2">
+                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-bold ${getStatusColor(order.status)}`}>
+                        {getStatusText(order.status)}
+                      </span>
+                      <div className="text-right">
+                        <span className="text-lg sm:text-xl font-bold text-gray-900">
+                          ${Number(order.total || 0).toFixed(2)}
+                        </span>
+                        <p className="text-xs text-gray-500">
+                          +${Number(order.platform_fee || 0).toFixed(2)} fee
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              )}
 
-              {/* Order Actions */}
-              <div className="bg-gray-50 px-6 py-4 border-t">
-                <div className="flex justify-between items-center">
-                  <div className="flex space-x-3">
+                {/* Order Items */}
+                <div className="px-3 sm:px-4 py-3">
+                  <h4 className="text-xs sm:text-sm font-bold text-gray-900 mb-2">Order Items</h4>
+                  <div className="space-y-2">
+                    {order.items.map((item) => (
+                      <div key={item.id} className="flex justify-between items-start gap-2 py-2 border-b border-gray-100 last:border-b-0">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs sm:text-sm font-semibold text-gray-900 truncate">{item.name}</p>
+                          <p className="text-xs text-gray-500 truncate">
+                            {item.restaurant_name || 'Restaurant'}
+                          </p>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <p className="text-xs sm:text-sm font-bold text-gray-900">
+                            ${(Number(item.price || 0) * Number(item.quantity || 1)).toFixed(2)}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            ${Number(item.price || 0).toFixed(2)} × {item.quantity}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Special Instructions */}
+                {order.order_details && (
+                  <div className="px-3 sm:px-4 py-2.5 bg-blue-50 border-t border-blue-100">
+                    <p className="text-xs font-bold text-blue-800 mb-1">📝 Special Instructions:</p>
+                    <p className="text-xs text-blue-700">{order.order_details}</p>
+                  </div>
+                )}
+
+                {/* Order Actions */}
+                <div className="bg-gradient-to-r from-gray-50 to-white px-3 sm:px-4 py-3 border-t border-gray-200">
+                  {/* Status Badge */}
+                  <div className="mb-3">
                     {order.status === 'paid' && (
-                      <span className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800">
+                      <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                         🍳 Being Prepared
                       </span>
                     )}
                     {order.status === 'pending' && (
-                      <span className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-yellow-100 text-yellow-800">
+                      <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
                         ⏳ Awaiting Payment
                       </span>
                     )}
                     {order.status === 'completed' && (
-                      <span className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-green-100 text-green-800">
-                        ✅ Ready for Pickup/Delivery
+                      <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        ✅ Ready for Pickup
                       </span>
                     )}
                     {order.status === 'cancelled' && (
-                      <span className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-red-100 text-red-800">
+                      <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
                         ❌ Cancelled
                       </span>
                     )}
                   </div>
-                  
-                  <div className="flex space-x-2">
+
+                  {/* Action Buttons */}
+                  <div className="flex flex-wrap gap-2">
                     {canCancelOrder(order.status) && (
                       <button
                         onClick={() => showCancelModal(order.id)}
-                        className="bg-red-500 text-white px-4 py-2 rounded text-sm hover:bg-red-600 transition-colors"
+                        className="flex-1 min-w-[120px] bg-red-600 text-white px-3 py-2 rounded-lg text-xs font-medium hover:bg-red-700 transition-all shadow-sm"
                       >
                         Cancel Order
                       </button>
                     )}
-                    
+
                     <button
                       onClick={() => navigate(`/order-details/${order.id}`)}
-                      className="bg-blue-500 text-white px-4 py-2 rounded text-sm hover:bg-blue-600 transition-colors"
+                      className="flex-1 min-w-[120px] bg-blue-600 text-white px-3 py-2 rounded-lg text-xs font-medium hover:bg-blue-700 transition-all shadow-sm"
                     >
                       View Details
                     </button>
-                    
-                    {order.status === 'paid' || order.status === 'completed' ? (
+
+                    {(order.status === 'paid' || order.status === 'completed') && (
                       <button
                         onClick={() => navigate("/")}
-                        className="bg-green-500 text-white px-4 py-2 rounded text-sm hover:bg-green-600 transition-colors"
+                        className="flex-1 min-w-[120px] bg-green-600 text-white px-3 py-2 rounded-lg text-xs font-medium hover:bg-green-700 transition-all shadow-sm"
                       >
                         Order Again
                       </button>
-                    ) : null}
+                    )}
 
                     {canRemoveOrder(order.status) && (
                       <button
                         onClick={() => confirmRemoveOrder(order.id)}
-                        className="bg-gray-500 text-white px-4 py-2 rounded text-sm hover:bg-gray-600 transition-colors"
+                        className="flex-1 min-w-[120px] bg-gray-600 text-white px-3 py-2 rounded-lg text-xs font-medium hover:bg-gray-700 transition-all shadow-sm"
                         title="Remove from order history"
                       >
                         🗑️ Remove
@@ -507,127 +507,135 @@ function CustomerOrders() {
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
 
-      {/* Summary Stats */}
-      {orders.length > 0 && (
-        <div className="mt-8 bg-blue-50 rounded-lg p-6">
-          <h3 className="text-lg font-semibold text-blue-800 mb-4">Order Summary</h3>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600">{orders.length}</div>
-              <div className="text-sm text-blue-700">Orders in History</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-green-600">
-                {orders.filter(o => o.status === 'completed' || o.status === 'delivered').length}
+        {/* Summary Stats */}
+        {orders.length > 0 && (
+          <div className="mt-4 sm:mt-6 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl shadow-sm p-4 sm:p-5">
+            <h3 className="text-sm sm:text-base font-bold text-gray-900 mb-3 sm:mb-4">📊 Order Summary</h3>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="bg-white rounded-lg p-3 text-center shadow-sm">
+                <div className="text-2xl sm:text-3xl font-bold text-blue-600">{orders.length}</div>
+                <div className="text-xs sm:text-sm text-blue-700 mt-1">Total Orders</div>
               </div>
-              <div className="text-sm text-green-700">Completed</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-yellow-600">
-                {orders.filter(o => o.status === 'pending' || o.status === 'paid').length}
+              <div className="bg-white rounded-lg p-3 text-center shadow-sm">
+                <div className="text-2xl sm:text-3xl font-bold text-green-600">
+                  {orders.filter(o => o.status === 'completed' || o.status === 'delivered').length}
+                </div>
+                <div className="text-xs sm:text-sm text-green-700 mt-1">Completed</div>
               </div>
-              <div className="text-sm text-yellow-700">In Progress</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-gray-600">
-                ${orders.reduce((sum, order) => sum + Number(order.total || 0), 0).toFixed(2)}
+              <div className="bg-white rounded-lg p-3 text-center shadow-sm">
+                <div className="text-2xl sm:text-3xl font-bold text-yellow-600">
+                  {orders.filter(o => o.status === 'pending' || o.status === 'paid').length}
+                </div>
+                <div className="text-xs sm:text-sm text-yellow-700 mt-1">In Progress</div>
               </div>
-              <div className="text-sm text-gray-700">Total Value</div>
+              <div className="bg-white rounded-lg p-3 text-center shadow-sm">
+                <div className="text-2xl sm:text-3xl font-bold text-purple-600">
+                  ${orders.reduce((sum, order) => sum + Number(order.total || 0), 0).toFixed(2)}
+                </div>
+                <div className="text-xs sm:text-sm text-purple-700 mt-1">Total Value</div>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Remove Order Confirmation Modal */}
-      {showRemoveConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold mb-4 text-gray-800">
-              Confirm Order Removal
-            </h3>
-            <p className="text-gray-600 mb-6">
-              Are you sure you want to remove this order from your order history? This action cannot be undone.
-            </p>
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => setShowRemoveConfirm(null)}
-                className="px-4 py-2 text-gray-600 bg-gray-200 rounded hover:bg-gray-300 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => removeOrder(showRemoveConfirm)}
-                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
-              >
-                Remove Order
-              </button>
+        {/* Remove Order Confirmation Modal */}
+        {showRemoveConfirm && (
+          <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl p-5 sm:p-6 max-w-sm w-full">
+              <div className="text-center mb-4">
+                <div className="text-4xl mb-3">🗑️</div>
+                <h3 className="text-base sm:text-lg font-bold text-gray-900 mb-2">
+                  Remove Order?
+                </h3>
+                <p className="text-sm text-gray-600">
+                  This will permanently delete this order from your history. This action cannot be undone.
+                </p>
+              </div>
+              <div className="flex gap-2.5">
+                <button
+                  onClick={() => setShowRemoveConfirm(null)}
+                  className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => removeOrder(showRemoveConfirm)}
+                  className="flex-1 px-4 py-2.5 text-sm font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 transition-all shadow-sm"
+                >
+                  Remove
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Cancel Order Confirmation Modal */}
-      {showCancelConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold mb-4 text-gray-800">
-              Cancel Order
-            </h3>
-            <p className="text-gray-600 mb-4">
-              Are you sure you want to cancel this order?
-            </p>
-            
-            <div className="mb-4">
-              <label htmlFor="cancel-reason" className="block text-sm font-medium text-gray-700 mb-2">
-                Reason for cancellation (optional):
-              </label>
-              <textarea
-                id="cancel-reason"
-                value={cancelReason}
-                onChange={(e) => setCancelReason(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                rows="3"
-                placeholder="Please provide a reason..."
-              />
-            </div>
+        {/* Cancel Order Confirmation Modal */}
+        {showCancelConfirm && (
+          <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl p-5 sm:p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+              <div className="mb-4">
+                <div className="text-center mb-3">
+                  <div className="text-4xl mb-2">❌</div>
+                  <h3 className="text-base sm:text-lg font-bold text-gray-900">
+                    Cancel Order
+                  </h3>
+                </div>
+                <p className="text-sm text-gray-600 text-center mb-4">
+                  Are you sure you want to cancel this order?
+                </p>
 
-            <div className="mb-6">
-              <label htmlFor="request-refund" className="flex items-center">
-                <input
-                  id="request-refund"
-                  type="checkbox"
-                  checked={requestRefund}
-                  onChange={(e) => setRequestRefund(e.target.checked)}
-                  className="mr-2"
-                />
-                <span className="text-sm text-gray-700">
-                  Request a refund (This will notify the restaurant owner to process your refund)
-                </span>
-              </label>
-            </div>
+                <div className="mb-4">
+                  <label htmlFor="cancel-reason" className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
+                    Reason for cancellation (optional):
+                  </label>
+                  <textarea
+                    id="cancel-reason"
+                    value={cancelReason}
+                    onChange={(e) => setCancelReason(e.target.value)}
+                    className="w-full p-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    rows="3"
+                    placeholder="Please provide a reason..."
+                  />
+                </div>
 
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => setShowCancelConfirm(null)}
-                className="px-4 py-2 text-gray-600 bg-gray-200 rounded hover:bg-gray-300 transition-colors"
-              >
-                Keep Order
-              </button>
-              <button
-                onClick={() => cancelOrder(showCancelConfirm)}
-                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
-              >
-                Cancel Order
-              </button>
+                <div className="mb-4">
+                  <label htmlFor="request-refund" className="flex items-start">
+                    <input
+                      id="request-refund"
+                      type="checkbox"
+                      checked={requestRefund}
+                      onChange={(e) => setRequestRefund(e.target.checked)}
+                      className="mt-0.5 mr-2 flex-shrink-0"
+                    />
+                    <span className="text-xs sm:text-sm text-gray-700">
+                      Request a refund (This will notify the restaurant owner to process your refund)
+                    </span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="flex gap-2.5">
+                <button
+                  onClick={() => setShowCancelConfirm(null)}
+                  className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-all"
+                >
+                  Keep Order
+                </button>
+                <button
+                  onClick={() => cancelOrder(showCancelConfirm)}
+                  className="flex-1 px-4 py-2.5 text-sm font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 transition-all shadow-sm"
+                >
+                  Cancel Order
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
