@@ -31,6 +31,7 @@ export const useOrderNotifications = (userRole = null, restaurantId = null) => {
     if (audioRef.current && isEnabled) {
       audioRef.current.currentTime = 0;
       audioRef.current.play().catch((error) => {
+        // eslint-disable-next-line no-console
         console.log('Audio play failed:', error);
         // Some browsers block autoplay, user interaction may be needed first
       });
@@ -71,7 +72,9 @@ export const useOrderNotifications = (userRole = null, restaurantId = null) => {
 
   // Check for new orders
   const checkForNewOrders = useCallback(async () => {
-    if (!isEnabled || !userRole) return;
+    if (!isEnabled || !userRole) {
+      return;
+    }
 
     try {
       let endpoint = '';
@@ -102,7 +105,6 @@ export const useOrderNotifications = (userRole = null, restaurantId = null) => {
 
           // Check if this is a new order (created in the last 30 seconds)
           const orderTime = new Date(latestOrder.created_at).getTime();
-          const timeSinceLastCheck = Date.now() - lastCheckRef.current;
           const isNewOrder = (Date.now() - orderTime) < 30000; // Within last 30 seconds
 
           // If we have a new order ID and it's actually new
@@ -123,26 +125,28 @@ export const useOrderNotifications = (userRole = null, restaurantId = null) => {
         lastCheckRef.current = Date.now();
       }
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Error checking for new orders:', error);
     }
   }, [isEnabled, userRole, restaurantId, lastOrderId, playNotificationSound, showBrowserNotification]);
 
   // Start polling for new orders
   useEffect(() => {
-    if (!userRole || !isEnabled) return;
+    if (userRole && isEnabled) {
+      // Request notification permission on mount
+      requestNotificationPermission();
 
-    // Request notification permission on mount
-    requestNotificationPermission();
+      // Initial check
+      checkForNewOrders();
 
-    // Initial check
-    checkForNewOrders();
-
-    // Poll every 10 seconds
-    pollingIntervalRef.current = setInterval(checkForNewOrders, 10000);
+      // Poll every 10 seconds
+      pollingIntervalRef.current = setInterval(checkForNewOrders, 10000);
+    }
 
     return () => {
       if (pollingIntervalRef.current) {
         clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
       }
     };
   }, [userRole, isEnabled, checkForNewOrders, requestNotificationPermission]);

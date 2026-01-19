@@ -1,4 +1,4 @@
-import React from 'react';
+import PropTypes from 'prop-types';
 import { useOrderNotifications } from '../hooks/useOrderNotifications';
 
 /**
@@ -102,6 +102,11 @@ const NotificationBell = ({ userRole, restaurantId }) => {
       )}
     </div>
   );
+};
+
+NotificationBell.propTypes = {
+  userRole: PropTypes.string,
+  restaurantId: PropTypes.number,
 };
 
 export default NotificationBell;
