@@ -11,6 +11,7 @@ export const useOrderNotifications = (userRole = null, _restaurantId = null) => 
   const [isEnabled, setIsEnabled] = useState(true);
   const audioRef = useRef(null);
   const pollingIntervalRef = useRef(null);
+  const soundRepeatIntervalRef = useRef(null);
   const lastCheckRef = useRef(Date.now());
 
   // Initialize audio
@@ -22,6 +23,11 @@ export const useOrderNotifications = (userRole = null, _restaurantId = null) => 
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current = null;
+      }
+      // Clear sound repeat interval on unmount
+      if (soundRepeatIntervalRef.current) {
+        clearInterval(soundRepeatIntervalRef.current);
+        soundRepeatIntervalRef.current = null;
       }
     };
   }, []);
@@ -37,6 +43,30 @@ export const useOrderNotifications = (userRole = null, _restaurantId = null) => 
       });
     }
   }, [isEnabled]);
+
+  // Start repeating sound alert
+  const startRepeatingSound = useCallback(() => {
+    // Clear any existing interval
+    if (soundRepeatIntervalRef.current) {
+      clearInterval(soundRepeatIntervalRef.current);
+    }
+
+    // Play sound immediately
+    playNotificationSound();
+
+    // Then repeat every 10 seconds
+    soundRepeatIntervalRef.current = setInterval(() => {
+      playNotificationSound();
+    }, 10000);
+  }, [playNotificationSound]);
+
+  // Stop repeating sound alert
+  const stopRepeatingSound = useCallback(() => {
+    if (soundRepeatIntervalRef.current) {
+      clearInterval(soundRepeatIntervalRef.current);
+      soundRepeatIntervalRef.current = null;
+    }
+  }, []);
 
   // Show browser notification
   const showBrowserNotification = useCallback((title, body) => {
@@ -111,7 +141,7 @@ export const useOrderNotifications = (userRole = null, _restaurantId = null) => 
           if (lastOrderId && latestOrder.id !== lastOrderId && isNewOrder) {
             // New order detected!
             setNewOrderCount(prev => prev + 1);
-            playNotificationSound();
+            startRepeatingSound();
 
             showBrowserNotification(
               '🍽️ New Order Received!',
@@ -128,7 +158,7 @@ export const useOrderNotifications = (userRole = null, _restaurantId = null) => 
       // eslint-disable-next-line no-console
       console.error('Error checking for new orders:', error);
     }
-  }, [isEnabled, userRole, lastOrderId, playNotificationSound, showBrowserNotification]);
+  }, [isEnabled, userRole, lastOrderId, startRepeatingSound, showBrowserNotification]);
 
   // Start polling for new orders
   useEffect(() => {
@@ -151,15 +181,39 @@ export const useOrderNotifications = (userRole = null, _restaurantId = null) => 
     };
   }, [userRole, isEnabled, checkForNewOrders, requestNotificationPermission]);
 
+  // Stop repeating sound when page becomes visible (owner opens the app)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && newOrderCount > 0) {
+        // Page is now visible and there are new orders - stop the repeating sound
+        stopRepeatingSound();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [newOrderCount, stopRepeatingSound]);
+
   // Clear notification count
   const clearNotificationCount = useCallback(() => {
     setNewOrderCount(0);
-  }, []);
+    stopRepeatingSound(); // Stop the repeating sound when user acknowledges
+  }, [stopRepeatingSound]);
 
   // Toggle notifications
   const toggleNotifications = useCallback(() => {
-    setIsEnabled(prev => !prev);
-  }, []);
+    setIsEnabled(prev => {
+      const newValue = !prev;
+      // Stop repeating sound when notifications are disabled
+      if (!newValue) {
+        stopRepeatingSound();
+      }
+      return newValue;
+    });
+  }, [stopRepeatingSound]);
 
   return {
     newOrderCount,
