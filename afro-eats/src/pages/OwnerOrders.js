@@ -128,7 +128,7 @@ function OwnerOrders() {
         </head>
         <body>
           <div class="header">
-            <div class="platform-badge">🍽️ A Food Zone Platform</div>
+            <div class="platform-badge">🍽️ OrderDabaly Platform</div>
             <h1>${restaurant?.name || 'Restaurant'}</h1>
             <h2>Order Receipt #${order.id}</h2>
             <p>Order Date: ${new Date(order.created_at).toLocaleDateString()} at ${new Date(order.created_at).toLocaleTimeString()}</p>
@@ -187,7 +187,7 @@ function OwnerOrders() {
           ` : ''}
           
           <div class="print-footer">
-            <p><strong>🍽️ Powered by A Food Zone Platform</strong></p>
+            <p><strong>🍽️ Powered by OrderDabaly Platform</strong></p>
             <p>Thank you for partnering with us!</p>
             <p>Printed on: ${new Date().toLocaleString()}</p>
           </div>
