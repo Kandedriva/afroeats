@@ -13,6 +13,7 @@ import OwnerOrders from "./pages/OwnerOrders";
 import Login from "./pages/Login";
 import { AuthProvider, AuthContext } from "./context/AuthContext";
 import { CartProvider } from "./context/CartContext";
+import { ChatProvider } from "./context/ChatContext";
 import CartPage from "./pages/CartPage";
 import DeliveryOptions from "./pages/DeliveryOptions";
 import Checkout from "./pages/Checkout";
@@ -41,6 +42,19 @@ import TermsAndConditions from "./pages/TermsAndConditions";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import DemoOrderCheckout from "./pages/DemoOrderCheckout";
 import OwnerAccount from "./pages/OwnerAccount";
+import CustomerChat from "./pages/CustomerChat";
+import OwnerChat from "./pages/OwnerChat";
+import ChatButton from "./Components/ChatButton";
+import { DriverAuthProvider } from "./context/DriverAuthContext";
+import DriverNavbar from "./Components/DriverNavbar";
+import ProtectedDriverRoute from "./Components/ProtectedDriverRoute";
+import DriverLogin from "./pages/DriverLogin";
+import DriverRegister from "./pages/DriverRegister";
+import DriverDashboard from "./pages/DriverDashboard";
+import DriverAvailableOrders from "./pages/DriverAvailableOrders";
+import DriverMyDeliveries from "./pages/DriverMyDeliveries";
+import DriverEarnings from "./pages/DriverEarnings";
+import DriverProfile from "./pages/DriverProfile";
 
 
 function AppContent() {
@@ -48,12 +62,18 @@ function AppContent() {
   const location = useLocation();
   const isOwnerRoute = location.pathname.startsWith("/owner");
   const isAdminRoute = location.pathname.startsWith("/admin");
+  const isDriverRoute = location.pathname.startsWith("/driver");
 
   return (
     <>
-      {!isOwnerRoute && !isAdminRoute && <Navbar />}
+      {!isOwnerRoute && !isAdminRoute && !isDriverRoute && <Navbar />}
       {isOwnerRoute && <OwnerNavbar />}
+      {isDriverRoute && <DriverNavbar />}
       {/* Admin routes don't show any navbar */}
+
+      {/* Floating Chat Button - Show on non-admin and non-driver routes */}
+      {!isAdminRoute && !isDriverRoute && <ChatButton />}
+
       <Routes>
         <Route path="/" element={<RestaurantList />} />
         <Route path="/restaurants/:id" element={<RestaurantDetails />} />
@@ -78,13 +98,21 @@ function AppContent() {
             </ProtectedRoute>
           } 
         />
-        <Route 
-          path="/my-notifications" 
+        <Route
+          path="/my-notifications"
           element={
             <ProtectedRoute>
               <CustomerNotifications />
             </ProtectedRoute>
-          } 
+          }
+        />
+        <Route
+          path="/my-chats"
+          element={
+            <ProtectedRoute>
+              <CustomerChat />
+            </ProtectedRoute>
+          }
         />
         <Route 
           path="/order-details/:orderId" 
@@ -170,11 +198,63 @@ function AppContent() {
             </ProtectedOwnerRoute>
           }
         />
+        <Route
+          path="/owner/chats"
+          element={
+            <ProtectedOwnerRoute>
+              <OwnerChat />
+            </ProtectedOwnerRoute>
+          }
+        />
 
         {/* Admin Routes */}
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
-        
+
+        {/* Driver Routes */}
+        <Route path="/driver/login" element={<DriverLogin />} />
+        <Route path="/driver/register" element={<DriverRegister />} />
+        <Route
+          path="/driver/dashboard"
+          element={
+            <ProtectedDriverRoute>
+              <DriverDashboard />
+            </ProtectedDriverRoute>
+          }
+        />
+        <Route
+          path="/driver/available-orders"
+          element={
+            <ProtectedDriverRoute>
+              <DriverAvailableOrders />
+            </ProtectedDriverRoute>
+          }
+        />
+        <Route
+          path="/driver/my-deliveries"
+          element={
+            <ProtectedDriverRoute>
+              <DriverMyDeliveries />
+            </ProtectedDriverRoute>
+          }
+        />
+        <Route
+          path="/driver/earnings"
+          element={
+            <ProtectedDriverRoute>
+              <DriverEarnings />
+            </ProtectedDriverRoute>
+          }
+        />
+        <Route
+          path="/driver/profile"
+          element={
+            <ProtectedDriverRoute>
+              <DriverProfile />
+            </ProtectedDriverRoute>
+          }
+        />
+
         {/* Legal Pages */}
         <Route path="/terms" element={<TermsAndConditions />} />
         <Route path="/privacy" element={<PrivacyPolicy />} />
@@ -193,9 +273,11 @@ function App() {
         <div className="min-h-screen bg-gray-100">
           <AuthProvider>
             <OwnerAuthProvider>
-              <GuestProvider>
-                <CartProvider>
-                  <AppContent />
+              <DriverAuthProvider>
+                <GuestProvider>
+                  <CartProvider>
+                    <ChatProvider>
+                      <AppContent />
                   <ToastContainer
                     position="top-right"
                     autoClose={4000}
@@ -217,10 +299,12 @@ function App() {
                       fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
                     }}
                   />
-            </CartProvider>
-          </GuestProvider>
-        </OwnerAuthProvider>
-      </AuthProvider>
+                    </ChatProvider>
+                  </CartProvider>
+                </GuestProvider>
+              </DriverAuthProvider>
+            </OwnerAuthProvider>
+          </AuthProvider>
         </div>
       </ErrorBoundary>
     </AsyncErrorBoundary>

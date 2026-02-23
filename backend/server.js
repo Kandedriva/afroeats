@@ -6,6 +6,7 @@ import ConnectPgSimple from "connect-pg-simple";
 import path from "path";
 import { fileURLToPath } from "url";
 import crypto from "crypto";
+import { createServer } from "http";
 
 // Import routes
 import pool from "./db.js";
@@ -25,6 +26,11 @@ import migrationRoutes from "./routes/migrationRoutes.js";
 import debugImageRoutes from "./routes/debugImageRoutes.js";
 import NotificationService from './services/NotificationService.js';
 import webhookDebugRoutes from './routes/webhookDebug.js';
+import chatRoutes from "./routes/chatRoutes.js";
+import socketService from "./services/socketService.js";
+import driverAuthRoutes from "./routes/driverAuthRoutes.js";
+import driverRoutes from "./routes/driverRoutes.js";
+import driverStripeRoutes from "./routes/driverStripeRoutes.js";
 
 // Import security and analytics
 import { 
@@ -70,8 +76,44 @@ app.use(helmetConfig);
 app.use(requestLogger);
 app.use(requestLoggingMiddleware);
 
-// CORS with secure configuration
-app.use(cors(corsOptions));
+// CORS with secure configuration - DISABLED, using manual CORS below
+// app.use(cors(corsOptions));
+
+// Manual CORS middleware to fix wildcard issue
+app.use((req, res, next) => {
+  const origin = req.get('Origin');
+  const allowedOrigins = [
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://localhost:3002',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:3001',
+    'http://127.0.0.1:3002',
+    'https://orderdabaly.com',
+    'https://www.orderdabaly.com',
+    'https://api.orderdabaly.com',
+    'https://orderdabaly.netlify.app',
+    'https://orderdabaly.vercel.app'
+  ];
+
+  // Determine which origin to return
+  const corsOrigin = allowedOrigins.includes(origin) ? origin : (origin || 'http://localhost:3000');
+
+  // Set CORS headers
+  res.setHeader('Access-Control-Allow-Origin', corsOrigin);
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Pragma, Cache-Control');
+  res.setHeader('Access-Control-Expose-Headers', 'Set-Cookie, Content-Type, Content-Length');
+  res.setHeader('Vary', 'Origin');
+
+  // Handle OPTIONS preflight
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end();
+  }
+
+  next();
+});
 
 // Body parsing middleware with comprehensive error handling
 app.use((req, res, next) => {
@@ -189,7 +231,24 @@ app.use((req, res, next) => {
   const origin = req.get('Origin');
   
   // Set enhanced headers for cross-domain cookie support
+  // IMPORTANT: Also set Access-Control-Allow-Origin to the specific origin to fix CORS wildcard issue
+  const allowedOrigins = [
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://localhost:3002',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:3001',
+    'http://127.0.0.1:3002',
+    'https://orderdabaly.com',
+    'https://www.orderdabaly.com',
+    'https://orderdabaly.netlify.app'
+  ];
+
+  const requestOrigin = origin || req.get('Origin');
+  const corsOrigin = (allowedOrigins.includes(requestOrigin) || !requestOrigin) ? requestOrigin : allowedOrigins[0];
+
   res.set({
+    'Access-Control-Allow-Origin': corsOrigin || 'http://localhost:3000',
     'Access-Control-Allow-Credentials': 'true',
     'Access-Control-Expose-Headers': 'Set-Cookie',
     'Vary': 'Origin, Cookie'
@@ -313,6 +372,34 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
+// FINAL CORS FIX - Set headers right before routes
+app.use((req, res, next) => {
+  const origin = req.get('Origin');
+  const allowedOrigins = [
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://localhost:3002',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:3001',
+    'http://127.0.0.1:3002'
+  ];
+
+  const corsOrigin = allowedOrigins.includes(origin) ? origin : (origin || 'http://localhost:3000');
+
+  console.log('🔧 FINAL CORS FIX - Setting headers:', {
+    origin,
+    corsOrigin,
+    url: req.url
+  });
+
+  res.setHeader('Access-Control-Allow-Origin', corsOrigin);
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+
+  next();
+});
+
 // API Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/orders", orderRoutes);
@@ -329,6 +416,12 @@ app.use("/api/debug", debugImageRoutes);
 app.use("/api/support", supportRoutes);
 app.use("/api/migration", migrationRoutes);
 app.use("/api/webhook-debug", webhookDebugRoutes);
+app.use("/api/chat", chatRoutes);
+
+// Driver routes
+app.use("/api/drivers", driverAuthRoutes);
+app.use("/api/drivers", driverRoutes);
+app.use("/api/drivers/stripe", driverStripeRoutes);
 
 // Root route for deployment health checks
 app.get('/', (req, res) => {
@@ -703,10 +796,17 @@ const startServer = async () => {
       console.log('⏰ Background jobs scheduled');
     }
     
+    // Create HTTP server for Socket.IO
+    const httpServer = createServer(app);
+
+    // Initialize Socket.IO for real-time chat
+    socketService.initialize(httpServer);
+
     // Start server
-    app.listen(PORT, () => {
+    httpServer.listen(PORT, () => {
       console.log(`🚀 OrderDabaly Server running on port ${PORT}`);
       console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`💬 Socket.IO enabled for real-time chat`);
       console.log(`📊 Admin dashboard: http://localhost:${PORT}/api/admin`);
       console.log(`🔍 Health check: http://localhost:${PORT}/api/health`);
     });

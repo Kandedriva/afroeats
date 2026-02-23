@@ -54,81 +54,75 @@ export const corsOptions = {
       // Development origins
       'http://localhost:3000',
       'http://localhost:3001',
+      'http://localhost:3002',
       'http://127.0.0.1:3000',
       'http://127.0.0.1:3001',
-      
+      'http://127.0.0.1:3002',
+
       // Production origins from environment variables
       process.env.FRONTEND_URL,
       process.env.CLIENT_URL,
       process.env.ADMIN_URL,
       process.env.REACT_APP_FRONTEND_URL,
-      
+
       // Specific production URLs
       'https://orderdabaly.com',
       'https://www.orderdabaly.com',
       'https://api.orderdabaly.com',
       'https://orderdabaly.netlify.app',
       'https://orderdabaly.vercel.app',
-      
+
       // Auto-deployed Netlify URLs (common pattern)
       'https://main--orderdabaly.netlify.app',
       'https://deploy-preview-*--orderdabaly.netlify.app',
-      
+
       // Backend service URLs (for admin dashboard and legacy support)
       'https://a-food-zone.onrender.com',
       'https://afro-restaurant-backend.onrender.com',
-      
+
       // Support for both API and frontend subdomains
       'https://app.orderdabaly.com',
       'https://admin.orderdabaly.com'
     ].filter(Boolean); // Remove undefined values
-    
+
     console.log('🌐 CORS Request from origin:', origin || 'NO_ORIGIN');
-    console.log('🌐 Allowed origins:', allowedOrigins);
-    
+
     // Allow requests with no origin (mobile apps, Postman, etc.)
-    // Check for both undefined and "undefined" string
     if (!origin || origin === 'undefined') {
-      console.log('✅ CORS: Allowing request with no origin (undefined)');
-      return callback(null, true);
+      console.log('✅ CORS: Allowing request with no origin, returning:', origin || 'http://localhost:3002');
+      return callback(null, origin || 'http://localhost:3002');
     }
-    
+
     // Check if origin is in allowed list or matches Netlify deploy preview pattern
-    const isAllowed = allowedOrigins.includes(origin) || 
+    const isAllowed = allowedOrigins.includes(origin) ||
                      (origin && (
                        origin.includes('--orderdabaly.netlify.app') ||
                        origin.includes('netlify.app') ||
                        origin.includes('vercel.app')
                      ));
-    
+
     if (isAllowed) {
-      console.log('✅ CORS: Origin allowed:', origin);
-      callback(null, true);
-    } else {
-      console.log('❌ CORS: Origin rejected:', origin);
-      console.log('💡 CORS: Add this origin to your environment variables if it should be allowed');
-      
-      // In development, be more lenient
-      if (process.env.NODE_ENV === 'development') {
-        console.log('🔧 Development mode: Allowing origin anyway');
-        callback(null, true);
-      } else {
-        // In production, be more lenient for image requests and known hosting platforms
-        if (req && req.path && req.path.includes('/uploads/')) {
-          console.log('🖼️ Allowing image request from:', origin);
-          callback(null, true);
-        } else {
-          callback(new Error(`CORS policy violation: Origin ${origin} is not allowed`));
-        }
-      }
+      console.log('✅ CORS: Origin allowed, returning origin:', origin);
+      return callback(null, origin); // Return the specific origin, not true
     }
+
+    console.log('❌ CORS: Origin rejected:', origin);
+
+    // In development, be more lenient
+    if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
+      console.log('🔧 Development mode: Allowing origin, returning:', origin);
+      return callback(null, origin); // Return the specific origin
+    }
+
+    // Reject in production
+    callback(new Error(`CORS policy violation: Origin ${origin} is not allowed`));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'],
   // Enhanced headers for Safari/WebKit compatibility
   allowedHeaders: [
-    'Content-Type', 
-    'Authorization', 
+    'Content-Type',
+    'Authorization',
     'X-Requested-With',
     'Accept',
     'Origin',
@@ -137,20 +131,20 @@ export const corsOptions = {
     'X-File-Name',
     'User-Agent',
     'DNT',
-    'Sec-Fetch-Mode', 
-    'Sec-Fetch-Site', 
+    'Sec-Fetch-Mode',
+    'Sec-Fetch-Site',
     'Sec-Fetch-Dest',
     'X-Safari-No-Cache',
     'X-Webkit-CSP'
   ],
   // Expose additional headers for Safari image handling
   exposedHeaders: [
-    'Set-Cookie', 
-    'Content-Type', 
-    'Content-Length', 
-    'ETag', 
+    'Set-Cookie',
+    'Content-Type',
+    'Content-Length',
+    'ETag',
     'Last-Modified',
-    'Cache-Control', 
+    'Cache-Control',
     'Cross-Origin-Resource-Policy',
     'Access-Control-Allow-Origin'
   ],
