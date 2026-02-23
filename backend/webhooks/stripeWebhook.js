@@ -1,6 +1,7 @@
 import stripe from '../stripe.js';
 import pool from '../db.js';
 import NotificationService from '../services/NotificationService.js';
+import socketService from '../services/socketService.js';
 
 export const handleStripeWebhook = async (req, res) => {
   const sig = req.headers['stripe-signature'];
@@ -137,6 +138,23 @@ export const handleStripeWebhook = async (req, res) => {
               );
 
               console.log(`✅ Customer notification created for user ${numericUserId}, order ${orderId}`);
+
+              // ✅ Send SMS to customer about order confirmation
+              try {
+                const { sendOrderStatusUpdateSMS } = require('../services/NotificationService.js');
+                const customerPhone = deliveryPhone;
+
+                if (customerPhone) {
+                  await sendOrderStatusUpdateSMS(customerPhone, {
+                    orderId,
+                    status: 'received',
+                    restaurantName: restaurantNames
+                  });
+                  console.log(`✅ Order confirmation SMS sent to customer: ${customerPhone}`);
+                }
+              } catch (smsError) {
+                console.error('❌ Failed to send order confirmation SMS:', smsError.message);
+              }
             } catch (notifError) {
               console.error('❌ Failed to create customer notification:', notifError.message);
               console.error('❌ Notification error details:', notifError.stack);
@@ -392,6 +410,88 @@ export const handleStripeWebhook = async (req, res) => {
           if (userId) {
             await pool.query('DELETE FROM carts WHERE user_id = $1', [userId]);
             console.log(`🛒 Cleared cart for user ${userId}`);
+          }
+
+          // ✅ Create delivery record if this is a delivery order
+          if (deliveryType === 'delivery' && deliveryAddress) {
+            try {
+              const { calculateDistanceAndFee } = await import('../services/googleMapsService.js');
+
+              // Get restaurant address(es) for pickup location
+              const restaurantAddresses = await pool.query(`
+                SELECT DISTINCT r.id, r.name, r.address, r.latitude, r.longitude
+                FROM restaurants r
+                INNER JOIN order_items oi ON r.id = oi.restaurant_id
+                WHERE oi.order_id = $1
+              `, [orderId]);
+
+              if (restaurantAddresses.rows.length > 0) {
+                // Use first restaurant as primary pickup location
+                // For multi-restaurant orders, this could be enhanced to handle multiple pickups
+                const primaryRestaurant = restaurantAddresses.rows[0];
+                const pickupAddress = primaryRestaurant.address;
+
+                // Calculate distance and delivery fee
+                const deliveryData = await calculateDistanceAndFee(pickupAddress, deliveryAddress);
+
+                // Create driver_deliveries record
+                await pool.query(`
+                  INSERT INTO driver_deliveries (
+                    order_id, status, pickup_location, delivery_location,
+                    pickup_latitude, pickup_longitude, delivery_latitude, delivery_longitude,
+                    distance_miles, base_delivery_fee, distance_delivery_fee, total_delivery_fee,
+                    driver_payout, platform_commission
+                  ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+                `, [
+                  orderId,
+                  'available', // Status is 'available' for drivers to claim
+                  pickupAddress,
+                  deliveryAddress,
+                  deliveryData.origin_coordinates.latitude,
+                  deliveryData.origin_coordinates.longitude,
+                  deliveryData.destination_coordinates.latitude,
+                  deliveryData.destination_coordinates.longitude,
+                  deliveryData.distance_miles,
+                  deliveryData.base_fee,
+                  deliveryData.distance_fee,
+                  deliveryData.total_delivery_fee,
+                  deliveryData.driver_payout,
+                  deliveryData.platform_commission
+                ]);
+
+                // Update order with delivery fee and distance
+                await pool.query(
+                  `UPDATE orders
+                   SET actual_delivery_fee = $1, delivery_distance_miles = $2, pickup_location = $3
+                   WHERE id = $4`,
+                  [deliveryData.total_delivery_fee, deliveryData.distance_miles, pickupAddress, orderId]
+                );
+
+                console.log(`✅ Delivery record created for order ${orderId}: ${deliveryData.distance_miles} miles, fee: $${deliveryData.total_delivery_fee}`);
+
+                // Notify all online drivers about new delivery order
+                try {
+                  socketService.emitToAllDrivers('new_delivery_order', {
+                    orderId,
+                    restaurantName: primaryRestaurant.name,
+                    pickupAddress,
+                    deliveryAddress,
+                    distanceMiles: deliveryData.distance_miles,
+                    driverPayout: deliveryData.driver_payout,
+                    totalDeliveryFee: deliveryData.total_delivery_fee,
+                    timestamp: new Date().toISOString(),
+                  });
+                  console.log(`📢 Notified drivers about new delivery order ${orderId}`);
+                } catch (socketError) {
+                  console.error('❌ Failed to notify drivers via socket:', socketError);
+                  // Don't fail the order if socket notification fails
+                }
+              }
+            } catch (deliveryError) {
+              console.error('❌ Failed to create delivery record:', deliveryError);
+              console.error('❌ Delivery error stack:', deliveryError.stack);
+              // Don't fail the entire order if delivery record creation fails
+            }
           }
 
           // Delete temp data

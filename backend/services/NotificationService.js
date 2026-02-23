@@ -280,6 +280,54 @@ Type: ${deliveryType === 'delivery' ? 'Delivery' : 'Pickup'}
   }
 
   /**
+   * Send order status update SMS to customer
+   */
+  async sendOrderStatusUpdateSMS(customerPhone, orderDetails) {
+    if (!customerPhone) {
+      return { success: false, reason: 'No phone number provided' };
+    }
+
+    if (!this.twilioClient) {
+      console.warn('Twilio not configured - SMS not sent');
+      return { success: false, reason: 'Twilio not configured' };
+    }
+
+    try {
+      const { orderId, status, restaurantName } = orderDetails;
+
+      const statusMessages = {
+        received: '✅ Order received and being prepared',
+        confirmed: '✅ Order confirmed by restaurant',
+        preparing: '👨‍🍳 Your order is being prepared',
+        ready: '✅ Order ready for pickup/delivery!',
+        out_for_delivery: '🚗 Order is out for delivery',
+        delivered: '🎉 Order delivered! Enjoy your meal!',
+      };
+
+      const statusMessage = statusMessages[status] || 'Order status updated';
+
+      const message = `${statusMessage}
+
+Order #${orderId}
+Restaurant: ${restaurantName}
+
+Track your order: ${process.env.FRONTEND_URL || 'http://localhost:3000'}/order-details/${orderId}`;
+
+      const result = await this.twilioClient.messages.create({
+        body: message,
+        from: process.env.TWILIO_PHONE_NUMBER,
+        to: customerPhone,
+      });
+
+      console.log(`✅ Order status SMS sent to ${customerPhone} for order #${orderId}`);
+      return { success: true, messageSid: result.sid };
+    } catch (error) {
+      console.error('Failed to send order status SMS:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
    * Send notifications to restaurant owner (both email and SMS)
    */
   async notifyRestaurantOwner(ownerInfo, orderDetails) {

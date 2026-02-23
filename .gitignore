@@ -183,6 +183,15 @@ FIX_WEBHOOK_*.md
 QUICK_FIX_*.md
 WEBHOOK_DIAGNOSTIC_*.md
 TWILIO_CONSENT_PROOF.md
+WEBHOOK_FIX_APPLIED.md
+COMPREHENSIVE_LEARNING_COURSE.md
+COURSE_CREATION_SUMMARY.md
+
+# Learning and tutorial directories
+LEARNING_COURSE/
+learning/
+tutorials/
+docs/learning/
 
 # Upload directories with user content
 backend/uploads/

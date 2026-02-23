@@ -1,5 +1,6 @@
 // React import removed as it's not needed in React 17+
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import RestaurantCard from "../Components/RestaurantCard";
 import { toast } from 'react-toastify';
 import { API_BASE_URL } from "../config/api";
@@ -149,8 +150,15 @@ export default function RestaurantList() {
 
   return (
     <div className="max-w-6xl mx-auto mt-4 p-4">
-      {/* Contact Support Button */}
-      <div className="mb-6 flex justify-end">
+      {/* Action Buttons */}
+      <div className="mb-6 flex justify-end gap-3">
+        <Link
+          to="/driver/register"
+          className="bg-green-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-green-700 transition-colors shadow-sm flex items-center gap-2"
+        >
+          <span>🚗</span>
+          Become a Driver
+        </Link>
         <button
           onClick={() => setShowSupportForm(true)}
           className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-2"

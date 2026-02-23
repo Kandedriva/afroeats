@@ -996,6 +996,23 @@ router.post("/orders/:id/complete", requireOwnerAuth, async (req, res) => {
         );
 
         console.log(`✅ Customer notification created: Order ${orderId} ready at ${restaurantName}`);
+
+        // ✅ Send SMS to customer about order ready
+        try {
+          const notificationService = require('../services/NotificationService.js');
+          const customerPhone = orderResult.rows[0]?.delivery_phone;
+
+          if (customerPhone) {
+            await notificationService.sendOrderStatusUpdateSMS(customerPhone, {
+              orderId,
+              status: 'ready',
+              restaurantName
+            });
+            console.log(`✅ Order ready SMS sent to customer: ${customerPhone}`);
+          }
+        } catch (smsError) {
+          console.error('❌ Failed to send order ready SMS:', smsError.message);
+        }
       }
     } catch (notifError) {
       console.error('❌ Failed to create customer notification:', notifError.message);
@@ -1060,6 +1077,27 @@ router.post("/orders/:id/complete", requireOwnerAuth, async (req, res) => {
           );
 
           console.log(`✅ Customer notification created: Order ${orderId} fully completed`);
+
+          // ✅ Send SMS to customer about order completion
+          try {
+            const notificationService = require('../services/NotificationService.js');
+            const completedOrderResult = await pool.query(
+              'SELECT delivery_phone FROM orders WHERE id = $1',
+              [orderId]
+            );
+            const customerPhone = completedOrderResult.rows[0]?.delivery_phone;
+
+            if (customerPhone) {
+              await notificationService.sendOrderStatusUpdateSMS(customerPhone, {
+                orderId,
+                status: 'delivered',
+                restaurantName: 'All Restaurants'
+              });
+              console.log(`✅ Order completion SMS sent to customer: ${customerPhone}`);
+            }
+          } catch (smsError) {
+            console.error('❌ Failed to send order completion SMS:', smsError.message);
+          }
         }
       } catch (notifError) {
         console.error('❌ Failed to create completion notification:', notifError.message);
