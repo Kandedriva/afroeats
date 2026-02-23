@@ -976,4 +976,357 @@ router.get('/restaurant-contacts', requireAdminAuth, async (req, res) => {
   }
 });
 
+// ============================================
+// DRIVER MANAGEMENT ENDPOINTS
+// ============================================
+
+/**
+ * GET /api/admin/drivers
+ * List all drivers with optional status filter
+ * Query params: ?status=pending|approved|rejected|suspended|all
+ */
+router.get('/drivers', requireAdminAuth, async (req, res) => {
+  try {
+    const { status } = req.query;
+
+    let query = `
+      SELECT
+        d.id, d.name, d.email, d.phone,
+        d.vehicle_type, d.vehicle_make, d.vehicle_model, d.vehicle_year,
+        d.vehicle_color, d.license_plate,
+        d.drivers_license_url, d.drivers_license_verified,
+        d.approval_status, d.approved_at, d.rejection_reason,
+        d.is_available, d.is_active,
+        d.total_deliveries, d.completed_deliveries, d.cancelled_deliveries,
+        d.average_rating, d.total_earnings,
+        d.stripe_account_id, d.stripe_onboarding_complete,
+        d.created_at, d.last_login_at
+      FROM drivers d
+    `;
+
+    const params = [];
+    if (status && status !== 'all') {
+      query += ` WHERE d.approval_status = $1`;
+      params.push(status);
+    }
+
+    query += ` ORDER BY d.created_at DESC`;
+
+    const result = await pool.query(query, params);
+
+    res.json({
+      success: true,
+      drivers: result.rows
+    });
+  } catch (error) {
+    logger.error('Error fetching drivers:', error);
+    res.status(500).json({ error: 'Failed to fetch drivers' });
+  }
+});
+
+/**
+ * GET /api/admin/drivers/:id
+ * Get detailed driver information
+ */
+router.get('/drivers/:id', requireAdminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      `SELECT
+        d.*,
+        COUNT(DISTINCT dd.id) FILTER (WHERE dd.status = 'delivered') as successful_deliveries,
+        COUNT(DISTINCT dd.id) FILTER (WHERE dd.status = 'cancelled') as cancelled_deliveries,
+        AVG(dd.customer_rating) FILTER (WHERE dd.customer_rating IS NOT NULL) as avg_customer_rating
+       FROM drivers d
+       LEFT JOIN driver_deliveries dd ON d.id = dd.driver_id
+       WHERE d.id = $1
+       GROUP BY d.id`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Driver not found' });
+    }
+
+    // Get recent deliveries
+    const recentDeliveries = await pool.query(
+      `SELECT
+        dd.id, dd.order_id, dd.status, dd.total_delivery_fee, dd.driver_payout,
+        dd.distance_miles, dd.claimed_at, dd.delivered_at,
+        o.created_at as order_created_at
+       FROM driver_deliveries dd
+       JOIN orders o ON dd.order_id = o.id
+       WHERE dd.driver_id = $1
+       ORDER BY dd.created_at DESC
+       LIMIT 10`,
+      [id]
+    );
+
+    res.json({
+      success: true,
+      driver: result.rows[0],
+      recent_deliveries: recentDeliveries.rows
+    });
+  } catch (error) {
+    logger.error('Error fetching driver details:', error);
+    res.status(500).json({ error: 'Failed to fetch driver details' });
+  }
+});
+
+/**
+ * POST /api/admin/drivers/:id/approve
+ * Approve a pending driver application
+ */
+router.post('/drivers/:id/approve', requireAdminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const adminId = req.admin.id;
+
+    const result = await pool.query(
+      `UPDATE drivers
+       SET approval_status = 'approved',
+           approved_by = $1,
+           approved_at = NOW(),
+           updated_at = NOW()
+       WHERE id = $2 AND approval_status = 'pending'
+       RETURNING id, name, email, approval_status`,
+      [adminId, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        error: 'Driver not found or not in pending status'
+      });
+    }
+
+    const driver = result.rows[0];
+
+    // Create driver notification
+    await pool.query(
+      `INSERT INTO driver_notifications (driver_id, type, title, message, data)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [
+        id,
+        'account_approved',
+        'Account Approved! 🎉',
+        'Congratulations! Your driver account has been approved. You can now start accepting delivery orders and earning money!',
+        JSON.stringify({ approved_at: new Date().toISOString() })
+      ]
+    );
+
+    logger.info(`Admin ${req.admin.username} approved driver ${driver.name} (ID: ${id})`);
+
+    res.json({
+      success: true,
+      message: 'Driver approved successfully',
+      driver
+    });
+  } catch (error) {
+    logger.error('Error approving driver:', error);
+    res.status(500).json({ error: 'Failed to approve driver' });
+  }
+});
+
+/**
+ * POST /api/admin/drivers/:id/reject
+ * Reject a pending driver application
+ * Body: { reason: string }
+ */
+router.post('/drivers/:id/reject', requireAdminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+    const adminId = req.admin.id;
+
+    if (!reason) {
+      return res.status(400).json({ error: 'Rejection reason is required' });
+    }
+
+    const result = await pool.query(
+      `UPDATE drivers
+       SET approval_status = 'rejected',
+           rejection_reason = $1,
+           approved_by = $2,
+           approved_at = NOW(),
+           updated_at = NOW()
+       WHERE id = $3 AND approval_status = 'pending'
+       RETURNING id, name, email, approval_status`,
+      [reason, adminId, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        error: 'Driver not found or not in pending status'
+      });
+    }
+
+    const driver = result.rows[0];
+
+    // Create driver notification
+    await pool.query(
+      `INSERT INTO driver_notifications (driver_id, type, title, message, data)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [
+        id,
+        'account_rejected',
+        'Application Update',
+        `Your driver application was not approved. Reason: ${reason}. If you believe this was a mistake, please contact support.`,
+        JSON.stringify({ reason, rejected_at: new Date().toISOString() })
+      ]
+    );
+
+    logger.info(`Admin ${req.admin.username} rejected driver ${driver.name} (ID: ${id}): ${reason}`);
+
+    res.json({
+      success: true,
+      message: 'Driver rejected',
+      driver
+    });
+  } catch (error) {
+    logger.error('Error rejecting driver:', error);
+    res.status(500).json({ error: 'Failed to reject driver' });
+  }
+});
+
+/**
+ * POST /api/admin/drivers/:id/suspend
+ * Suspend an approved driver
+ * Body: { reason: string }
+ */
+router.post('/drivers/:id/suspend', requireAdminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    if (!reason) {
+      return res.status(400).json({ error: 'Suspension reason is required' });
+    }
+
+    const result = await pool.query(
+      `UPDATE drivers
+       SET approval_status = 'suspended',
+           rejection_reason = $1,
+           is_available = FALSE,
+           updated_at = NOW()
+       WHERE id = $2 AND approval_status = 'approved'
+       RETURNING id, name, email, approval_status`,
+      [reason, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        error: 'Driver not found or not in approved status'
+      });
+    }
+
+    const driver = result.rows[0];
+
+    // Create driver notification
+    await pool.query(
+      `INSERT INTO driver_notifications (driver_id, type, title, message, data)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [
+        id,
+        'account_suspended',
+        'Account Suspended ⚠️',
+        `Your driver account has been suspended. Reason: ${reason}. Please contact support for more information.`,
+        JSON.stringify({ reason, suspended_at: new Date().toISOString() })
+      ]
+    );
+
+    logger.warn(`Admin ${req.admin.username} suspended driver ${driver.name} (ID: ${id}): ${reason}`);
+
+    res.json({
+      success: true,
+      message: 'Driver suspended successfully',
+      driver
+    });
+  } catch (error) {
+    logger.error('Error suspending driver:', error);
+    res.status(500).json({ error: 'Failed to suspend driver' });
+  }
+});
+
+/**
+ * POST /api/admin/drivers/:id/reactivate
+ * Reactivate a suspended driver
+ */
+router.post('/drivers/:id/reactivate', requireAdminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      `UPDATE drivers
+       SET approval_status = 'approved',
+           rejection_reason = NULL,
+           updated_at = NOW()
+       WHERE id = $1 AND approval_status = 'suspended'
+       RETURNING id, name, email, approval_status`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        error: 'Driver not found or not in suspended status'
+      });
+    }
+
+    const driver = result.rows[0];
+
+    // Create driver notification
+    await pool.query(
+      `INSERT INTO driver_notifications (driver_id, type, title, message, data)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [
+        id,
+        'account_reactivated',
+        'Account Reactivated! ✅',
+        'Your driver account has been reactivated. You can now start accepting deliveries again!',
+        JSON.stringify({ reactivated_at: new Date().toISOString() })
+      ]
+    );
+
+    logger.info(`Admin ${req.admin.username} reactivated driver ${driver.name} (ID: ${id})`);
+
+    res.json({
+      success: true,
+      message: 'Driver reactivated successfully',
+      driver
+    });
+  } catch (error) {
+    logger.error('Error reactivating driver:', error);
+    res.status(500).json({ error: 'Failed to reactivate driver' });
+  }
+});
+
+/**
+ * GET /api/admin/drivers/stats/summary
+ * Get driver statistics summary
+ */
+router.get('/drivers/stats/summary', requireAdminAuth, async (req, res) => {
+  try {
+    const stats = await pool.query(`
+      SELECT
+        COUNT(*) FILTER (WHERE approval_status = 'pending') as pending_drivers,
+        COUNT(*) FILTER (WHERE approval_status = 'approved') as approved_drivers,
+        COUNT(*) FILTER (WHERE approval_status = 'rejected') as rejected_drivers,
+        COUNT(*) FILTER (WHERE approval_status = 'suspended') as suspended_drivers,
+        COUNT(*) FILTER (WHERE is_available = TRUE AND approval_status = 'approved') as online_drivers,
+        COUNT(DISTINCT dd.id) FILTER (WHERE dd.status = 'delivered' AND dd.delivered_at >= CURRENT_DATE) as deliveries_today,
+        COALESCE(SUM(dd.total_delivery_fee) FILTER (WHERE dd.status = 'delivered' AND dd.delivered_at >= CURRENT_DATE), 0) as revenue_today
+      FROM drivers d
+      LEFT JOIN driver_deliveries dd ON d.id = dd.driver_id
+    `);
+
+    res.json({
+      success: true,
+      stats: stats.rows[0]
+    });
+  } catch (error) {
+    logger.error('Error fetching driver stats:', error);
+    res.status(500).json({ error: 'Failed to fetch driver stats' });
+  }
+});
+
 export default router;

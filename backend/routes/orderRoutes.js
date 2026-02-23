@@ -3,6 +3,7 @@ import pool from "../db.js";
 import stripe from "../stripe.js";
 import { requireAuth } from "../middleware/authMiddleware.js";
 import { jobs } from "../services/queue.js";
+import socketService from "../services/socketService.js";
 
 const router = express.Router();
 
@@ -122,9 +123,111 @@ async function sendDemoOrderNotifications(orderId, items, customerInfo, isGuestO
       
       console.log(`✅ Notification sent to ${restaurant.name} (${restaurant.owner_email})`);
     }
-    
+
+    // ✅ Send SMS to customer about order confirmation (for both registered and guest users)
+    try {
+      const notificationService = require('../services/NotificationService.js');
+      const customerPhone = customerInfo.phone;
+      const restaurantNames = Object.values(restaurantOrders)
+        .map(r => r.restaurant.name)
+        .join(', ');
+
+      if (customerPhone) {
+        await notificationService.sendOrderStatusUpdateSMS(customerPhone, {
+          orderId,
+          status: 'received',
+          restaurantName: restaurantNames
+        });
+        console.log(`✅ Demo order confirmation SMS sent to customer: ${customerPhone}`);
+      }
+    } catch (smsError) {
+      console.error('❌ Failed to send demo order confirmation SMS:', smsError.message);
+    }
+
+    // ✅ Create delivery record for demo orders if delivery type
+    try {
+      // Check if this is a delivery order
+      const orderCheck = await pool.query(
+        'SELECT delivery_type, delivery_address FROM orders WHERE id = $1',
+        [orderId]
+      );
+
+      if (orderCheck.rows.length > 0 &&
+          orderCheck.rows[0].delivery_type === 'delivery' &&
+          orderCheck.rows[0].delivery_address) {
+
+        const { calculateDistanceAndFee } = await import('../services/googleMapsService.js');
+        const deliveryAddress = orderCheck.rows[0].delivery_address;
+
+        // Get first restaurant address as pickup location
+        const firstRestaurant = Object.values(restaurantOrders)[0]?.restaurant;
+        if (firstRestaurant && firstRestaurant.address) {
+          const pickupAddress = firstRestaurant.address;
+
+          // Calculate distance and delivery fee
+          const deliveryData = await calculateDistanceAndFee(pickupAddress, deliveryAddress);
+
+          // Create driver_deliveries record
+          await pool.query(`
+            INSERT INTO driver_deliveries (
+              order_id, status, pickup_location, delivery_location,
+              pickup_latitude, pickup_longitude, delivery_latitude, delivery_longitude,
+              distance_miles, base_delivery_fee, distance_delivery_fee, total_delivery_fee,
+              driver_payout, platform_commission
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+          `, [
+            orderId,
+            'available',
+            pickupAddress,
+            deliveryAddress,
+            deliveryData.origin_coordinates.latitude,
+            deliveryData.origin_coordinates.longitude,
+            deliveryData.destination_coordinates.latitude,
+            deliveryData.destination_coordinates.longitude,
+            deliveryData.distance_miles,
+            deliveryData.base_fee,
+            deliveryData.distance_fee,
+            deliveryData.total_delivery_fee,
+            deliveryData.driver_payout,
+            deliveryData.platform_commission
+          ]);
+
+          // Update order with delivery fee
+          await pool.query(
+            `UPDATE orders
+             SET actual_delivery_fee = $1, delivery_distance_miles = $2, pickup_location = $3
+             WHERE id = $4`,
+            [deliveryData.total_delivery_fee, deliveryData.distance_miles, pickupAddress, orderId]
+          );
+
+          console.log(`✅ Demo delivery record created for order ${orderId}: ${deliveryData.distance_miles} miles, fee: $${deliveryData.total_delivery_fee}`);
+
+          // Notify all online drivers about new delivery order
+          try {
+            socketService.emitToAllDrivers('new_delivery_order', {
+              orderId,
+              restaurantName: firstRestaurant.name,
+              pickupAddress,
+              deliveryAddress,
+              distanceMiles: deliveryData.distance_miles,
+              driverPayout: deliveryData.driver_payout,
+              totalDeliveryFee: deliveryData.total_delivery_fee,
+              timestamp: new Date().toISOString(),
+            });
+            console.log(`📢 Notified drivers about new demo delivery order ${orderId}`);
+          } catch (socketError) {
+            console.error('❌ Failed to notify drivers via socket:', socketError);
+            // Don't fail the order if socket notification fails
+          }
+        }
+      }
+    } catch (deliveryError) {
+      console.error('❌ Failed to create demo delivery record:', deliveryError);
+      // Don't fail the entire order notification flow
+    }
+
     console.log(`🎉 All demo order notifications sent for order #${orderId}`);
-    
+
   } catch (error) {
     console.error("Error sending demo order notifications:", error);
   }
@@ -1562,6 +1665,39 @@ router.post("/guest", async (req, res) => {
   } catch (err) {
     console.error('Guest order creation error:', err);
     res.status(500).json({ error: "Failed to place guest order" });
+  }
+});
+
+/**
+ * GET /api/orders/my-restaurants
+ * Get all restaurants where the authenticated user has placed orders
+ */
+router.get('/my-restaurants', requireAuth, async (req, res) => {
+  try {
+    const userId = req.session.userId;
+
+    const result = await pool.query(
+      `SELECT DISTINCT
+        r.id,
+        r.name,
+        r.image_url,
+        r.address,
+        MAX(o.created_at) as last_order_date
+      FROM orders o
+      JOIN restaurants r ON o.restaurant_id = r.id
+      WHERE o.user_id = $1
+      GROUP BY r.id, r.name, r.image_url, r.address
+      ORDER BY last_order_date DESC`,
+      [userId]
+    );
+
+    res.json({
+      success: true,
+      restaurants: result.rows,
+    });
+  } catch (error) {
+    console.error('Error fetching user restaurants:', error);
+    res.status(500).json({ error: 'Failed to fetch restaurants' });
   }
 });
 

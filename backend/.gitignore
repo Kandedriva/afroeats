@@ -154,12 +154,12 @@ dist
 *secret*
 *password*
 
-# Development documentation
-*STRIPE*
-*AUTHENTICATION*
-*DEVELOPMENT*
-*SETUP*
-*GUIDE*
+# Development documentation (markdown files only)
+*STRIPE*.md
+*AUTHENTICATION*.md
+*DEVELOPMENT*.md
+*SETUP*.md
+*GUIDE*.md
 *.md
 
 # Upload directories

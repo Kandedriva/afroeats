@@ -42,6 +42,7 @@ const AdminDashboard = () => {
   const [users, setUsers] = useState([]);
   const [restaurants, setRestaurants] = useState([]);
   const [orders, setOrders] = useState([]);
+  const [drivers, setDrivers] = useState([]);
   const [systemHealth, setSystemHealth] = useState(null);
   const [supportMessages, setSupportMessages] = useState([]);
   const [supportStats, setSupportStats] = useState(null);
@@ -245,13 +246,28 @@ const AdminDashboard = () => {
       const res = await fetch(`${API_BASE_URL}/api/admin/orders`, {
         credentials: 'include'
       });
-      
+
       if (res.ok) {
         const data = await res.json();
         setOrders(data.orders);
       }
     } catch (error) {
       // console.error('Failed to load orders:', error);
+    }
+  };
+
+  const loadDrivers = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/admin/drivers`, {
+        credentials: 'include'
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setDrivers(data.drivers);
+      }
+    } catch (error) {
+      // console.error('Failed to load drivers:', error);
     }
   };
 
@@ -313,6 +329,11 @@ const AdminDashboard = () => {
       case 'restaurants':
         if (restaurants.length === 0) {
           loadRestaurants();
+        }
+        break;
+      case 'drivers':
+        if (drivers.length === 0) {
+          loadDrivers();
         }
         break;
       case 'orders':
@@ -437,6 +458,7 @@ const AdminDashboard = () => {
               { id: 'analytics', label: '📈 Analytics' },
               { id: 'users', label: '👥 Users' },
               { id: 'restaurants', label: '🏪 Restaurants' },
+              { id: 'drivers', label: '🚗 Drivers' },
               { id: 'orders', label: '📋 Orders' },
               { id: 'support', label: '🎧 Support' },
               { id: 'contacts', label: '📞 Contacts' },
@@ -482,7 +504,11 @@ const AdminDashboard = () => {
         {activeTab === 'restaurants' && (
           <RestaurantsTab restaurants={restaurants} />
         )}
-        
+
+        {activeTab === 'drivers' && (
+          <DriversTab drivers={drivers} onDriverUpdate={loadDrivers} />
+        )}
+
         {activeTab === 'orders' && (
           <OrdersTab orders={orders} />
         )}
@@ -1525,7 +1551,368 @@ const OrdersTab = ({ orders }) => (
   </div>
 );
 
-// Restaurant Contacts Tab Component
+// Drivers Tab Component
+const DriversTab = ({ drivers, onDriverUpdate }) => {
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [selectedDriver, setSelectedDriver] = useState(null);
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const handleApproveDriver = async (driverId) => {
+    setIsProcessing(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/admin/drivers/${driverId}/approve`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+
+      if (res.ok) {
+        showToast.success('Driver approved successfully');
+        setSelectedDriver(null);
+        onDriverUpdate();
+      } else {
+        const data = await res.json();
+        showToast.error(data.error || 'Failed to approve driver');
+      }
+    } catch (error) {
+      showToast.error('An error occurred while approving driver');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleRejectDriver = async (driverId) => {
+    if (!rejectionReason.trim()) {
+      showToast.warning('Please provide a rejection reason');
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/admin/drivers/${driverId}/reject`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ reason: rejectionReason }),
+      });
+
+      if (res.ok) {
+        showToast.success('Driver rejected');
+        setSelectedDriver(null);
+        setRejectionReason('');
+        onDriverUpdate();
+      } else {
+        const data = await res.json();
+        showToast.error(data.error || 'Failed to reject driver');
+      }
+    } catch (error) {
+      showToast.error('An error occurred while rejecting driver');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const filteredDrivers = drivers.filter((driver) => {
+    if (filterStatus === 'all') {
+      return true;
+    }
+    return driver.approval_status === filterStatus;
+  });
+
+  return (
+    <div className="space-y-6">
+      {/* Filter Buttons */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setFilterStatus('all')}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              filterStatus === 'all'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            All ({drivers.length})
+          </button>
+          <button
+            onClick={() => setFilterStatus('pending')}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              filterStatus === 'pending'
+                ? 'bg-yellow-600 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            Pending ({drivers.filter(d => d.approval_status === 'pending').length})
+          </button>
+          <button
+            onClick={() => setFilterStatus('approved')}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              filterStatus === 'approved'
+                ? 'bg-green-600 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            Approved ({drivers.filter(d => d.approval_status === 'approved').length})
+          </button>
+          <button
+            onClick={() => setFilterStatus('rejected')}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              filterStatus === 'rejected'
+                ? 'bg-red-600 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            Rejected ({drivers.filter(d => d.approval_status === 'rejected').length})
+          </button>
+        </div>
+      </div>
+
+      {/* Drivers List */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-100">
+        <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
+          <h3 className="text-lg font-semibold text-gray-800">🚗 Delivery Drivers</h3>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Driver</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Contact</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vehicle</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Stats</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {filteredDrivers.map((driver) => (
+                <tr key={driver.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4">
+                    <div>
+                      <div className="text-sm font-medium text-gray-900">{driver.name}</div>
+                      <div className="text-sm text-gray-500">ID: {driver.id}</div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="text-sm text-gray-900">{driver.email}</div>
+                    <div className="text-sm text-gray-500">{driver.phone}</div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="text-sm text-gray-900">
+                      {driver.vehicle_make} {driver.vehicle_model}
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      {driver.vehicle_color} • {driver.license_plate}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span
+                      className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                        driver.approval_status === 'approved'
+                          ? 'bg-green-100 text-green-800'
+                          : driver.approval_status === 'pending'
+                          ? 'bg-yellow-100 text-yellow-800'
+                          : driver.approval_status === 'rejected'
+                          ? 'bg-red-100 text-red-800'
+                          : 'bg-gray-100 text-gray-800'
+                      }`}
+                    >
+                      {driver.approval_status}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="text-sm text-gray-900">
+                      {driver.completed_deliveries || 0} deliveries
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      ⭐ {driver.average_rating && typeof driver.average_rating === 'number'
+                        ? driver.average_rating.toFixed(1)
+                        : (driver.average_rating ? parseFloat(driver.average_rating).toFixed(1) : 'N/A')}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <button
+                      onClick={() => setSelectedDriver(driver)}
+                      className="text-blue-600 hover:text-blue-900 text-sm font-medium"
+                    >
+                      View Details
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {filteredDrivers.length === 0 && (
+          <div className="text-center py-8 text-gray-500">
+            <span className="text-4xl mb-2 block">🚗</span>
+            No drivers found
+          </div>
+        )}
+      </div>
+
+      {/* Driver Details Modal */}
+      {selectedDriver && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-gray-200">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-semibold text-gray-900">Driver Details</h3>
+                <button
+                  onClick={() => {
+                    setSelectedDriver(null);
+                    setRejectionReason('');
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <span className="text-2xl">×</span>
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {/* Personal Info */}
+                <div>
+                  <h4 className="font-medium text-gray-900 mb-2">Personal Information</h4>
+                  <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                    <p><span className="font-medium">Name:</span> {selectedDriver.name}</p>
+                    <p><span className="font-medium">Email:</span> {selectedDriver.email}</p>
+                    <p><span className="font-medium">Phone:</span> {selectedDriver.phone}</p>
+                    <p>
+                      <span className="font-medium">Status:</span>{' '}
+                      <span
+                        className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                          selectedDriver.approval_status === 'approved'
+                            ? 'bg-green-100 text-green-800'
+                            : selectedDriver.approval_status === 'pending'
+                            ? 'bg-yellow-100 text-yellow-800'
+                            : 'bg-red-100 text-red-800'
+                        }`}
+                      >
+                        {selectedDriver.approval_status}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+
+                {/* Vehicle Info */}
+                <div>
+                  <h4 className="font-medium text-gray-900 mb-2">Vehicle Information</h4>
+                  <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                    <p><span className="font-medium">Type:</span> {selectedDriver.vehicle_type}</p>
+                    <p>
+                      <span className="font-medium">Make/Model:</span>{' '}
+                      {selectedDriver.vehicle_make} {selectedDriver.vehicle_model} ({selectedDriver.vehicle_year})
+                    </p>
+                    <p><span className="font-medium">Color:</span> {selectedDriver.vehicle_color}</p>
+                    <p><span className="font-medium">License Plate:</span> {selectedDriver.license_plate}</p>
+                  </div>
+                </div>
+
+                {/* Driver's License */}
+                {selectedDriver.drivers_license_url && (
+                  <div>
+                    <h4 className="font-medium text-gray-900 mb-2">Driver&apos;s License</h4>
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <a
+                        href={selectedDriver.drivers_license_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:text-blue-900 underline"
+                      >
+                        View License Document
+                      </a>
+                    </div>
+                  </div>
+                )}
+
+                {/* Performance Stats */}
+                <div>
+                  <h4 className="font-medium text-gray-900 mb-2">Performance</h4>
+                  <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                    <p><span className="font-medium">Total Deliveries:</span> {selectedDriver.total_deliveries || 0}</p>
+                    <p><span className="font-medium">Completed:</span> {selectedDriver.completed_deliveries || 0}</p>
+                    <p><span className="font-medium">Cancelled:</span> {selectedDriver.cancelled_deliveries || 0}</p>
+                    <p>
+                      <span className="font-medium">Average Rating:</span> ⭐{' '}
+                      {selectedDriver.average_rating && typeof selectedDriver.average_rating === 'number'
+                        ? selectedDriver.average_rating.toFixed(1)
+                        : (selectedDriver.average_rating ? parseFloat(selectedDriver.average_rating).toFixed(1) : 'N/A')}
+                    </p>
+                    <p>
+                      <span className="font-medium">Total Earnings:</span> $
+                      {selectedDriver.total_earnings && typeof selectedDriver.total_earnings === 'number'
+                        ? selectedDriver.total_earnings.toFixed(2)
+                        : (selectedDriver.total_earnings ? parseFloat(selectedDriver.total_earnings).toFixed(2) : '0.00')}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Rejection Reason (if rejected) */}
+                {selectedDriver.rejection_reason && (
+                  <div>
+                    <h4 className="font-medium text-red-900 mb-2">Rejection Reason</h4>
+                    <div className="bg-red-50 rounded-lg p-4">
+                      <p className="text-red-800">{selectedDriver.rejection_reason}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Actions for pending drivers */}
+                {selectedDriver.approval_status === 'pending' && (
+                  <div className="border-t pt-4">
+                    <h4 className="font-medium text-gray-900 mb-3">Actions</h4>
+
+                    {/* Approve Button */}
+                    <button
+                      onClick={() => handleApproveDriver(selectedDriver.id)}
+                      disabled={isProcessing}
+                      className="w-full mb-3 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium"
+                    >
+                      {isProcessing ? 'Processing...' : '✓ Approve Driver'}
+                    </button>
+
+                    {/* Reject Section */}
+                    <div>
+                      <label htmlFor="rejectionReason" className="block text-sm font-medium text-gray-700 mb-2">
+                        Rejection Reason
+                      </label>
+                      <textarea
+                        id="rejectionReason"
+                        value={rejectionReason}
+                        onChange={(e) => setRejectionReason(e.target.value)}
+                        placeholder="Enter reason for rejection..."
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg mb-2 focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                        rows="3"
+                      />
+                      <button
+                        onClick={() => handleRejectDriver(selectedDriver.id)}
+                        disabled={isProcessing || !rejectionReason.trim()}
+                        className="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium"
+                      >
+                        {isProcessing ? 'Processing...' : '✗ Reject Driver'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+DriversTab.propTypes = {
+  drivers: PropTypes.array.isRequired,
+  onDriverUpdate: PropTypes.func.isRequired,
+};
+
+  // Restaurant Contacts Tab Component
 const RestaurantContactsTab = ({ restaurantContacts }) => {
   if (!restaurantContacts || restaurantContacts.length === 0) {
     return (
