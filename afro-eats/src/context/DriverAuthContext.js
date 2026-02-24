@@ -26,7 +26,6 @@ export function DriverAuthProvider({ children }) {
         }
       } catch (err) {
         // Network error - keep current state
-        console.error('Failed to fetch driver session:', err);
       } finally {
         setLoading(false);
       }
@@ -42,7 +41,7 @@ export function DriverAuthProvider({ children }) {
         credentials: "include",
       });
     } catch (err) {
-      console.error('Logout error:', err);
+      // Logout error - continue anyway
     }
 
     setDriver(null);
@@ -62,7 +61,7 @@ export function DriverAuthProvider({ children }) {
         setDriver(null);
       }
     } catch (err) {
-      console.error('Refresh auth error:', err);
+      // Error refreshing auth
     } finally {
       setLoading(false);
     }

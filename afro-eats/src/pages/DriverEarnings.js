@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { API_BASE_URL } from "../config/api";
 import { toast } from 'react-toastify';
 
@@ -8,11 +8,7 @@ function DriverEarnings() {
   const [recentEarnings, setRecentEarnings] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchEarnings();
-  }, [period]);
-
-  const fetchEarnings = async () => {
+  const fetchEarnings = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch(
@@ -32,7 +28,11 @@ function DriverEarnings() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [period]);
+
+  useEffect(() => {
+    fetchEarnings();
+  }, [fetchEarnings]);
 
   if (loading) {
     return (

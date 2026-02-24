@@ -1,3 +1,4 @@
+import PropTypes from 'prop-types';
 import { format } from 'date-fns';
 import '../styles/ChatMessage.css';
 
@@ -5,7 +6,7 @@ import '../styles/ChatMessage.css';
  * Individual chat message component
  * Displays message content, sender info, timestamp, and read status
  */
-export default function ChatMessage({ message, isOwnMessage }) {
+function ChatMessage({ message, isOwnMessage }) {
   const formatTime = (timestamp) => {
     const date = new Date(timestamp);
     const today = new Date();
@@ -60,3 +61,14 @@ export default function ChatMessage({ message, isOwnMessage }) {
     </div>
   );
 }
+
+ChatMessage.propTypes = {
+  message: PropTypes.shape({
+    message: PropTypes.string,
+    created_at: PropTypes.string,
+    is_read: PropTypes.bool
+  }).isRequired,
+  isOwnMessage: PropTypes.bool
+};
+
+export default ChatMessage;

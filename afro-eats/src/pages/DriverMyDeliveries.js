@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { API_BASE_URL } from "../config/api";
 import { toast } from 'react-toastify';
 
@@ -8,11 +8,7 @@ function DriverMyDeliveries() {
   const [activeTab, setActiveTab] = useState('active'); // 'active' or 'completed'
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchDeliveries();
-  }, [activeTab]);
-
-  const fetchDeliveries = async () => {
+  const fetchDeliveries = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch(
@@ -35,7 +31,11 @@ function DriverMyDeliveries() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeTab]);
+
+  useEffect(() => {
+    fetchDeliveries();
+  }, [fetchDeliveries]);
 
   const updateStatus = async (deliveryId, newStatus, notes = '') => {
     try {
