@@ -1,6 +1,6 @@
 // React import removed as it's not needed in React 17+
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { useCart } from "../context/CartContext";
 import { toast } from 'react-toastify';
 import { API_BASE_URL } from "../config/api";
@@ -9,6 +9,7 @@ import { setupImageRefreshInterval, enhanceExistingImages } from "../utils/image
 
 export default function RestaurantDetails() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [restaurant, setRestaurant] = useState(null);
   const [dishes, setDishes] = useState([]);
   const [error, setError] = useState("");
@@ -84,6 +85,22 @@ export default function RestaurantDetails() {
 
   return (
     <div className="max-w-6xl mx-auto mt-4 sm:mt-10 p-4 sm:p-6">
+      {/* Back Button */}
+      <button
+        onClick={() => navigate('/')}
+        className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4 sm:mb-6 transition-colors duration-200 group"
+      >
+        <svg
+          className="w-5 h-5 sm:w-6 sm:h-6 transform group-hover:-translate-x-1 transition-transform duration-200"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+        </svg>
+        <span className="font-medium text-sm sm:text-base">Back to Restaurants</span>
+      </button>
+
       <div className="mb-6 sm:mb-8">
         <h2 className="text-2xl sm:text-3xl font-semibold text-gray-800 mb-2">{restaurant.name}</h2>
         <p className="text-gray-600 text-sm sm:text-base">{restaurant.address}</p>

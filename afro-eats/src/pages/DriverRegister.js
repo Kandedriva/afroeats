@@ -81,6 +81,22 @@ function DriverRegister() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-green-100 py-12 px-4">
       <div className="max-w-3xl mx-auto bg-white rounded-xl shadow-2xl p-8">
+        {/* Back Button */}
+        <button
+          onClick={() => navigate('/')}
+          className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6 transition-colors duration-200 group"
+        >
+          <svg
+            className="w-5 h-5 transform group-hover:-translate-x-1 transition-transform duration-200"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
+          <span className="font-medium text-sm">Back to Home</span>
+        </button>
+
         <div className="text-center mb-8">
           <div className="text-5xl mb-3">🚗</div>
           <h1 className="text-3xl font-bold text-green-700 mb-2">Driver Registration</h1>
