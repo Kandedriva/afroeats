@@ -19,6 +19,46 @@ export function ChatProvider({ children }) {
   const [isConnected, setIsConnected] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
 
+  // Fetch conversations
+  const fetchConversations = useCallback(async () => {
+    try {
+      const endpoint = owner
+        ? `${API_BASE_URL}/api/chat/owner/conversations`
+        : `${API_BASE_URL}/api/chat/conversations`;
+
+      const response = await fetch(endpoint, {
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setConversations(data.conversations || []);
+      }
+    } catch (error) {
+      // Error fetching conversations
+    }
+  }, [owner]);
+
+  // Fetch unread count
+  const fetchUnreadCount = useCallback(async () => {
+    try {
+      const endpoint = owner
+        ? `${API_BASE_URL}/api/chat/owner/unread-count`
+        : `${API_BASE_URL}/api/chat/unread-count`;
+
+      const response = await fetch(endpoint, {
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setUnreadCount(data.unreadCount || 0);
+      }
+    } catch (error) {
+      // Error fetching unread count
+    }
+  }, [owner]);
+
   // Initialize Socket.IO connection
   useEffect(() => {
     if (!user && !owner) {
@@ -110,46 +150,6 @@ export function ChatProvider({ children }) {
       newSocket.close();
     };
   }, [user, owner, activeConversation, fetchConversations, fetchUnreadCount]);
-
-  // Fetch conversations
-  const fetchConversations = useCallback(async () => {
-    try {
-      const endpoint = owner
-        ? `${API_BASE_URL}/api/chat/owner/conversations`
-        : `${API_BASE_URL}/api/chat/conversations`;
-
-      const response = await fetch(endpoint, {
-        credentials: 'include',
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setConversations(data.conversations || []);
-      }
-    } catch (error) {
-      // Error fetching conversations
-    }
-  }, [owner]);
-
-  // Fetch unread count
-  const fetchUnreadCount = useCallback(async () => {
-    try {
-      const endpoint = owner
-        ? `${API_BASE_URL}/api/chat/owner/unread-count`
-        : `${API_BASE_URL}/api/chat/unread-count`;
-
-      const response = await fetch(endpoint, {
-        credentials: 'include',
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setUnreadCount(data.unreadCount || 0);
-      }
-    } catch (error) {
-      // Error fetching unread count
-    }
-  }, [owner]);
 
   // Fetch messages for a conversation
   const fetchMessages = useCallback(async (conversationId) => {
