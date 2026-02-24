@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useContext } from 'react';
+import PropTypes from 'prop-types';
 import { useSocket } from '../hooks/useSocket';
 import { AuthContext } from '../context/AuthContext';
 import { OwnerAuthContext } from '../context/OwnerAuthContext';
@@ -9,7 +10,7 @@ import '../styles/ChatWindow.css';
  * Main chat window component
  * Displays active conversation messages and input field
  */
-export default function ChatWindow({ isMinimized, onMinimize, isFloating = false }) {
+function ChatWindow({ isMinimized, onMinimize, isFloating = false }) {
   const { user } = useContext(AuthContext);
   const { owner } = useContext(OwnerAuthContext);
   const {
@@ -188,3 +189,11 @@ export default function ChatWindow({ isMinimized, onMinimize, isFloating = false
     </div>
   );
 }
+
+ChatWindow.propTypes = {
+  isMinimized: PropTypes.bool,
+  onMinimize: PropTypes.func,
+  isFloating: PropTypes.bool
+};
+
+export default ChatWindow;

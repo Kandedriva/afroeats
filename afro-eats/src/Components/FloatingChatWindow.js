@@ -1,4 +1,5 @@
 import { useState, useEffect, useContext } from 'react';
+import PropTypes from 'prop-types';
 import { useSocket } from '../hooks/useSocket';
 import { AuthContext } from '../context/AuthContext';
 import { API_BASE_URL } from '../config/api';
@@ -8,7 +9,7 @@ import '../styles/FloatingChatWindow.css';
 /**
  * Floating chat window with restaurant list and chat interface
  */
-export default function FloatingChatWindow({ isMinimized, onMinimize }) {
+function FloatingChatWindow({ isMinimized, onMinimize }) {
   const { user } = useContext(AuthContext);
   const {
     conversations,
@@ -41,7 +42,7 @@ export default function FloatingChatWindow({ isMinimized, onMinimize }) {
           setRestaurants(data.restaurants || []);
         }
       } catch (error) {
-        console.error('Error fetching restaurants:', error);
+        // Error fetching restaurants
       } finally {
         setLoading(false);
       }
@@ -146,8 +147,16 @@ export default function FloatingChatWindow({ isMinimized, onMinimize }) {
                   return (
                     <div
                       key={restaurant.id}
+                      role="button"
+                      tabIndex={0}
                       className="restaurant-item"
                       onClick={() => handleSelectRestaurant(restaurant)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          handleSelectRestaurant(restaurant);
+                        }
+                      }}
                     >
                       <div className="restaurant-avatar">
                         {restaurant.image_url ? (
@@ -182,3 +191,10 @@ export default function FloatingChatWindow({ isMinimized, onMinimize }) {
     </div>
   );
 }
+
+FloatingChatWindow.propTypes = {
+  isMinimized: PropTypes.bool,
+  onMinimize: PropTypes.func
+};
+
+export default FloatingChatWindow;

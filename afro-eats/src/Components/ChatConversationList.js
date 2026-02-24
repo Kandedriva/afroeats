@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import PropTypes from 'prop-types';
 import { format } from 'date-fns';
 import { useSocket } from '../hooks/useSocket';
 import '../styles/ChatConversationList.css';
@@ -7,7 +8,7 @@ import '../styles/ChatConversationList.css';
  * List of chat conversations with search/filter
  * Shows conversation preview, last message, and unread badge
  */
-export default function ChatConversationList({ onSelectConversation }) {
+function ChatConversationList({ onSelectConversation }) {
   const { conversations, activeConversation, openConversation } = useSocket();
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -93,10 +94,18 @@ export default function ChatConversationList({ onSelectConversation }) {
             return (
               <div
                 key={conv.id}
+                role="button"
+                tabIndex={0}
                 className={`conversation-item ${isActive ? 'active' : ''} ${
                   unreadCount > 0 ? 'unread' : ''
                 }`}
                 onClick={() => handleSelectConversation(conv)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handleSelectConversation(conv);
+                  }
+                }}
               >
                 {/* Avatar */}
                 <div className="conversation-avatar">
@@ -142,3 +151,9 @@ export default function ChatConversationList({ onSelectConversation }) {
     </div>
   );
 }
+
+ChatConversationList.propTypes = {
+  onSelectConversation: PropTypes.func
+};
+
+export default ChatConversationList;
