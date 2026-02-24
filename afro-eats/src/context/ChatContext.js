@@ -1,4 +1,5 @@
 import { createContext, useState, useEffect, useCallback, useContext } from 'react';
+import PropTypes from 'prop-types';
 import { AuthContext } from './AuthContext';
 import { OwnerAuthContext } from './OwnerAuthContext';
 import { API_BASE_URL } from '../config/api';
@@ -30,7 +31,6 @@ export function ChatProvider({ children }) {
     });
 
     newSocket.on('connect', () => {
-      console.log('✅ Socket.IO connected:', newSocket.id);
       setIsConnected(true);
 
       // Register user or owner
@@ -42,17 +42,15 @@ export function ChatProvider({ children }) {
     });
 
     newSocket.on('disconnect', () => {
-      console.log('❌ Socket.IO disconnected');
       setIsConnected(false);
     });
 
-    newSocket.on('registration_success', (data) => {
-      console.log('✅ Registered:', data);
+    newSocket.on('registration_success', () => {
+      // Registration successful
     });
 
     // Listen for new messages
     newSocket.on('new_message', (message) => {
-      console.log('📨 New message received:', message);
 
       // Add message to current conversation if it's active
       if (activeConversation && message.conversation_id === activeConversation.id) {
@@ -75,8 +73,7 @@ export function ChatProvider({ children }) {
     });
 
     // Listen for new chat notifications (when not in conversation)
-    newSocket.on('new_chat_notification', (notification) => {
-      console.log('🔔 New chat notification:', notification);
+    newSocket.on('new_chat_notification', () => {
       fetchUnreadCount();
       fetchConversations();
     });
@@ -91,22 +88,20 @@ export function ChatProvider({ children }) {
     });
 
     // Listen for typing indicators
-    newSocket.on('user_typing', ({ conversationId, senderType }) => {
+    newSocket.on('user_typing', ({ conversationId }) => {
       if (activeConversation && conversationId === activeConversation.id) {
         // Show typing indicator (you can implement this in UI)
-        console.log(`${senderType} is typing...`);
       }
     });
 
     newSocket.on('user_stopped_typing', ({ conversationId }) => {
       if (activeConversation && conversationId === activeConversation.id) {
         // Hide typing indicator
-        console.log('Stopped typing');
       }
     });
 
-    newSocket.on('error', (error) => {
-      console.error('❌ Socket error:', error);
+    newSocket.on('error', () => {
+      // Socket error occurred
     });
 
     setSocket(newSocket);
@@ -114,7 +109,7 @@ export function ChatProvider({ children }) {
     return () => {
       newSocket.close();
     };
-  }, [user, owner, activeConversation]);
+  }, [user, owner, activeConversation, fetchConversations, fetchUnreadCount]);
 
   // Fetch conversations
   const fetchConversations = useCallback(async () => {
@@ -132,7 +127,7 @@ export function ChatProvider({ children }) {
         setConversations(data.conversations || []);
       }
     } catch (error) {
-      console.error('Error fetching conversations:', error);
+      // Error fetching conversations
     }
   }, [owner]);
 
@@ -152,7 +147,7 @@ export function ChatProvider({ children }) {
         setUnreadCount(data.unreadCount || 0);
       }
     } catch (error) {
-      console.error('Error fetching unread count:', error);
+      // Error fetching unread count
     }
   }, [owner]);
 
@@ -172,7 +167,7 @@ export function ChatProvider({ children }) {
         setMessages(data.messages || []);
       }
     } catch (error) {
-      console.error('Error fetching messages:', error);
+      // Error fetching messages
     }
   }, [owner]);
 
@@ -197,7 +192,6 @@ export function ChatProvider({ children }) {
       }
       return null;
     } catch (error) {
-      console.error('Error creating conversation:', error);
       return null;
     }
   }, []);
@@ -205,7 +199,6 @@ export function ChatProvider({ children }) {
   // Send message via Socket.IO
   const sendMessage = useCallback((conversationId, message) => {
     if (!socket || !isConnected) {
-      console.error('Socket not connected');
       return;
     }
 
@@ -313,3 +306,7 @@ export function ChatProvider({ children }) {
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
 }
+
+ChatProvider.propTypes = {
+  children: PropTypes.node.isRequired
+};

@@ -18,8 +18,8 @@ export function useDriverSocket(driverId, isAvailable) {
   const playSound = useCallback(() => {
     if (audioRef.current) {
       audioRef.current.currentTime = 0;
-      audioRef.current.play().catch((err) => {
-        console.warn('Failed to play notification sound:', err);
+      audioRef.current.play().catch(() => {
+        // Audio play failed
       });
     }
   }, []);
@@ -67,20 +67,17 @@ export function useDriverSocket(driverId, isAvailable) {
 
     // Register as driver
     socketRef.current.on('connect', () => {
-      console.log('✅ Driver socket connected:', socketRef.current.id);
       socketRef.current.emit('register_driver', { driverId });
       setIsConnected(true);
     });
 
     // Handle registration success
-    socketRef.current.on('registration_success', (data) => {
-      console.log('✅ Driver registered successfully:', data);
+    socketRef.current.on('registration_success', () => {
+      // Driver registered successfully
     });
 
     // Listen for new delivery orders
     socketRef.current.on('new_delivery_order', (orderData) => {
-      console.log('🚗 New delivery order received:', orderData);
-
       // Only play sound and show notification if driver is available
       if (isAvailable) {
         setNewOrderNotification(orderData);
@@ -105,14 +102,13 @@ export function useDriverSocket(driverId, isAvailable) {
 
     // Handle disconnect
     socketRef.current.on('disconnect', () => {
-      console.log('❌ Driver socket disconnected');
       setIsConnected(false);
       stopRepeatingSound();
     });
 
     // Handle connection errors
-    socketRef.current.on('connect_error', (error) => {
-      console.error('Socket connection error:', error);
+    socketRef.current.on('connect_error', () => {
+      // Connection error occurred
     });
 
     // Cleanup on unmount

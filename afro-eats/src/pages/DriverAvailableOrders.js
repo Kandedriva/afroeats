@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { API_BASE_URL } from "../config/api";
 import { toast } from 'react-toastify';
 import { useNavigate } from "react-router-dom";
@@ -17,19 +17,7 @@ function DriverAvailableOrders() {
     driver?.is_available
   );
 
-  useEffect(() => {
-    fetchAvailableOrders();
-  }, []);
-
-  // Auto-refresh orders when new order notification arrives
-  useEffect(() => {
-    if (newOrderNotification) {
-      fetchAvailableOrders();
-      acknowledgeNotification(); // Auto-dismiss since user is already on orders page
-    }
-  }, [newOrderNotification]);
-
-  const fetchAvailableOrders = async () => {
+  const fetchAvailableOrders = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE_URL}/api/drivers/available-orders`, {
         credentials: "include"
@@ -51,7 +39,19 @@ function DriverAvailableOrders() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchAvailableOrders();
+  }, [fetchAvailableOrders]);
+
+  // Auto-refresh orders when new order notification arrives
+  useEffect(() => {
+    if (newOrderNotification) {
+      fetchAvailableOrders();
+      acknowledgeNotification(); // Auto-dismiss since user is already on orders page
+    }
+  }, [newOrderNotification, fetchAvailableOrders, acknowledgeNotification]);
 
   const claimOrder = async (orderId) => {
     if (!window.confirm("Are you sure you want to claim this order?")) {
