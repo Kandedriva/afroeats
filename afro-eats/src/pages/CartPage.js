@@ -69,6 +69,20 @@ export default function CartPage() {
 
   return (
     <div className="max-w-4xl mx-auto mt-4 sm:mt-10 p-4 sm:p-6">
+      <button
+        onClick={() => navigate('/')}
+        className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4 sm:mb-6 transition-colors duration-200 group"
+      >
+        <svg
+          className="w-5 h-5 sm:w-6 sm:h-6 transform group-hover:-translate-x-1 transition-transform duration-200"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+        </svg>
+        <span className="font-medium text-sm sm:text-base">Back to Restaurants</span>
+      </button>
       <h2 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6">Your Cart</h2>
       
       {/* Show cancellation notice if user just canceled checkout */}
