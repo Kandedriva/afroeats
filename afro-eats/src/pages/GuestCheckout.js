@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useGuest } from "../context/GuestContext";
 import { useNavigate, Link } from "react-router-dom";
 import { toast } from 'react-toastify';
@@ -7,7 +7,7 @@ import { API_BASE_URL } from "../config/api";
 export default function GuestCheckout() {
   const { guestCart, guestTotal } = useGuest();
   const navigate = useNavigate();
-  
+
   const [guestInfo, setGuestInfo] = useState({
     name: "",
     email: "",
@@ -26,16 +26,8 @@ export default function GuestCheckout() {
     }
   }, [guestCart.length, navigate]);
 
-  // Calculate delivery fee when delivery type or address changes
-  useEffect(() => {
-    if (deliveryType === "delivery" && guestInfo.address && guestInfo.address.trim()) {
-      calculateDeliveryFee();
-    } else if (deliveryType === "pickup") {
-      setDeliveryFeeData(null); // No delivery fee for pickup
-    }
-  }, [deliveryType, guestInfo.address, guestCart]);
-
-  const calculateDeliveryFee = async () => {
+  // Calculate delivery fee function wrapped in useCallback
+  const calculateDeliveryFee = useCallback(async () => {
     if (!guestInfo.address || !guestCart.length) {
       return;
     }
@@ -46,7 +38,6 @@ export default function GuestCheckout() {
       const restaurantId = guestCart[0].restaurantId || guestCart[0].restaurant_id;
 
       if (!restaurantId) {
-        console.warn("No restaurant ID found in cart");
         setDeliveryFeeData(null);
         return;
       }
@@ -63,7 +54,6 @@ export default function GuestCheckout() {
       if (res.ok) {
         const feeData = await res.json();
         setDeliveryFeeData(feeData);
-        console.log("Guest delivery fee calculated:", feeData);
       } else {
         setDeliveryFeeData({
           deliveryFee: 5.00,
@@ -73,7 +63,6 @@ export default function GuestCheckout() {
         });
       }
     } catch (err) {
-      console.error("Failed to calculate guest delivery fee:", err);
       setDeliveryFeeData({
         deliveryFee: 5.00,
         estimated: true,
@@ -83,7 +72,16 @@ export default function GuestCheckout() {
     } finally {
       setCalculatingFee(false);
     }
-  };
+  }, [guestInfo.address, guestCart]);
+
+  // Calculate delivery fee when delivery type or address changes
+  useEffect(() => {
+    if (deliveryType === "delivery" && guestInfo.address && guestInfo.address.trim()) {
+      calculateDeliveryFee();
+    } else if (deliveryType === "pickup") {
+      setDeliveryFeeData(null); // No delivery fee for pickup
+    }
+  }, [deliveryType, guestInfo.address, guestCart, calculateDeliveryFee]);
 
   const handleInputChange = (field, value) => {
     setGuestInfo(prev => ({

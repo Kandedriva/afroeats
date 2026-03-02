@@ -1,5 +1,5 @@
 // React import removed as it's not needed in React 17+
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
@@ -57,19 +57,7 @@ export default function DeliveryOptions() {
     }
   };
 
-  // Calculate delivery fee when delivery type or address changes
-  useEffect(() => {
-    if (deliveryType === "delivery" && cart.length > 0) {
-      const address = useRegisteredAddress ? userProfile?.address : customAddress;
-      if (address && address.trim()) {
-        calculateDeliveryFee(address);
-      }
-    } else if (deliveryType === "pickup") {
-      setDeliveryFeeData(null); // No delivery fee for pickup
-    }
-  }, [deliveryType, useRegisteredAddress, customAddress, userProfile, cart]);
-
-  const calculateDeliveryFee = async (deliveryAddress) => {
+  const calculateDeliveryFee = useCallback(async (deliveryAddress) => {
     if (!deliveryAddress || !cart.length) {
       return;
     }
@@ -81,7 +69,6 @@ export default function DeliveryOptions() {
       const restaurantId = cart[0].restaurantId || cart[0].restaurant_id;
 
       if (!restaurantId) {
-        console.warn("No restaurant ID found in cart");
         setDeliveryFeeData(null);
         return;
       }
@@ -98,7 +85,6 @@ export default function DeliveryOptions() {
       if (res.ok) {
         const feeData = await res.json();
         setDeliveryFeeData(feeData);
-        console.log("Delivery fee calculated:", feeData);
       } else {
         // Use fallback fee if calculation fails
         setDeliveryFeeData({
@@ -109,7 +95,6 @@ export default function DeliveryOptions() {
         });
       }
     } catch (err) {
-      console.error("Failed to calculate delivery fee:", err);
       // Use fallback fee on error
       setDeliveryFeeData({
         deliveryFee: 5.00,
@@ -120,7 +105,19 @@ export default function DeliveryOptions() {
     } finally {
       setCalculatingFee(false);
     }
-  };
+  }, [cart]);
+
+  // Calculate delivery fee when delivery type or address changes
+  useEffect(() => {
+    if (deliveryType === "delivery" && cart.length > 0) {
+      const address = useRegisteredAddress ? userProfile?.address : customAddress;
+      if (address && address.trim()) {
+        calculateDeliveryFee(address);
+      }
+    } else if (deliveryType === "pickup") {
+      setDeliveryFeeData(null); // No delivery fee for pickup
+    }
+  }, [deliveryType, useRegisteredAddress, customAddress, userProfile, cart, calculateDeliveryFee]);
 
   const handleContinueToPayment = async () => {
     if (!deliveryType) {
