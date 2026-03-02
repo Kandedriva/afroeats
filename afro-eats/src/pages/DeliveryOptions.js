@@ -70,7 +70,9 @@ export default function DeliveryOptions() {
   }, [deliveryType, useRegisteredAddress, customAddress, userProfile, cart]);
 
   const calculateDeliveryFee = async (deliveryAddress) => {
-    if (!deliveryAddress || !cart.length) return;
+    if (!deliveryAddress || !cart.length) {
+      return;
+    }
 
     setCalculatingFee(true);
 
