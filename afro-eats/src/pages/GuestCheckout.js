@@ -36,7 +36,9 @@ export default function GuestCheckout() {
   }, [deliveryType, guestInfo.address, guestCart]);
 
   const calculateDeliveryFee = async () => {
-    if (!guestInfo.address || !guestCart.length) return;
+    if (!guestInfo.address || !guestCart.length) {
+      return;
+    }
 
     setCalculatingFee(true);
 
