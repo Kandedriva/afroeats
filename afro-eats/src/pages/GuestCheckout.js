@@ -17,7 +17,8 @@ export default function GuestCheckout() {
   const [deliveryType, setDeliveryType] = useState("delivery"); // "delivery" or "pickup"
   const [orderDetails, setOrderDetails] = useState("");
   const [loading, setLoading] = useState(false);
-  const [restaurantDetails, setRestaurantDetails] = useState(null);
+  const [deliveryFeeData, setDeliveryFeeData] = useState(null);
+  const [calculatingFee, setCalculatingFee] = useState(false);
 
   useEffect(() => {
     if (guestCart.length === 0) {
@@ -25,28 +26,62 @@ export default function GuestCheckout() {
     }
   }, [guestCart.length, navigate]);
 
-  // Fetch restaurant details to get delivery fee
+  // Calculate delivery fee when delivery type or address changes
   useEffect(() => {
-    const fetchRestaurantDetails = async () => {
-      if (guestCart.length > 0) {
-        const restaurantId = guestCart[0].restaurantId;
-        if (restaurantId) {
-          try {
-            const res = await fetch(`${API_BASE_URL}/api/restaurants/${restaurantId}`);
-            if (res.ok) {
-              const data = await res.json();
-              setRestaurantDetails(data.restaurant);
-            }
-          } catch (err) {
-            // Silently handle restaurant details fetch error
-            // This is not critical for checkout flow, delivery fee will default to 0
-          }
-        }
-      }
-    };
+    if (deliveryType === "delivery" && guestInfo.address && guestInfo.address.trim()) {
+      calculateDeliveryFee();
+    } else if (deliveryType === "pickup") {
+      setDeliveryFeeData(null); // No delivery fee for pickup
+    }
+  }, [deliveryType, guestInfo.address, guestCart]);
 
-    fetchRestaurantDetails();
-  }, [guestCart]);
+  const calculateDeliveryFee = async () => {
+    if (!guestInfo.address || !guestCart.length) return;
+
+    setCalculatingFee(true);
+
+    try {
+      const restaurantId = guestCart[0].restaurantId || guestCart[0].restaurant_id;
+
+      if (!restaurantId) {
+        console.warn("No restaurant ID found in cart");
+        setDeliveryFeeData(null);
+        return;
+      }
+
+      const res = await fetch(`${API_BASE_URL}/api/orders/calculate-delivery-fee`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          restaurantId,
+          deliveryAddress: guestInfo.address
+        })
+      });
+
+      if (res.ok) {
+        const feeData = await res.json();
+        setDeliveryFeeData(feeData);
+        console.log("Guest delivery fee calculated:", feeData);
+      } else {
+        setDeliveryFeeData({
+          deliveryFee: 5.00,
+          estimated: true,
+          fallback: true,
+          message: "Using estimated delivery fee"
+        });
+      }
+    } catch (err) {
+      console.error("Failed to calculate guest delivery fee:", err);
+      setDeliveryFeeData({
+        deliveryFee: 5.00,
+        estimated: true,
+        fallback: true,
+        message: "Using estimated delivery fee"
+      });
+    } finally {
+      setCalculatingFee(false);
+    }
+  };
 
   const handleInputChange = (field, value) => {
     setGuestInfo(prev => ({
@@ -128,11 +163,11 @@ export default function GuestCheckout() {
     }
   };
 
-  // Calculate totals with delivery fee
+  // Calculate totals with distance-based delivery fee
   const subtotal = guestTotal;
   const platformFee = 1.20;
-  const deliveryFee = (deliveryType === "delivery" && restaurantDetails?.delivery_fee) 
-    ? (parseFloat(restaurantDetails.delivery_fee) || 0)
+  const deliveryFee = (deliveryType === "delivery" && deliveryFeeData)
+    ? deliveryFeeData.deliveryFee
     : 0;
   const total = subtotal + platformFee + deliveryFee;
 
@@ -226,9 +261,15 @@ export default function GuestCheckout() {
                 <div>
                   <div className="font-medium">Delivery</div>
                   <div className="text-sm text-gray-600">Get your order delivered to your address</div>
-                  {deliveryFee > 0 && (
+                  {deliveryType === "delivery" && calculatingFee && (
+                    <div className="text-xs text-gray-500 font-medium mt-1">
+                      Calculating delivery fee...
+                    </div>
+                  )}
+                  {deliveryType === "delivery" && deliveryFeeData && (
                     <div className="text-xs text-green-600 font-medium mt-1">
-                      + ${deliveryFee.toFixed(2)} delivery fee
+                      + ${deliveryFeeData.deliveryFee.toFixed(2)} delivery fee
+                      {deliveryFeeData.distanceMiles > 0 && ` (${deliveryFeeData.distanceMiles} mi)`}
                     </div>
                   )}
                 </div>
@@ -329,10 +370,30 @@ export default function GuestCheckout() {
             <span>Platform Fee:</span>
             <span>${platformFee.toFixed(2)}</span>
           </div>
-          {deliveryType === "delivery" && deliveryFee > 0 && (
+          {deliveryType === "delivery" && calculatingFee && (
             <div className="flex justify-between text-gray-700">
               <span>Delivery Fee:</span>
-              <span>${deliveryFee.toFixed(2)}</span>
+              <span className="text-gray-500 text-sm">Calculating...</span>
+            </div>
+          )}
+          {deliveryType === "delivery" && deliveryFeeData && (
+            <div className="flex justify-between text-gray-700">
+              <span>
+                Delivery Fee
+                {deliveryFeeData.distanceMiles > 0 && (
+                  <span className="text-xs text-gray-500 ml-1">({deliveryFeeData.distanceMiles} mi)</span>
+                )}
+                {deliveryFeeData.fallback && (
+                  <span className="text-xs text-yellow-600 ml-1">(est.)</span>
+                )}
+              </span>
+              <span>${deliveryFeeData.deliveryFee.toFixed(2)}</span>
+            </div>
+          )}
+          {deliveryType === "pickup" && (
+            <div className="flex justify-between text-gray-700">
+              <span>Delivery Fee:</span>
+              <span className="text-green-600">$0.00 (Pickup)</span>
             </div>
           )}
           <div className="border-t pt-2 mt-2">

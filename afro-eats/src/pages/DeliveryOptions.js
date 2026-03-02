@@ -17,6 +17,8 @@ export default function DeliveryOptions() {
   const [customPhone, setCustomPhone] = useState("");
   const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [deliveryFeeData, setDeliveryFeeData] = useState(null);
+  const [calculatingFee, setCalculatingFee] = useState(false);
 
   // Get restaurant-specific instructions from cart page
   const restaurantInstructions = location.state?.restaurantInstructions || {};
@@ -52,6 +54,69 @@ export default function DeliveryOptions() {
       toast.error("Failed to load profile information");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Calculate delivery fee when delivery type or address changes
+  useEffect(() => {
+    if (deliveryType === "delivery" && cart.length > 0) {
+      const address = useRegisteredAddress ? userProfile?.address : customAddress;
+      if (address && address.trim()) {
+        calculateDeliveryFee(address);
+      }
+    } else if (deliveryType === "pickup") {
+      setDeliveryFeeData(null); // No delivery fee for pickup
+    }
+  }, [deliveryType, useRegisteredAddress, customAddress, userProfile, cart]);
+
+  const calculateDeliveryFee = async (deliveryAddress) => {
+    if (!deliveryAddress || !cart.length) return;
+
+    setCalculatingFee(true);
+
+    try {
+      // Get restaurant ID from first cart item (assuming single restaurant per order)
+      const restaurantId = cart[0].restaurantId || cart[0].restaurant_id;
+
+      if (!restaurantId) {
+        console.warn("No restaurant ID found in cart");
+        setDeliveryFeeData(null);
+        return;
+      }
+
+      const res = await fetch(`${API_BASE_URL}/api/orders/calculate-delivery-fee`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          restaurantId,
+          deliveryAddress
+        })
+      });
+
+      if (res.ok) {
+        const feeData = await res.json();
+        setDeliveryFeeData(feeData);
+        console.log("Delivery fee calculated:", feeData);
+      } else {
+        // Use fallback fee if calculation fails
+        setDeliveryFeeData({
+          deliveryFee: 5.00,
+          estimated: true,
+          fallback: true,
+          message: "Using estimated delivery fee"
+        });
+      }
+    } catch (err) {
+      console.error("Failed to calculate delivery fee:", err);
+      // Use fallback fee on error
+      setDeliveryFeeData({
+        deliveryFee: 5.00,
+        estimated: true,
+        fallback: true,
+        message: "Using estimated delivery fee"
+      });
+    } finally {
+      setCalculatingFee(false);
     }
   };
 
@@ -120,10 +185,59 @@ export default function DeliveryOptions() {
       
       {/* Order Summary */}
       <div className="bg-gray-50 p-4 rounded-lg mb-6">
-        <h3 className="font-semibold mb-2">Order Summary</h3>
-        <p className="text-sm text-gray-600">{cart.length} item(s)</p>
-        <p className="text-lg font-semibold">Total: ${Number(total).toFixed(2)}</p>
-        <p className="text-sm text-gray-600">+ Platform fee ($1.20) at checkout</p>
+        <h3 className="font-semibold mb-3">Order Summary</h3>
+        <div className="space-y-2 text-sm">
+          <div className="flex justify-between">
+            <span className="text-gray-600">Subtotal ({cart.length} item{cart.length !== 1 ? 's' : ''})</span>
+            <span className="font-medium">${Number(total).toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-gray-600">Platform fee</span>
+            <span className="font-medium">$1.20</span>
+          </div>
+          {deliveryType === "delivery" && deliveryFeeData && (
+            <div className="flex justify-between">
+              <span className="text-gray-600">
+                Delivery fee
+                {deliveryFeeData.distanceMiles > 0 && (
+                  <span className="text-xs ml-1">({deliveryFeeData.distanceMiles} mi)</span>
+                )}
+                {deliveryFeeData.fallback && (
+                  <span className="text-xs ml-1 text-yellow-600">(estimated)</span>
+                )}
+              </span>
+              <span className="font-medium">${deliveryFeeData.deliveryFee.toFixed(2)}</span>
+            </div>
+          )}
+          {deliveryType === "delivery" && calculatingFee && (
+            <div className="flex justify-between">
+              <span className="text-gray-600">Delivery fee</span>
+              <span className="text-gray-500 text-xs">Calculating...</span>
+            </div>
+          )}
+          {deliveryType === "pickup" && (
+            <div className="flex justify-between">
+              <span className="text-gray-600">Delivery fee</span>
+              <span className="font-medium text-green-600">$0.00 (Pickup)</span>
+            </div>
+          )}
+          <div className="pt-2 border-t border-gray-300 flex justify-between">
+            <span className="font-semibold text-gray-800">Estimated Total</span>
+            <span className="font-bold text-lg text-green-600">
+              ${(
+                Number(total) +
+                1.20 +
+                (deliveryType === "delivery" && deliveryFeeData ? deliveryFeeData.deliveryFee : 0)
+              ).toFixed(2)}
+            </span>
+          </div>
+        </div>
+
+        {deliveryType === "delivery" && deliveryFeeData && deliveryFeeData.fallback && (
+          <div className="mt-3 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-700">
+            ℹ️ {deliveryFeeData.message || "Using estimated delivery fee"}
+          </div>
+        )}
         
         {/* Show restaurant-specific instructions if any */}
         {Object.keys(restaurantInstructions).length > 0 && (
@@ -173,9 +287,15 @@ export default function DeliveryOptions() {
                 onChange={(e) => setDeliveryType(e.target.value)}
                 className="mr-3"
               />
-              <div>
+              <div className="flex-1">
                 <h4 className="font-medium">🚚 Delivery</h4>
                 <p className="text-sm text-gray-600">Have your order delivered to your address</p>
+                {deliveryType === "delivery" && deliveryFeeData && (
+                  <p className="text-sm text-green-600 mt-1">
+                    Delivery fee: ${deliveryFeeData.deliveryFee.toFixed(2)}
+                    {deliveryFeeData.distanceMiles > 0 && ` (${deliveryFeeData.distanceMiles} miles)`}
+                  </p>
+                )}
               </div>
             </div>
           </div>
