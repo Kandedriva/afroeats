@@ -69,6 +69,20 @@ export default function Register() {
 
   return (
     <div className="max-w-md mx-auto mt-10 bg-white p-6 rounded shadow">
+      <button
+        onClick={() => navigate('/')}
+        className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6 transition-colors duration-200 group"
+      >
+        <svg
+          className="w-5 h-5 transform group-hover:-translate-x-1 transition-transform duration-200"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+        </svg>
+        <span className="font-medium text-sm">Back to Home</span>
+      </button>
       <h2 className="text-2xl font-bold mb-4">Create Account</h2>
       <form onSubmit={handleSubmit} className="space-y-4">
         <input
