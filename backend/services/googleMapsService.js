@@ -6,6 +6,7 @@ const BASE_DELIVERY_FEE = 3.00; // Base fee for any delivery
 const PRICE_PER_MILE = 1.50; // Additional fee per mile
 const DRIVER_COMMISSION_RATE = 0.85; // Driver gets 85% of delivery fee
 const PLATFORM_COMMISSION_RATE = 0.15; // Platform gets 15%
+const FALLBACK_DELIVERY_FEE = 5.00; // Default fallback when calculation fails
 
 /**
  * Geocode an address to latitude/longitude
@@ -93,6 +94,26 @@ export async function calculateDistance(origin, destination) {
     console.error('Distance calculation error:', error.message);
     return null;
   }
+}
+
+/**
+ * Get fallback delivery fee when calculation fails
+ * @returns {object} - Fallback fee breakdown
+ */
+export function getFallbackDeliveryFee() {
+  const driverPayout = FALLBACK_DELIVERY_FEE * DRIVER_COMMISSION_RATE;
+  const platformCommission = FALLBACK_DELIVERY_FEE * PLATFORM_COMMISSION_RATE;
+
+  return {
+    base_fee: parseFloat(BASE_DELIVERY_FEE.toFixed(2)),
+    distance_fee: parseFloat((FALLBACK_DELIVERY_FEE - BASE_DELIVERY_FEE).toFixed(2)),
+    total_delivery_fee: parseFloat(FALLBACK_DELIVERY_FEE.toFixed(2)),
+    driver_payout: parseFloat(driverPayout.toFixed(2)),
+    platform_commission: parseFloat(platformCommission.toFixed(2)),
+    distance_miles: 0,
+    fallback: true,
+    estimated: true
+  };
 }
 
 /**
@@ -256,5 +277,9 @@ export default {
   calculateDeliveryFee,
   calculateDistanceAndFee,
   geocodeRestaurants,
-  geocodeRestaurant
+  geocodeRestaurant,
+  getFallbackDeliveryFee,
+  BASE_DELIVERY_FEE,
+  PRICE_PER_MILE,
+  FALLBACK_DELIVERY_FEE
 };

@@ -1701,4 +1701,120 @@ router.get('/my-restaurants', requireAuth, async (req, res) => {
   }
 });
 
+/**
+ * POST /api/orders/calculate-delivery-fee
+ * Calculate delivery fee estimate before checkout
+ * Allows customers to see delivery cost upfront
+ */
+router.post("/calculate-delivery-fee", async (req, res) => {
+  try {
+    const { restaurantId, deliveryAddress } = req.body;
+
+    console.log("📍 Calculating delivery fee:", { restaurantId, deliveryAddress });
+
+    if (!restaurantId || !deliveryAddress) {
+      return res.status(400).json({ error: "Restaurant ID and delivery address required" });
+    }
+
+    // Get restaurant details with coordinates
+    const restaurantResult = await pool.query(
+      "SELECT id, name, address, latitude, longitude, address_geocoded FROM restaurants WHERE id = $1",
+      [restaurantId]
+    );
+
+    if (restaurantResult.rows.length === 0) {
+      return res.status(404).json({ error: "Restaurant not found" });
+    }
+
+    const restaurant = restaurantResult.rows[0];
+
+    // Import Google Maps service
+    const {
+      calculateDistanceAndFee,
+      geocodeRestaurant,
+      getFallbackDeliveryFee,
+      BASE_DELIVERY_FEE,
+      PRICE_PER_MILE
+    } = await import('../services/googleMapsService.js');
+
+    // If restaurant not geocoded, try to geocode it now
+    if (!restaurant.latitude || !restaurant.longitude || !restaurant.address_geocoded) {
+      console.log(`⚠️ Restaurant ${restaurant.name} not geocoded, geocoding now...`);
+      const geocoded = await geocodeRestaurant(restaurantId);
+      if (geocoded) {
+        restaurant.latitude = geocoded.latitude;
+        restaurant.longitude = geocoded.longitude;
+      } else {
+        // Fallback to default fee if geocoding fails
+        console.warn(`❌ Could not geocode restaurant ${restaurant.name}, using fallback fee`);
+        const fallbackFee = getFallbackDeliveryFee();
+        return res.json({
+          deliveryFee: fallbackFee.total_delivery_fee,
+          distanceMiles: fallbackFee.distance_miles,
+          estimated: true,
+          fallback: true,
+          baseFee: BASE_DELIVERY_FEE,
+          perMileFee: PRICE_PER_MILE,
+          message: "Using estimated delivery fee (restaurant location not available)"
+        });
+      }
+    }
+
+    try {
+      // Calculate distance-based delivery fee
+      const feeData = await calculateDistanceAndFee(restaurant.address, deliveryAddress);
+
+      console.log(`✅ Delivery fee calculated: $${feeData.total_delivery_fee} for ${feeData.distance_miles} miles`);
+
+      return res.json({
+        deliveryFee: feeData.total_delivery_fee,
+        distanceMiles: feeData.distance_miles,
+        distanceText: feeData.distance_text,
+        durationText: feeData.duration_text,
+        baseFee: feeData.base_fee,
+        distanceFee: feeData.distance_fee,
+        estimated: true,
+        fallback: false,
+        restaurantName: restaurant.name,
+        restaurantAddress: restaurant.address
+      });
+
+    } catch (calculationError) {
+      // Fallback to default fee if calculation fails
+      console.error("Delivery fee calculation error:", calculationError.message);
+
+      const fallbackFee = getFallbackDeliveryFee();
+      return res.json({
+        deliveryFee: fallbackFee.total_delivery_fee,
+        distanceMiles: fallbackFee.distance_miles,
+        estimated: true,
+        fallback: true,
+        baseFee: BASE_DELIVERY_FEE,
+        perMileFee: PRICE_PER_MILE,
+        message: "Using estimated delivery fee (unable to calculate exact distance)",
+        error: calculationError.message
+      });
+    }
+
+  } catch (error) {
+    console.error("Calculate delivery fee endpoint error:", error);
+
+    // Always return a response, never fail the request
+    // Import getFallbackDeliveryFee if not already imported
+    const { getFallbackDeliveryFee: getFallback, BASE_DELIVERY_FEE: BASE_FEE, PRICE_PER_MILE: PRICE } = await import('../services/googleMapsService.js');
+    const fallbackFee = getFallback();
+
+    res.json({
+      deliveryFee: fallbackFee.total_delivery_fee,
+      distanceMiles: fallbackFee.distance_miles,
+      estimated: true,
+      fallback: true,
+      baseFee: BASE_FEE,
+      perMileFee: PRICE,
+      message: "Using default delivery fee",
+      error: error.message
+    });
+  }
+});
+
 export default router;

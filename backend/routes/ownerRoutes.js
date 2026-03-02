@@ -79,6 +79,22 @@ router.post("/register", ...uploadRestaurantLogo, async (req, res) => {
       [restaurant_name, location, phone_number, logoPath, ownerId]
     );
 
+    const restaurantId = restaurantResult.rows[0].id;
+
+    // Auto-geocode the new restaurant address
+    try {
+      const { geocodeRestaurant } = await import('../services/googleMapsService.js');
+      const geocoded = await geocodeRestaurant(restaurantId);
+      if (geocoded) {
+        console.log(`✅ Auto-geocoded new restaurant ${restaurant_name}: (${geocoded.latitude}, ${geocoded.longitude})`);
+      } else {
+        console.warn(`⚠️ Could not auto-geocode restaurant ${restaurant_name} at address: ${location}`);
+      }
+    } catch (geocodeError) {
+      console.warn(`⚠️ Auto-geocoding failed for restaurant ${restaurant_name}:`, geocodeError.message);
+      // Don't fail registration if geocoding fails - it can be done later
+    }
+
     // Regenerate session ID for security and set owner session
     req.session.regenerate((err) => {
       if (err) {
@@ -1682,15 +1698,32 @@ router.put("/restaurant/address", requireOwnerAuth, async (req, res) => {
     }
 
     // Update restaurant address
-    await pool.query(
-      "UPDATE restaurants SET address = $1 WHERE owner_id = $2",
+    const updateResult = await pool.query(
+      "UPDATE restaurants SET address = $1, address_geocoded = FALSE WHERE owner_id = $2 RETURNING id",
       [trimmedAddress, ownerId]
     );
 
-    res.json({ 
-      success: true, 
+    // Auto-geocode the updated address
+    if (updateResult.rows.length > 0) {
+      const restaurantId = updateResult.rows[0].id;
+      try {
+        const { geocodeRestaurant } = await import('../services/googleMapsService.js');
+        const geocoded = await geocodeRestaurant(restaurantId);
+        if (geocoded) {
+          console.log(`✅ Re-geocoded restaurant after address update: (${geocoded.latitude}, ${geocoded.longitude})`);
+        } else {
+          console.warn(`⚠️ Could not geocode updated address: ${trimmedAddress}`);
+        }
+      } catch (geocodeError) {
+        console.warn(`⚠️ Re-geocoding failed for updated address:`, geocodeError.message);
+        // Don't fail the address update if geocoding fails
+      }
+    }
+
+    res.json({
+      success: true,
       message: "Restaurant address updated successfully",
-      address: trimmedAddress 
+      address: trimmedAddress
     });
 
   } catch (err) {
