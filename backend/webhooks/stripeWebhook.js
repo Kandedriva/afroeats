@@ -517,6 +517,68 @@ export const handleStripeWebhook = async (req, res) => {
       // Track transfer events if needed
       break;
 
+    case 'refund.created':
+      console.log(`💰 Refund created: ${event.data.object.id}`);
+      try {
+        const refund = event.data.object;
+        // Update refund status in database if it exists
+        const refundId = refund.metadata?.refund_id;
+        if (refundId) {
+          await pool.query(`
+            UPDATE refunds
+            SET status = 'processing', stripe_refund_id = $1, updated_at = NOW()
+            WHERE id = $2
+          `, [refund.id, refundId]);
+          console.log(`✅ Updated refund ${refundId} to processing`);
+        }
+      } catch (err) {
+        console.error('Error handling refund.created:', err);
+      }
+      break;
+
+    case 'refund.updated':
+      console.log(`💰 Refund updated: ${event.data.object.id}`);
+      try {
+        const refund = event.data.object;
+        const refundId = refund.metadata?.refund_id;
+        if (refundId) {
+          await pool.query(`
+            UPDATE refunds
+            SET status = $1, updated_at = NOW()
+            WHERE id = $2
+          `, [refund.status, refundId]);
+          console.log(`✅ Updated refund ${refundId} to ${refund.status}`);
+        }
+      } catch (err) {
+        console.error('Error handling refund.updated:', err);
+      }
+      break;
+
+    case 'refund.failed':
+      console.log(`❌ Refund failed: ${event.data.object.id}`);
+      try {
+        const refund = event.data.object;
+        const refundId = refund.metadata?.refund_id;
+        if (refundId) {
+          await pool.query(`
+            UPDATE refunds
+            SET status = 'failed', updated_at = NOW()
+            WHERE id = $1
+          `, [refundId]);
+
+          // Log the failure
+          await pool.query(`
+            INSERT INTO refund_logs (refund_id, action, old_status, new_status, notes)
+            VALUES ($1, $2, $3, $4, $5)
+          `, [refundId, 'failed', 'processing', 'failed', refund.failure_reason || 'Unknown failure']);
+
+          console.log(`✅ Marked refund ${refundId} as failed`);
+        }
+      } catch (err) {
+        console.error('Error handling refund.failed:', err);
+      }
+      break;
+
     default:
       console.log(`Unhandled event type: ${event.type}`);
   }
