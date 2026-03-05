@@ -31,6 +31,7 @@ import socketService from "./services/socketService.js";
 import driverAuthRoutes from "./routes/driverAuthRoutes.js";
 import driverRoutes from "./routes/driverRoutes.js";
 import driverStripeRoutes from "./routes/driverStripeRoutes.js";
+import refundRoutes from "./routes/refundRoutes.js";
 
 // Import security and analytics
 import { 
@@ -422,6 +423,9 @@ app.use("/api/chat", chatRoutes);
 app.use("/api/drivers", driverAuthRoutes);
 app.use("/api/drivers", driverRoutes);
 app.use("/api/drivers/stripe", driverStripeRoutes);
+
+// Refund routes
+app.use("/api/refunds", refundRoutes);
 
 // Root route for deployment health checks
 app.get('/', (req, res) => {
