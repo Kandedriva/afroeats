@@ -541,7 +541,48 @@ export const handleStripeWebhook = async (req, res) => {
       try {
         const refund = event.data.object;
         const refundId = refund.metadata?.refund_id;
-        if (refundId) {
+        if (refundId && refund.status === 'succeeded') {
+          // Update refund status
+          await pool.query(`
+            UPDATE refunds
+            SET status = 'succeeded', succeeded_at = NOW(), updated_at = NOW()
+            WHERE id = $1
+          `, [refundId]);
+
+          // Get refund and user details for email
+          const refundResult = await pool.query(`
+            SELECT r.*, o.user_id
+            FROM refunds r
+            JOIN orders o ON r.order_id = o.id
+            WHERE r.id = $1
+          `, [refundId]);
+
+          if (refundResult.rows.length > 0) {
+            const refundData = refundResult.rows[0];
+            if (refundData.user_id) {
+              // Get user email
+              const userResult = await pool.query(
+                'SELECT email, name FROM users WHERE id = $1',
+                [refundData.user_id]
+              );
+
+              if (userResult.rows.length > 0) {
+                const user = userResult.rows[0];
+                // Send success email asynchronously
+                NotificationService.sendRefundCompletedEmail(user.email, user.name, {
+                  refundId: refundData.id,
+                  orderId: refundData.order_id,
+                  amount: refundData.amount
+                }).catch(err => {
+                  console.error('Failed to send refund completed email:', err);
+                });
+              }
+            }
+          }
+
+          console.log(`✅ Updated refund ${refundId} to succeeded and sent email`);
+        } else if (refundId) {
+          // Just update status for other statuses
           await pool.query(`
             UPDATE refunds
             SET status = $1, updated_at = NOW()
@@ -572,7 +613,38 @@ export const handleStripeWebhook = async (req, res) => {
             VALUES ($1, $2, $3, $4, $5)
           `, [refundId, 'failed', 'processing', 'failed', refund.failure_reason || 'Unknown failure']);
 
-          console.log(`✅ Marked refund ${refundId} as failed`);
+          // Get refund and user details for email
+          const refundResult = await pool.query(`
+            SELECT r.*, o.user_id
+            FROM refunds r
+            JOIN orders o ON r.order_id = o.id
+            WHERE r.id = $1
+          `, [refundId]);
+
+          if (refundResult.rows.length > 0) {
+            const refundData = refundResult.rows[0];
+            if (refundData.user_id) {
+              // Get user email
+              const userResult = await pool.query(
+                'SELECT email, name FROM users WHERE id = $1',
+                [refundData.user_id]
+              );
+
+              if (userResult.rows.length > 0) {
+                const user = userResult.rows[0];
+                // Send failure email asynchronously
+                NotificationService.sendRefundFailedEmail(user.email, user.name, {
+                  refundId: refundData.id,
+                  orderId: refundData.order_id,
+                  amount: refundData.amount
+                }).catch(err => {
+                  console.error('Failed to send refund failed email:', err);
+                });
+              }
+            }
+          }
+
+          console.log(`✅ Marked refund ${refundId} as failed and sent email`);
         }
       } catch (err) {
         console.error('Error handling refund.failed:', err);
