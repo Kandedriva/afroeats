@@ -11,6 +11,7 @@ import express from 'express';
 import RefundService from '../services/RefundService.js';
 import { auth } from '../middleware/auth.js';
 import ownerAuth from '../middleware/ownerAuth.js';
+import adminAuth from '../middleware/adminAuth.js';
 
 const router = express.Router();
 
@@ -165,12 +166,11 @@ router.delete('/:refundId', auth, async (req, res) => {
 /**
  * POST /api/refunds/admin/create
  * Admin creates and auto-processes a refund
- * TODO: Add admin auth middleware
+ * Requires admin authentication
  */
-router.post('/admin/create', async (req, res) => {
+router.post('/admin/create', adminAuth, async (req, res) => {
   try {
-    // TODO: Replace with proper admin auth
-    const adminEmail = req.body.adminEmail || 'admin@orderdabaly.com';
+    const adminEmail = req.admin.email;
 
     const { orderId, amount, reason, description } = req.body;
 
@@ -220,12 +220,11 @@ router.post('/admin/create', async (req, res) => {
 /**
  * POST /api/refunds/admin/:refundId/approve
  * Admin approves and processes a pending refund
- * TODO: Add admin auth middleware
+ * Requires admin authentication
  */
-router.post('/admin/:refundId/approve', async (req, res) => {
+router.post('/admin/:refundId/approve', adminAuth, async (req, res) => {
   try {
-    // TODO: Replace with proper admin auth
-    const adminEmail = req.body.adminEmail || 'admin@orderdabaly.com';
+    const adminEmail = req.admin.email;
     const refundId = parseInt(req.params.refundId);
 
     const refund = await RefundService.processRefund(refundId, adminEmail);
@@ -245,9 +244,9 @@ router.post('/admin/:refundId/approve', async (req, res) => {
 /**
  * GET /api/refunds/admin/list
  * Admin lists all refunds with filters
- * TODO: Add admin auth middleware
+ * Requires admin authentication
  */
-router.get('/admin/list', async (req, res) => {
+router.get('/admin/list', adminAuth, async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
@@ -272,9 +271,9 @@ router.get('/admin/list', async (req, res) => {
 /**
  * GET /api/refunds/admin/stats
  * Get refund statistics
- * TODO: Add admin auth middleware
+ * Requires admin authentication
  */
-router.get('/admin/stats', async (req, res) => {
+router.get('/admin/stats', adminAuth, async (req, res) => {
   try {
     const restaurantId = req.query.restaurantId ? parseInt(req.query.restaurantId) : null;
     const dateFrom = req.query.dateFrom;
@@ -297,12 +296,11 @@ router.get('/admin/stats', async (req, res) => {
 /**
  * DELETE /api/refunds/admin/:refundId
  * Admin cancels a pending refund
- * TODO: Add admin auth middleware
+ * Requires admin authentication
  */
-router.delete('/admin/:refundId', async (req, res) => {
+router.delete('/admin/:refundId', adminAuth, async (req, res) => {
   try {
-    // TODO: Replace with proper admin auth
-    const adminEmail = req.body.adminEmail || 'admin@orderdabaly.com';
+    const adminEmail = req.admin.email;
     const refundId = parseInt(req.params.refundId);
 
     const cancelledRefund = await RefundService.cancelRefund(refundId, adminEmail);

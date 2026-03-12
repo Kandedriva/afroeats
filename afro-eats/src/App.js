@@ -55,6 +55,7 @@ import DriverAvailableOrders from "./pages/DriverAvailableOrders";
 import DriverMyDeliveries from "./pages/DriverMyDeliveries";
 import DriverEarnings from "./pages/DriverEarnings";
 import DriverProfile from "./pages/DriverProfile";
+import CustomerRefunds from "./pages/CustomerRefunds";
 
 
 function AppContent() {
@@ -114,13 +115,21 @@ function AppContent() {
             </ProtectedRoute>
           }
         />
-        <Route 
-          path="/order-details/:orderId" 
+        <Route
+          path="/my-refunds"
+          element={
+            <ProtectedRoute>
+              <CustomerRefunds />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/order-details/:orderId"
           element={
             <ProtectedRoute>
               <OrderDetails />
             </ProtectedRoute>
-          } 
+          }
         />
         <Route path="/cart" element={
           <ErrorBoundary>

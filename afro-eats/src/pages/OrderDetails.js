@@ -11,6 +11,11 @@ function OrderDetails() {
   const [error, setError] = useState("");
   const [showRestaurantModal, setShowRestaurantModal] = useState(false);
   const [availableRestaurants, setAvailableRestaurants] = useState([]);
+  const [showRefundModal, setShowRefundModal] = useState(false);
+  const [refundAmount, setRefundAmount] = useState("");
+  const [refundReason, setRefundReason] = useState("quality_issue");
+  const [refundDescription, setRefundDescription] = useState("");
+  const [submittingRefund, setSubmittingRefund] = useState(false);
   const { user, loading: authLoading } = useContext(AuthContext);
   const { orderId } = useParams();
   const navigate = useNavigate();
@@ -100,6 +105,112 @@ function OrderDetails() {
     setAvailableRestaurants([]);
   };
 
+  const openRefundModal = () => {
+    const maxRefund = Number(order.total || 0) - Number(order.refunded_amount || 0);
+    setRefundAmount(maxRefund.toFixed(2));
+    setRefundReason("quality_issue");
+    setRefundDescription("");
+    setShowRefundModal(true);
+  };
+
+  const closeRefundModal = () => {
+    setShowRefundModal(false);
+    setRefundAmount("");
+    setRefundReason("quality_issue");
+    setRefundDescription("");
+  };
+
+  const submitRefund = async () => {
+    try {
+      // Validate inputs
+      const amount = parseFloat(refundAmount);
+      const maxRefund = Number(order.total || 0) - Number(order.refunded_amount || 0);
+
+      if (!amount || amount <= 0) {
+        toast.error("Please enter a valid refund amount");
+        return;
+      }
+
+      if (amount > maxRefund) {
+        toast.error(`Refund amount cannot exceed $${maxRefund.toFixed(2)}`);
+        return;
+      }
+
+      if (!refundDescription.trim()) {
+        toast.error("Please provide a description for the refund request");
+        return;
+      }
+
+      setSubmittingRefund(true);
+
+      const res = await fetch(`${API_BASE_URL}/api/refunds/request`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          orderId: parseInt(orderId),
+          amount,
+          reason: refundReason,
+          description: refundDescription,
+        }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to submit refund request");
+      }
+
+      const data = await res.json();
+      toast.success("Refund request submitted successfully! We'll review it shortly.");
+
+      closeRefundModal();
+
+      // Refresh order details to show updated refund status
+      fetchOrderDetails();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setSubmittingRefund(false);
+    }
+  };
+
+  const canRequestRefund = () => {
+    // Can request refund if order is paid and not fully refunded
+    const isPaid = order.status === 'paid' || order.status === 'completed' || order.status === 'delivered';
+    const refundedAmount = Number(order.refunded_amount || 0);
+    const totalAmount = Number(order.total || 0);
+    const hasRefundableAmount = refundedAmount < totalAmount;
+    const notCancelled = order.status !== 'cancelled';
+
+    return isPaid && hasRefundableAmount && notCancelled;
+  };
+
+  const getRefundStatusBadge = () => {
+    if (!order.refund_status || order.refund_status === 'none') return null;
+
+    const statusColors = {
+      requested: 'bg-yellow-100 text-yellow-800',
+      partial: 'bg-orange-100 text-orange-800',
+      full: 'bg-purple-100 text-purple-800',
+      processing: 'bg-blue-100 text-blue-800',
+    };
+
+    const statusText = {
+      requested: 'Refund Requested',
+      partial: 'Partially Refunded',
+      full: 'Fully Refunded',
+      processing: 'Refund Processing',
+    };
+
+    return (
+      <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${statusColors[order.refund_status]}`}>
+        {statusText[order.refund_status]}
+      </span>
+    );
+  };
+
   if (authLoading || orderLoading) {
     return (
       <div className="max-w-4xl mx-auto p-6">
@@ -153,9 +264,12 @@ function OrderDetails() {
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold">Order Status</h2>
-          <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(order.status)}`}>
-            {getStatusText(order.status)}
-          </span>
+          <div className="flex gap-2">
+            <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(order.status)}`}>
+              {getStatusText(order.status)}
+            </span>
+            {getRefundStatusBadge()}
+          </div>
         </div>
         
         {/* Status Timeline */}
@@ -227,10 +341,22 @@ function OrderDetails() {
             <span className="text-gray-600">Platform Fee:</span>
             <span className="text-gray-800">${Number(order.platform_fee || 0).toFixed(2)}</span>
           </div>
+          {order.refunded_amount && Number(order.refunded_amount) > 0 && (
+            <div className="flex justify-between text-red-600">
+              <span>Refunded:</span>
+              <span>-${Number(order.refunded_amount).toFixed(2)}</span>
+            </div>
+          )}
           <div className="border-t pt-2 flex justify-between">
             <span className="font-semibold text-gray-800">Total:</span>
             <span className="font-semibold text-gray-800">${Number(order.total || 0).toFixed(2)}</span>
           </div>
+          {order.refunded_amount && Number(order.refunded_amount) > 0 && (
+            <div className="flex justify-between text-sm text-purple-600">
+              <span className="font-medium">Net Amount:</span>
+              <span className="font-medium">${(Number(order.total || 0) - Number(order.refunded_amount || 0)).toFixed(2)}</span>
+            </div>
+          )}
           {order.paid_at && (
             <div className="text-sm text-green-600 mt-2">
               ✅ Payment confirmed on {new Date(order.paid_at).toLocaleDateString()}
@@ -269,7 +395,7 @@ function OrderDetails() {
           </div>
         )}
         
-        <div className="flex space-x-4">
+        <div className="flex flex-wrap gap-3">
           <button
             onClick={() => navigate("/")}
             className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition-colors"
@@ -280,15 +406,157 @@ function OrderDetails() {
             onClick={handleCallSupport}
             className={`px-4 py-2 rounded transition-colors ${
               order.items?.some(item => item.restaurant_phone)
-                ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                ? 'bg-blue-600 text-white hover:bg-blue-700'
                 : 'bg-gray-400 text-gray-200 cursor-not-allowed'
             }`}
             disabled={!order.items?.some(item => item.restaurant_phone)}
           >
             📞 Call Restaurant
           </button>
+          {canRequestRefund() && (
+            <button
+              onClick={openRefundModal}
+              className="bg-orange-600 text-white px-4 py-2 rounded hover:bg-orange-700 transition-colors"
+            >
+              💰 Request Refund
+            </button>
+          )}
+          <button
+            onClick={() => navigate("/my-refunds")}
+            className="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700 transition-colors"
+          >
+            View Refund Status
+          </button>
         </div>
       </div>
+
+      {/* Refund Request Modal */}
+      {showRefundModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 max-w-lg w-full mx-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="text-center mb-6">
+              <div className="mx-auto flex items-center justify-center h-14 w-14 rounded-full bg-orange-100 mb-4">
+                <span className="text-3xl">💰</span>
+              </div>
+              <h3 className="text-2xl font-bold text-gray-800 mb-2">
+                Request Refund
+              </h3>
+              <p className="text-sm text-gray-600">
+                Please provide details about your refund request. Our team will review it shortly.
+              </p>
+            </div>
+
+            <div className="space-y-4 mb-6">
+              {/* Refund Amount */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Refund Amount
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-2.5 text-gray-500 text-lg">$</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    max={(Number(order.total || 0) - Number(order.refunded_amount || 0)).toFixed(2)}
+                    value={refundAmount}
+                    onChange={(e) => setRefundAmount(e.target.value)}
+                    className="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    placeholder="0.00"
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Maximum refundable: ${(Number(order.total || 0) - Number(order.refunded_amount || 0)).toFixed(2)}
+                </p>
+              </div>
+
+              {/* Refund Reason */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Reason for Refund
+                </label>
+                <select
+                  value={refundReason}
+                  onChange={(e) => setRefundReason(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                >
+                  <option value="quality_issue">Quality Issue</option>
+                  <option value="wrong_item">Wrong Item Delivered</option>
+                  <option value="late_delivery">Late Delivery</option>
+                  <option value="item_unavailable">Item Unavailable</option>
+                  <option value="customer_request">Changed My Mind</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Description
+                  <span className="text-red-500 ml-1">*</span>
+                </label>
+                <textarea
+                  value={refundDescription}
+                  onChange={(e) => setRefundDescription(e.target.value)}
+                  rows={4}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent resize-none"
+                  placeholder="Please describe the issue in detail..."
+                  required
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Please provide specific details to help us process your request faster.
+                </p>
+              </div>
+
+              {/* Info Box */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <h3 className="text-sm font-medium text-blue-800">What happens next?</h3>
+                    <div className="mt-2 text-sm text-blue-700">
+                      <ul className="list-disc list-inside space-y-1">
+                        <li>Your request will be reviewed by our team</li>
+                        <li>You&apos;ll receive an email confirmation</li>
+                        <li>Refunds typically process within 5-7 business days</li>
+                        <li>The money will return to your original payment method</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={closeRefundModal}
+                disabled={submittingRefund}
+                className="px-5 py-2.5 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors font-medium disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitRefund}
+                disabled={submittingRefund}
+                className="px-5 py-2.5 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {submittingRefund ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Submitting...
+                  </>
+                ) : (
+                  "Submit Refund Request"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Restaurant Selection Modal */}
       {showRestaurantModal && (

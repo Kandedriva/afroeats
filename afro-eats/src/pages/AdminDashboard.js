@@ -4,6 +4,7 @@ import { Navigate } from 'react-router-dom';
 import { showToast } from '../utils/toast';
 import PropTypes from 'prop-types';
 import { API_BASE_URL } from '../config/api';
+import AdminRefundsTab from '../Components/AdminRefundsTab';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -460,6 +461,7 @@ const AdminDashboard = () => {
               { id: 'restaurants', label: '🏪 Restaurants' },
               { id: 'drivers', label: '🚗 Drivers' },
               { id: 'orders', label: '📋 Orders' },
+              { id: 'refunds', label: '💰 Refunds' },
               { id: 'support', label: '🎧 Support' },
               { id: 'contacts', label: '📞 Contacts' },
               { id: 'system', label: '⚙️ System' }
@@ -512,7 +514,11 @@ const AdminDashboard = () => {
         {activeTab === 'orders' && (
           <OrdersTab orders={orders} />
         )}
-        
+
+        {activeTab === 'refunds' && (
+          <AdminRefundsTab />
+        )}
+
         {activeTab === 'support' && (
           <SupportTab 
             supportMessages={supportMessages} 

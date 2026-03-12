@@ -11,6 +11,7 @@
 import Stripe from 'stripe';
 import pool from '../db.js';
 import { Errors } from '../utils/errorHandler.js';
+import NotificationService from './NotificationService.js';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
@@ -141,6 +142,29 @@ class RefundService {
       ]);
 
       await client.query('COMMIT');
+
+      // Send email notification to customer
+      if (requestedByUserId) {
+        // Get user details for email
+        const userResult = await pool.query(
+          'SELECT email, name FROM users WHERE id = $1',
+          [requestedByUserId]
+        );
+
+        if (userResult.rows.length > 0) {
+          const user = userResult.rows[0];
+          // Send asynchronously to avoid blocking
+          NotificationService.sendRefundRequestEmail(user.email, user.name, {
+            refundId: refund.id,
+            orderId,
+            amount,
+            reason,
+            status: refund.status
+          }).catch(err => {
+            console.error('Failed to send refund request email:', err);
+          });
+        }
+      }
 
       // Auto-process if requested and Stripe key available
       if (autoProcess && process.env.STRIPE_SECRET_KEY) {
@@ -285,7 +309,29 @@ class RefundService {
         [refundId]
       );
 
-      return updatedRefundResult.rows[0];
+      const updatedRefund = updatedRefundResult.rows[0];
+
+      // Send approval email to customer
+      if (refund.requested_by_user_id) {
+        const userResult = await pool.query(
+          'SELECT email, name FROM users WHERE id = $1',
+          [refund.requested_by_user_id]
+        );
+
+        if (userResult.rows.length > 0) {
+          const user = userResult.rows[0];
+          // Send asynchronously
+          NotificationService.sendRefundApprovedEmail(user.email, user.name, {
+            refundId: updatedRefund.id,
+            orderId: updatedRefund.order_id,
+            amount: updatedRefund.amount
+          }).catch(err => {
+            console.error('Failed to send refund approved email:', err);
+          });
+        }
+      }
+
+      return updatedRefund;
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;
