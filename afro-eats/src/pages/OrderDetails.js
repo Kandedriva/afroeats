@@ -162,7 +162,7 @@ function OrderDetails() {
         throw new Error(errorData.error || "Failed to submit refund request");
       }
 
-      const data = await res.json();
+      await res.json();
       toast.success("Refund request submitted successfully! We'll review it shortly.");
 
       closeRefundModal();
@@ -188,7 +188,9 @@ function OrderDetails() {
   };
 
   const getRefundStatusBadge = () => {
-    if (!order.refund_status || order.refund_status === 'none') return null;
+    if (!order.refund_status || order.refund_status === 'none') {
+      return null;
+    }
 
     const statusColors = {
       requested: 'bg-yellow-100 text-yellow-800',
@@ -449,12 +451,13 @@ function OrderDetails() {
             <div className="space-y-4 mb-6">
               {/* Refund Amount */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="refund-amount" className="block text-sm font-medium text-gray-700 mb-2">
                   Refund Amount
                 </label>
                 <div className="relative">
                   <span className="absolute left-3 top-2.5 text-gray-500 text-lg">$</span>
                   <input
+                    id="refund-amount"
                     type="number"
                     step="0.01"
                     min="0.01"
@@ -472,10 +475,11 @@ function OrderDetails() {
 
               {/* Refund Reason */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="refund-reason" className="block text-sm font-medium text-gray-700 mb-2">
                   Reason for Refund
                 </label>
                 <select
+                  id="refund-reason"
                   value={refundReason}
                   onChange={(e) => setRefundReason(e.target.value)}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
@@ -491,11 +495,12 @@ function OrderDetails() {
 
               {/* Description */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="refund-description" className="block text-sm font-medium text-gray-700 mb-2">
                   Description
                   <span className="text-red-500 ml-1">*</span>
                 </label>
                 <textarea
+                  id="refund-description"
                   value={refundDescription}
                   onChange={(e) => setRefundDescription(e.target.value)}
                   rows={4}

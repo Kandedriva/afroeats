@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import PropTypes from 'prop-types';
 import { toast } from 'react-toastify';
 import { API_BASE_URL } from '../config/api';
 
