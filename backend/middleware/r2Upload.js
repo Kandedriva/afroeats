@@ -158,6 +158,11 @@ export const uploadRestaurantLogo = uploadToR2('restaurant', 'logo', true);
 export const uploadProfileImage = uploadToR2('profile', 'image', true);
 
 /**
+ * Middleware specifically for product images
+ */
+export const uploadProductImage = uploadToR2('product', 'image', true);
+
+/**
  * Helper function to handle R2 upload result in route handlers
  */
 export const handleR2UploadResult = (req) => {
@@ -209,6 +214,7 @@ export default {
   uploadDishImage,
   uploadRestaurantLogo,
   uploadProfileImage,
+  uploadProductImage,
   handleR2UploadResult,
   deleteOldR2Image
 };

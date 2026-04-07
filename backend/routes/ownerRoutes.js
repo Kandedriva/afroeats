@@ -2,17 +2,18 @@ import express from "express";
 import bcryptjs from "bcryptjs";
 import pool from "../db.js";
 import { requireOwnerAuth } from "../middleware/ownerAuth.js";
-import { 
-  checkAccountLockout, 
-  handleFailedLogin, 
-  handleSuccessfulLogin 
+import {
+  checkAccountLockout,
+  handleFailedLogin,
+  handleSuccessfulLogin
 } from "../middleware/accountLockout.js";
-import { 
-  uploadRestaurantLogo, 
-  uploadDishImage, 
-  handleR2UploadResult, 
-  deleteOldR2Image 
+import {
+  uploadRestaurantLogo,
+  uploadDishImage,
+  handleR2UploadResult,
+  deleteOldR2Image
 } from "../middleware/r2Upload.js";
+import { sendRestaurantOwnerWelcomeEmail } from "../services/emailService.js";
 
 const router = express.Router();
 
@@ -116,7 +117,11 @@ router.post("/register", ...uploadRestaurantLogo, async (req, res) => {
         }
 
         console.log('✅ Owner registration session saved successfully. ID:', req.sessionID, 'Owner:', name);
-        
+
+        // Send welcome email (non-blocking)
+        sendRestaurantOwnerWelcomeEmail(email, name, restaurant_name)
+          .catch(err => console.error('Failed to send restaurant owner welcome email:', err));
+
         res.status(201).json({
           owner: ownerResult.rows[0],
           restaurant: restaurantResult.rows[0],
