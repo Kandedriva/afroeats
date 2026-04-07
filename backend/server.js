@@ -32,6 +32,8 @@ import driverAuthRoutes from "./routes/driverAuthRoutes.js";
 import driverRoutes from "./routes/driverRoutes.js";
 import driverStripeRoutes from "./routes/driverStripeRoutes.js";
 import refundRoutes from "./routes/refundRoutes.js";
+import productRoutes from "./routes/productRoutes.js";
+import groceryRoutes from "./routes/groceryRoutes.js";
 
 // Import security and analytics
 import { 
@@ -77,10 +79,7 @@ app.use(helmetConfig);
 app.use(requestLogger);
 app.use(requestLoggingMiddleware);
 
-// CORS with secure configuration - DISABLED, using manual CORS below
-// app.use(cors(corsOptions));
-
-// Manual CORS middleware to fix wildcard issue
+// Manual CORS - DO NOT use cors() package, it's causing wildcard issues
 app.use((req, res, next) => {
   const origin = req.get('Origin');
   const allowedOrigins = [
@@ -92,24 +91,33 @@ app.use((req, res, next) => {
     'http://127.0.0.1:3002',
     'https://orderdabaly.com',
     'https://www.orderdabaly.com',
-    'https://api.orderdabaly.com',
     'https://orderdabaly.netlify.app',
-    'https://orderdabaly.vercel.app'
   ];
 
-  // Determine which origin to return
-  const corsOrigin = allowedOrigins.includes(origin) ? origin : (origin || 'http://localhost:3000');
+  // Determine origin to use - default to localhost:3002
+  const corsOrigin = (origin && allowedOrigins.includes(origin)) ? origin : 'http://localhost:3002';
 
-  // Set CORS headers
-  res.setHeader('Access-Control-Allow-Origin', corsOrigin);
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Pragma, Cache-Control');
-  res.setHeader('Access-Control-Expose-Headers', 'Set-Cookie, Content-Type, Content-Length');
-  res.setHeader('Vary', 'Origin');
+  // Intercept writeHead to force CORS headers before sending response
+  const originalWriteHead = res.writeHead;
+  res.writeHead = function(statusCode, headers) {
+    // Force our CORS headers by setting them directly
+    this.setHeader('Access-Control-Allow-Origin', corsOrigin);
+    this.setHeader('Access-Control-Allow-Credentials', 'true');
+    this.setHeader('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS');
+    this.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, Pragma');
+    this.setHeader('Access-Control-Expose-Headers', 'Set-Cookie');
+    this.setHeader('Vary', 'Origin');
 
-  // Handle OPTIONS preflight
+    // Call original writeHead
+    return originalWriteHead.apply(this, arguments);
+  };
+
+  // Handle preflight
   if (req.method === 'OPTIONS') {
+    res.setHeader('Access-Control-Allow-Origin', corsOrigin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, Pragma');
     return res.status(204).end();
   }
 
@@ -373,33 +381,33 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
-// FINAL CORS FIX - Set headers right before routes
-app.use((req, res, next) => {
-  const origin = req.get('Origin');
-  const allowedOrigins = [
-    'http://localhost:3000',
-    'http://localhost:3001',
-    'http://localhost:3002',
-    'http://127.0.0.1:3000',
-    'http://127.0.0.1:3001',
-    'http://127.0.0.1:3002'
-  ];
-
-  const corsOrigin = allowedOrigins.includes(origin) ? origin : (origin || 'http://localhost:3000');
-
-  console.log('🔧 FINAL CORS FIX - Setting headers:', {
-    origin,
-    corsOrigin,
-    url: req.url
-  });
-
-  res.setHeader('Access-Control-Allow-Origin', corsOrigin);
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
-
-  next();
-});
+// FINAL CORS FIX - Disabled, using proper cors() middleware above
+// app.use((req, res, next) => {
+//   const origin = req.get('Origin');
+//   const allowedOrigins = [
+//     'http://localhost:3000',
+//     'http://localhost:3001',
+//     'http://localhost:3002',
+//     'http://127.0.0.1:3000',
+//     'http://127.0.0.1:3001',
+//     'http://127.0.0.1:3002'
+//   ];
+//
+//   const corsOrigin = allowedOrigins.includes(origin) ? origin : (origin || 'http://localhost:3000');
+//
+//   console.log('🔧 FINAL CORS FIX - Setting headers:', {
+//     origin,
+//     corsOrigin,
+//     url: req.url
+//   });
+//
+//   res.setHeader('Access-Control-Allow-Origin', corsOrigin);
+//   res.setHeader('Access-Control-Allow-Credentials', 'true');
+//   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD');
+//   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+//
+//   next();
+// });
 
 // API Routes
 app.use("/api/auth", authRoutes);
@@ -426,6 +434,12 @@ app.use("/api/drivers/stripe", driverStripeRoutes);
 
 // Refund routes
 app.use("/api/refunds", refundRoutes);
+
+// Product routes (marketplace)
+app.use("/api/products", productRoutes);
+
+// Grocery order routes
+app.use("/api/grocery", groceryRoutes);
 
 // Root route for deployment health checks
 app.get('/', (req, res) => {

@@ -2,15 +2,18 @@ import { Link } from "react-router-dom";
 import { useContext, useState, useEffect } from "react";
 import { AuthContext } from "../context/AuthContext";
 import { CartContext } from "../context/CartContext";
+import { useGroceryCart } from "../context/GroceryCartContext";
 import { API_BASE_URL } from "../config/api";
 
 function Navbar() {
   const { user, logout } = useContext(AuthContext);
   const { cart } = useContext(CartContext);
+  const { getGroceryItemCount } = useGroceryCart();
   const [notificationCount, setNotificationCount] = useState(0);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const cartItemCount = cart.reduce((total, item) => total + item.quantity, 0);
+  const groceryItemCount = getGroceryItemCount();
 
   // Fetch notification count for logged-in users
   useEffect(() => {
@@ -51,17 +54,40 @@ function Navbar() {
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-6">
-            <Link 
-              to="/cart" 
+            <Link
+              to="/marketplace"
+              className="text-gray-700 hover:text-green-600 transition-colors duration-200 font-medium"
+            >
+              🛒 Marketplace
+            </Link>
+            <Link
+              to="/restaurants"
+              className="text-gray-700 hover:text-green-600 transition-colors duration-200 font-medium"
+            >
+              🍽️ Restaurants
+            </Link>
+            <Link
+              to="/cart"
               className="text-gray-700 hover:text-green-600 transition-colors duration-200 flex items-center relative"
             >
-              🛒 Cart
+              Food Cart
               {cartItemCount > 0 && (
                 <span className="ml-1 bg-green-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
                   {cartItemCount}
                 </span>
               )}
             </Link>
+            {groceryItemCount > 0 && (
+              <Link
+                to="/grocery-cart"
+                className="text-gray-700 hover:text-green-600 transition-colors duration-200 flex items-center relative"
+              >
+                🥬 Grocery Cart
+                <span className="ml-1 bg-purple-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                  {groceryItemCount}
+                </span>
+              </Link>
+            )}
 
             {user ? (
               <>
@@ -140,10 +166,33 @@ function Navbar() {
         {isMenuOpen && (
           <div className="md:hidden bg-white border-t border-gray-200">
             <div className="px-2 pt-2 pb-3 space-y-1">
+              <Link
+                to="/marketplace"
+                className="block px-3 py-2 text-gray-700 hover:text-green-600 hover:bg-gray-50 rounded-md transition-colors duration-200 font-medium"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                🛒 Marketplace
+              </Link>
+              <Link
+                to="/restaurants"
+                className="block px-3 py-2 text-gray-700 hover:text-green-600 hover:bg-gray-50 rounded-md transition-colors duration-200 font-medium"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                🍽️ Restaurants
+              </Link>
+              {groceryItemCount > 0 && (
+                <Link
+                  to="/grocery-cart"
+                  className="block px-3 py-2 text-gray-700 hover:text-green-600 hover:bg-gray-50 rounded-md transition-colors duration-200"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  🥬 Grocery Cart ({groceryItemCount})
+                </Link>
+              )}
               {user ? (
                 <>
-                  <Link 
-                    to="/my-orders" 
+                  <Link
+                    to="/my-orders"
                     className="block px-3 py-2 text-gray-700 hover:text-green-600 hover:bg-gray-50 rounded-md transition-colors duration-200"
                     onClick={() => setIsMenuOpen(false)}
                   >

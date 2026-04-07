@@ -1,7 +1,7 @@
 import { Routes, Route, useLocation } from "react-router-dom";
 import Navbar from "./Components/Navbar";
 import OwnerNavbar from "./Components/OwnerNavbar";
-import RestaurantList from "./pages/RestaurantList";
+import RestaurantsPage from "./pages/RestaurantsPage";
 import RestaurantDetails from "./pages/RestaurantDetails";
 import Register from "./pages/Register";
 import RegisterOwner from "./pages/RegisterOwner";
@@ -14,6 +14,7 @@ import Login from "./pages/Login";
 import { AuthProvider, AuthContext } from "./context/AuthContext";
 import { CartProvider } from "./context/CartContext";
 import { ChatProvider } from "./context/ChatContext";
+import { GroceryCartProvider } from "./context/GroceryCartContext";
 import CartPage from "./pages/CartPage";
 import DeliveryOptions from "./pages/DeliveryOptions";
 import Checkout from "./pages/Checkout";
@@ -56,6 +57,10 @@ import DriverMyDeliveries from "./pages/DriverMyDeliveries";
 import DriverEarnings from "./pages/DriverEarnings";
 import DriverProfile from "./pages/DriverProfile";
 import CustomerRefunds from "./pages/CustomerRefunds";
+import MarketplaceHome from "./pages/MarketplaceHome";
+import ProductDetails from "./pages/ProductDetails";
+import GroceryCart from "./pages/GroceryCart";
+import GroceryCheckout from "./pages/GroceryCheckout";
 
 
 function AppContent() {
@@ -76,7 +81,12 @@ function AppContent() {
       {!isAdminRoute && !isDriverRoute && <ChatButton />}
 
       <Routes>
-        <Route path="/" element={<RestaurantList />} />
+        <Route path="/" element={<MarketplaceHome />} />
+        <Route path="/restaurants" element={<RestaurantsPage />} />
+        <Route path="/marketplace" element={<MarketplaceHome />} />
+        <Route path="/marketplace/product/:productId" element={<ProductDetails />} />
+        <Route path="/grocery-cart" element={<GroceryCart />} />
+        <Route path="/grocery-checkout" element={<GroceryCheckout />} />
         <Route path="/restaurants/:id" element={<RestaurantDetails />} />
         <Route path="/register" element={<Register />} />
         <Route path="/login" element={<Login />} />
@@ -268,8 +278,8 @@ function AppContent() {
         <Route path="/terms" element={<TermsAndConditions />} />
         <Route path="/privacy" element={<PrivacyPolicy />} />
         
-        {/* Catch-all route for 404 - redirect to home */}
-        <Route path="*" element={<RestaurantList />} />
+        {/* Catch-all route for 404 - redirect to marketplace */}
+        <Route path="*" element={<MarketplaceHome />} />
       </Routes>
     </>
   );
@@ -285,8 +295,9 @@ function App() {
               <DriverAuthProvider>
                 <GuestProvider>
                   <CartProvider>
-                    <ChatProvider>
-                      <AppContent />
+                    <GroceryCartProvider>
+                      <ChatProvider>
+                        <AppContent />
                   <ToastContainer
                     position="top-right"
                     autoClose={4000}
@@ -308,7 +319,8 @@ function App() {
                       fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
                     }}
                   />
-                    </ChatProvider>
+                      </ChatProvider>
+                    </GroceryCartProvider>
                   </CartProvider>
                 </GuestProvider>
               </DriverAuthProvider>

@@ -3,6 +3,7 @@ import bcryptjs from "bcryptjs";
 import pool from "../db.js";
 import { uploadToR2 } from "../middleware/r2Upload.js";
 import { requireDriverAuth } from "../middleware/driverAuth.js";
+import { sendDriverWelcomeEmail } from "../services/emailService.js";
 
 const router = express.Router();
 
@@ -128,6 +129,10 @@ router.post("/register", ...uploadToR2('driver_license', 'drivers_license', fals
           console.error('Session save error:', saveErr);
           return res.status(500).json({ error: "Session save error" });
         }
+
+        // Send welcome email (non-blocking)
+        sendDriverWelcomeEmail(driver.email, driver.name)
+          .catch(err => console.error('Failed to send driver welcome email:', err));
 
         res.status(201).json({
           success: true,

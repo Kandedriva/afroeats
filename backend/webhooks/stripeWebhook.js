@@ -2,6 +2,10 @@ import stripe from '../stripe.js';
 import pool from '../db.js';
 import NotificationService from '../services/NotificationService.js';
 import socketService from '../services/socketService.js';
+import {
+  sendOrderConfirmationEmail,
+  sendRestaurantOrderNotificationEmail
+} from '../services/emailService.js';
 
 export const handleStripeWebhook = async (req, res) => {
   const sig = req.headers['stripe-signature'];
@@ -27,6 +31,82 @@ export const handleStripeWebhook = async (req, res) => {
         try {
           console.log(`🔔 Processing checkout.session.completed for session: ${session.id}`);
 
+          // Check if this is a grocery order from metadata
+          const orderType = session.metadata?.orderType;
+
+          if (orderType === 'grocery') {
+            // Handle grocery order payment
+            const orderId = parseInt(session.metadata.orderId);
+            console.log(`🥬 Processing grocery order payment: ${orderId}`);
+
+            await pool.query(
+              `UPDATE grocery_orders
+               SET status = 'paid', paid_at = NOW(), stripe_payment_intent = $1
+               WHERE id = $2`,
+              [session.payment_intent, orderId]
+            );
+
+            console.log(`✅ Grocery order ${orderId} marked as paid`);
+
+            // Send order confirmation email to customer
+            try {
+              const orderResult = await pool.query(
+                `SELECT
+                  go.id, go.subtotal, go.platform_fee, go.delivery_fee, go.total,
+                  go.delivery_address, go.delivery_city, go.delivery_state, go.delivery_zip,
+                  go.delivery_name, go.delivery_phone, go.user_id, go.guest_email,
+                  u.name as user_name, u.email as user_email,
+                  json_agg(
+                    json_build_object(
+                      'name', p.name,
+                      'product_name', p.name,
+                      'quantity', goi.quantity,
+                      'price', goi.unit_price
+                    )
+                  ) as items
+                FROM grocery_orders go
+                LEFT JOIN users u ON go.user_id = u.id
+                LEFT JOIN grocery_order_items goi ON go.id = goi.grocery_order_id
+                LEFT JOIN products p ON goi.product_id = p.id
+                WHERE go.id = $1
+                GROUP BY go.id, u.name, u.email`,
+                [orderId]
+              );
+
+              if (orderResult.rows.length > 0) {
+                const order = orderResult.rows[0];
+                const customerEmail = order.user_email || order.guest_email;
+                const customerName = order.user_name || order.delivery_name || 'Customer';
+
+                if (customerEmail) {
+                  await sendOrderConfirmationEmail(customerEmail, customerName, {
+                    orderId: order.id,
+                    items: order.items,
+                    subtotal: parseFloat(order.subtotal),
+                    deliveryFee: parseFloat(order.delivery_fee),
+                    platformFee: parseFloat(order.platform_fee),
+                    total: parseFloat(order.total),
+                    orderType: 'grocery',
+                    deliveryAddress: {
+                      name: order.delivery_name,
+                      address: order.delivery_address,
+                      city: order.delivery_city,
+                      state: order.delivery_state,
+                      zipCode: order.delivery_zip,
+                      phone: order.delivery_phone
+                    }
+                  });
+                  console.log(`✅ Grocery order confirmation email sent to ${customerEmail}`);
+                }
+              }
+            } catch (emailError) {
+              console.error('❌ Failed to send grocery order confirmation email:', emailError);
+            }
+
+            break;
+          }
+
+          // Regular restaurant order handling
           // ✅ FIXED: Retrieve FULL order data from temp_order_data table
           const tempDataResult = await pool.query(
             'SELECT order_data FROM temp_order_data WHERE session_id = $1',
@@ -154,6 +234,55 @@ export const handleStripeWebhook = async (req, res) => {
                 }
               } catch (smsError) {
                 console.error('❌ Failed to send order confirmation SMS:', smsError.message);
+              }
+
+              // ✅ Send email confirmation to customer
+              try {
+                const customerResult = await pool.query(
+                  'SELECT name, email FROM users WHERE id = $1',
+                  [numericUserId]
+                );
+
+                if (customerResult.rows.length > 0) {
+                  const customer = customerResult.rows[0];
+                  const customerEmail = customer.email;
+                  const customerName = customer.name;
+
+                  // Prepare items with restaurant names
+                  const itemsWithRestaurants = items.map(item => {
+                    const restaurantId = item.restaurantId;
+                    const restaurantName = restaurantTotals[restaurantId]?.restaurant?.name || 'Restaurant';
+                    return {
+                      ...item,
+                      restaurant_name: restaurantName
+                    };
+                  });
+
+                  // Calculate fees (assuming 10% delivery fee if delivery, 0 if pickup)
+                  const deliveryFeeAmount = deliveryType === 'delivery' ? total * 0.1 : 0;
+                  const subtotal = total - platformFee - deliveryFeeAmount;
+
+                  await sendOrderConfirmationEmail(customerEmail, customerName, {
+                    orderId,
+                    items: itemsWithRestaurants,
+                    subtotal,
+                    deliveryFee: deliveryFeeAmount,
+                    platformFee,
+                    total,
+                    orderType: 'food',
+                    deliveryAddress: deliveryType === 'delivery' ? {
+                      name: customerName,
+                      address: deliveryAddress,
+                      city: '',
+                      state: '',
+                      zipCode: '',
+                      phone: deliveryPhone
+                    } : null
+                  });
+                  console.log(`✅ Order confirmation email sent to customer: ${customerEmail}`);
+                }
+              } catch (emailError) {
+                console.error('❌ Failed to send order confirmation email:', emailError);
               }
             } catch (notifError) {
               console.error('❌ Failed to create customer notification:', notifError.message);
@@ -308,6 +437,31 @@ export const handleStripeWebhook = async (req, res) => {
                       console.log(`📱 SMS sent to ${ownerInfo.phone} for order #${orderId}`);
                     } else {
                       console.log(`⚠️ SMS failed: ${notificationResults.sms.reason || notificationResults.sms.error}`);
+                    }
+
+                    // Send SendGrid email notification
+                    try {
+                      await sendRestaurantOrderNotificationEmail(ownerInfo.email, restaurant.name, {
+                        orderId,
+                        items: restaurantItems.map((item) => ({
+                          name: item.name,
+                          quantity: item.quantity,
+                          price: item.price
+                        })),
+                        subtotal: restaurantTotal,
+                        customerName: customerInfo.name,
+                        deliveryAddress: deliveryType === 'delivery' ? {
+                          name: customerInfo.name,
+                          address: deliveryAddress,
+                          city: '',
+                          state: '',
+                          zipCode: '',
+                          phone: customerInfo.phone
+                        } : null
+                      });
+                      console.log(`✅ SendGrid email sent to restaurant ${restaurant.name}`);
+                    } catch (sendGridError) {
+                      console.error(`❌ Failed to send SendGrid email to restaurant ${restaurantId}:`, sendGridError);
                     }
                   }
                 } catch (notificationError) {

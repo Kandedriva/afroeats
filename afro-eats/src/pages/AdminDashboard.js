@@ -5,6 +5,7 @@ import { showToast } from '../utils/toast';
 import PropTypes from 'prop-types';
 import { API_BASE_URL } from '../config/api';
 import AdminRefundsTab from '../Components/AdminRefundsTab';
+import AdminProductsTab from '../Components/AdminProductsTab';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -457,6 +458,7 @@ const AdminDashboard = () => {
             {[
               { id: 'overview', label: '📊 Overview' },
               { id: 'analytics', label: '📈 Analytics' },
+              { id: 'products', label: '📦 Products' },
               { id: 'users', label: '👥 Users' },
               { id: 'restaurants', label: '🏪 Restaurants' },
               { id: 'drivers', label: '🚗 Drivers' },
@@ -499,10 +501,14 @@ const AdminDashboard = () => {
           />
         )}
         
+        {activeTab === 'products' && (
+          <AdminProductsTab />
+        )}
+
         {activeTab === 'users' && (
           <UsersTab users={users} />
         )}
-        
+
         {activeTab === 'restaurants' && (
           <RestaurantsTab restaurants={restaurants} />
         )}

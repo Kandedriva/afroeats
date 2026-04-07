@@ -1,12 +1,13 @@
 import express from "express";
 import bcryptjs from "bcryptjs";
 import pool from "../db.js";
-import { 
-  checkAccountLockout, 
-  handleFailedLogin, 
-  handleSuccessfulLogin 
+import {
+  checkAccountLockout,
+  handleFailedLogin,
+  handleSuccessfulLogin
 } from "../middleware/accountLockout.js";
 import { requireAuth } from "../middleware/authMiddleware.js";
+import { sendUserWelcomeEmail } from "../services/emailService.js";
 
 const router = express.Router();
 
@@ -63,6 +64,10 @@ router.post("/register", async (req, res) => {
     req.session.save((err) => {
       if (err) console.error('Session save error:', err);
     });
+
+    // Send welcome email (non-blocking)
+    sendUserWelcomeEmail(newUser.rows[0].email, newUser.rows[0].name)
+      .catch(err => console.error('Failed to send welcome email:', err));
 
     res.status(201).json({ user: newUser.rows[0] });
   } catch (err) {

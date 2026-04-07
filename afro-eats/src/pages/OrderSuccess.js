@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { useCart } from "../context/CartContext";
+import { useGroceryCart } from "../context/GroceryCartContext";
 import { useAuth } from "../context/AuthContext";
 import { useGuest } from "../context/GuestContext";
 import { API_BASE_URL } from "../config/api";
@@ -13,36 +14,52 @@ function OrderSuccess() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const { forceRefreshCart, clearCart } = useCart();
+  const { clearGroceryCart } = useGroceryCart();
   const { user } = useAuth();
   const { clearGuestCartAfterSuccessfulOrder } = useGuest();
   const orderId = searchParams.get('order_id');
   const sessionId = searchParams.get('session_id');
+  const orderType = searchParams.get('type'); // 'grocery' or undefined (restaurant)
   const isDemo = searchParams.get('demo');
   const isGuestFromStripe = searchParams.get('guest') === 'true';
-  
+
   // Check if this is a guest order from navigation state
   const guestOrderInfo = location.state;
+  const isGroceryOrder = orderType === 'grocery';
 
   useEffect(() => {
     const handleOrderSuccess = async () => {
       try {
         let finalOrderId = orderId;
-        
+
         if (sessionId && !isDemo) {
-          // Handle real Stripe payment success - this will create the order
-          const res = await fetch(`${API_BASE_URL}/api/orders/success?session_id=${sessionId}`, {
-            credentials: "include",
-          });
-          
-          if (!res.ok) {
-            const errorData = await res.json();
-            throw new Error(errorData.error || "Failed to confirm payment");
+          if (isGroceryOrder) {
+            // For grocery orders, the order is already created by the webhook
+            // We just need to verify the session
+            const res = await fetch(`${API_BASE_URL}/api/grocery/verify-session?session_id=${sessionId}`, {
+              credentials: "include",
+            });
+
+            if (res.ok) {
+              const data = await res.json();
+              finalOrderId = data.orderId;
+            }
+          } else {
+            // Handle restaurant order - this will create the order
+            const res = await fetch(`${API_BASE_URL}/api/orders/success?session_id=${sessionId}`, {
+              credentials: "include",
+            });
+
+            if (!res.ok) {
+              const errorData = await res.json();
+              throw new Error(errorData.error || "Failed to confirm payment");
+            }
+
+            const successData = await res.json();
+            finalOrderId = successData.orderId;
           }
-          
-          const successData = await res.json();
-          finalOrderId = successData.orderId;
         }
-        
+
         if (!finalOrderId) {
           navigate('/');
           return;
@@ -50,7 +67,11 @@ function OrderSuccess() {
 
         // Get order details (skip for guest orders since they don't have access to protected endpoint)
         if (!guestOrderInfo?.guestOrder && !isGuestFromStripe && user) {
-          const orderRes = await fetch(`${API_BASE_URL}/api/orders/${finalOrderId}`, {
+          const endpoint = isGroceryOrder
+            ? `${API_BASE_URL}/api/grocery/orders/${finalOrderId}`
+            : `${API_BASE_URL}/api/orders/${finalOrderId}`;
+
+          const orderRes = await fetch(endpoint, {
             credentials: "include",
           });
 
@@ -69,17 +90,23 @@ function OrderSuccess() {
           });
         }
 
-        // Clear appropriate cart based on user type
+        // Clear appropriate cart based on order type and user type
         if (user && !isGuestFromStripe) {
-          // Authenticated user - clear server cart
-          await clearCart();
-          await new Promise(resolve => setTimeout(resolve, 500));
-          await forceRefreshCart();
+          if (isGroceryOrder) {
+            // Clear grocery cart
+            clearGroceryCart();
+          } else {
+            // Authenticated user - clear restaurant cart
+            await clearCart();
+            await new Promise(resolve => setTimeout(resolve, 500));
+            await forceRefreshCart();
+          }
         } else if (isGuestFromStripe || guestOrderInfo?.guestOrder) {
           // Guest user - clear guest cart after successful order
           clearGuestCartAfterSuccessfulOrder();
         }
       } catch (err) {
+        console.error('Order success error:', err);
         // Don't block the success page if we can't fetch details
         // The order was still successful
       } finally {
@@ -88,7 +115,7 @@ function OrderSuccess() {
     };
 
     handleOrderSuccess();
-  }, [orderId, sessionId, isDemo, isGuestFromStripe, guestOrderInfo?.guestOrder, guestOrderInfo?.email, navigate, forceRefreshCart, clearCart, clearGuestCartAfterSuccessfulOrder, user]);
+  }, [orderId, sessionId, isDemo, isGroceryOrder, isGuestFromStripe, guestOrderInfo?.guestOrder, guestOrderInfo?.email, navigate, forceRefreshCart, clearCart, clearGroceryCart, clearGuestCartAfterSuccessfulOrder, user]);
 
   if (loading) {
     return (
@@ -108,7 +135,9 @@ function OrderSuccess() {
         </div>
         <h1 className="text-3xl font-bold text-green-800 mb-2">Order Confirmed!</h1>
         <p className="text-gray-600">
-          Thank you for your order. Your food is being prepared!
+          {isGroceryOrder
+            ? "Thank you for your grocery order. We'll prepare it for delivery!"
+            : "Thank you for your order. Your food is being prepared!"}
         </p>
         {(guestOrderInfo?.guestOrder || isGuestFromStripe) && (
           <div className="mt-4 inline-block bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm">
@@ -186,18 +215,37 @@ function OrderSuccess() {
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6">
         <h3 className="text-lg font-semibold text-blue-800 mb-3">What&apos;s Next?</h3>
         <div className="space-y-2 text-blue-700">
-          <div className="flex items-center">
-            <span className="text-blue-600 mr-2">🍳</span>
-            <span>Restaurants are preparing your order</span>
-          </div>
-          <div className="flex items-center">
-            <span className="text-blue-600 mr-2">📧</span>
-            <span>You&apos;ll receive updates via email</span>
-          </div>
-          <div className="flex items-center">
-            <span className="text-blue-600 mr-2">🚚</span>
-            <span>Delivery will be coordinated directly with restaurants</span>
-          </div>
+          {isGroceryOrder ? (
+            <>
+              <div className="flex items-center">
+                <span className="text-blue-600 mr-2">📦</span>
+                <span>Your grocery order is being prepared</span>
+              </div>
+              <div className="flex items-center">
+                <span className="text-blue-600 mr-2">📧</span>
+                <span>You&apos;ll receive updates via email</span>
+              </div>
+              <div className="flex items-center">
+                <span className="text-blue-600 mr-2">🚚</span>
+                <span>Your order will be delivered to your address</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center">
+                <span className="text-blue-600 mr-2">🍳</span>
+                <span>Restaurants are preparing your order</span>
+              </div>
+              <div className="flex items-center">
+                <span className="text-blue-600 mr-2">📧</span>
+                <span>You&apos;ll receive updates via email</span>
+              </div>
+              <div className="flex items-center">
+                <span className="text-blue-600 mr-2">🚚</span>
+                <span>Delivery will be coordinated directly with restaurants</span>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -205,13 +253,17 @@ function OrderSuccess() {
       <div className="flex space-x-4">
         <button
           onClick={async () => {
-            await clearCart(); // Ensure cart is cleared
-            await forceRefreshCart(); // Ensure cart is refreshed
+            if (isGroceryOrder) {
+              clearGroceryCart(); // Ensure grocery cart is cleared
+            } else {
+              await clearCart(); // Ensure restaurant cart is cleared
+              await forceRefreshCart(); // Ensure cart is refreshed
+            }
             navigate('/');
           }}
           className="flex-1 bg-gray-200 text-gray-800 py-3 px-4 rounded-lg font-medium hover:bg-gray-300 transition-colors"
         >
-          Browse More Restaurants
+          {isGroceryOrder ? 'Browse More Products' : 'Browse More Restaurants'}
         </button>
         {(guestOrderInfo?.guestOrder || isGuestFromStripe) ? (
           <button

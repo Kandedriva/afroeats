@@ -1,6 +1,10 @@
 import express from "express";
 import pool from "../db.js";
 import { requireDriverAuth, requireApprovedDriver } from "../middleware/driverAuth.js";
+import {
+  sendOrderDeliveredEmail,
+  sendRestaurantOrderCompletedEmail
+} from "../services/emailService.js";
 
 const router = express.Router();
 
@@ -366,6 +370,45 @@ router.post("/update-delivery-status", requireApprovedDriver, async (req, res) =
          WHERE id = $1`,
         [driverId, driver_payout]
       );
+
+      // Send delivery completion emails (non-blocking)
+      try {
+        // Get customer info
+        const customerResult = await client.query(
+          'SELECT u.name, u.email, o.total FROM orders o JOIN users u ON o.user_id = u.id WHERE o.id = $1',
+          [orderId]
+        );
+
+        if (customerResult.rows.length > 0) {
+          const customer = customerResult.rows[0];
+          sendOrderDeliveredEmail(customer.email, customer.name, {
+            orderId,
+            total: parseFloat(customer.total),
+            orderType: 'food'
+          }).catch(err => console.error('Failed to send delivery email to customer:', err));
+        }
+
+        // Get restaurant owners' emails
+        const restaurantOwnersResult = await client.query(
+          `SELECT DISTINCT ro.email, ro.name, r.name as restaurant_name, o.total
+           FROM orders o
+           JOIN order_items oi ON o.id = oi.order_id
+           JOIN restaurants r ON oi.restaurant_id = r.id
+           JOIN restaurant_owners ro ON r.owner_id = ro.id
+           WHERE o.id = $1`,
+          [orderId]
+        );
+
+        for (const owner of restaurantOwnersResult.rows) {
+          sendRestaurantOrderCompletedEmail(owner.email, owner.restaurant_name, {
+            orderId,
+            total: parseFloat(owner.total)
+          }).catch(err => console.error(`Failed to send completion email to restaurant ${owner.restaurant_name}:`, err));
+        }
+      } catch (emailError) {
+        console.error('Error sending delivery emails:', emailError);
+        // Don't fail the request if email fails
+      }
     }
 
     // Create customer notification
