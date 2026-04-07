@@ -1,4 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
+import PropTypes from "prop-types";
 import { useGroceryCart } from "../context/GroceryCartContext";
 import { toast } from "react-toastify";
 
@@ -298,6 +299,21 @@ const CartItem = ({ item, onQuantityChange, onRemove }) => {
       </div>
     </div>
   );
+};
+
+CartItem.propTypes = {
+  item: PropTypes.shape({
+    id: PropTypes.number.isRequired,
+    name: PropTypes.string.isRequired,
+    price: PropTypes.number.isRequired,
+    unit: PropTypes.string.isRequired,
+    quantity: PropTypes.number.isRequired,
+    image_url: PropTypes.string,
+    stock_quantity: PropTypes.number,
+    category: PropTypes.string,
+  }).isRequired,
+  onQuantityChange: PropTypes.func.isRequired,
+  onRemove: PropTypes.func.isRequired,
 };
 
 export default GroceryCart;

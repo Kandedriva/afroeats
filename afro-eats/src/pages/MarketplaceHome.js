@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
+import PropTypes from "prop-types";
 import { API_BASE_URL } from "../config/api";
 import { toast } from "react-toastify";
 import { useGroceryCart } from "../context/GroceryCartContext";
@@ -12,13 +13,7 @@ const MarketplaceHome = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [featuredProducts, setFeaturedProducts] = useState([]);
 
-  useEffect(() => {
-    loadCategories();
-    loadProducts();
-    loadFeaturedProducts();
-  }, [selectedCategory, searchQuery]);
-
-  const loadCategories = async () => {
+  const loadCategories = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE_URL}/api/products/categories`);
       if (!res.ok) {
@@ -27,11 +22,12 @@ const MarketplaceHome = () => {
       const data = await res.json();
       setCategories(data);
     } catch (err) {
+      // eslint-disable-next-line no-console
       console.error("Load categories error:", err);
     }
-  };
+  }, []);
 
-  const loadProducts = async () => {
+  const loadProducts = useCallback(async () => {
     try {
       setLoading(true);
       const params = new URLSearchParams();
@@ -57,9 +53,9 @@ const MarketplaceHome = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedCategory, searchQuery]);
 
-  const loadFeaturedProducts = async () => {
+  const loadFeaturedProducts = useCallback(async () => {
     try {
       const res = await fetch(
         `${API_BASE_URL}/api/products?is_available=true&tags=popular,featured&limit=6`
@@ -69,9 +65,16 @@ const MarketplaceHome = () => {
         setFeaturedProducts(data);
       }
     } catch (err) {
+      // eslint-disable-next-line no-console
       console.error("Load featured error:", err);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadCategories();
+    loadProducts();
+    loadFeaturedProducts();
+  }, [loadCategories, loadProducts, loadFeaturedProducts]);
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -404,6 +407,25 @@ const ProductCard = ({ product }) => {
       </div>
     </div>
   );
+};
+
+ProductCard.propTypes = {
+  product: PropTypes.shape({
+    id: PropTypes.number.isRequired,
+    name: PropTypes.string.isRequired,
+    price: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+    unit: PropTypes.string.isRequired,
+    image_url: PropTypes.string,
+    origin: PropTypes.string,
+    description: PropTypes.string,
+    is_available: PropTypes.bool,
+    stock_quantity: PropTypes.number,
+    category: PropTypes.string,
+    organic: PropTypes.bool,
+    gluten_free: PropTypes.bool,
+    vegan: PropTypes.bool,
+    low_stock_threshold: PropTypes.number,
+  }).isRequired,
 };
 
 export default MarketplaceHome;

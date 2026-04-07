@@ -106,6 +106,7 @@ function OrderSuccess() {
           clearGuestCartAfterSuccessfulOrder();
         }
       } catch (err) {
+        // eslint-disable-next-line no-console
         console.error('Order success error:', err);
         // Don't block the success page if we can't fetch details
         // The order was still successful
