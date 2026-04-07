@@ -17,6 +17,7 @@ export const GroceryCartProvider = ({ children }) => {
         const parsed = JSON.parse(savedCart);
         setGroceryCart(parsed);
       } catch (err) {
+        // eslint-disable-next-line no-console
         console.error("Failed to parse grocery cart:", err);
         localStorage.removeItem(storageKey);
       }
