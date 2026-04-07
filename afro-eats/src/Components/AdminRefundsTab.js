@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'react-toastify';
 import { API_BASE_URL } from '../config/api';
 
@@ -12,12 +12,7 @@ const AdminRefundsTab = () => {
   const [processing, setProcessing] = useState(false);
   const [filterStatus, setFilterStatus] = useState('all');
 
-  useEffect(() => {
-    loadRefunds();
-    loadStats();
-  }, [filterStatus]);
-
-  const loadRefunds = async () => {
+  const loadRefunds = useCallback(async () => {
     try {
       setLoading(true);
       const url = filterStatus === 'all'
@@ -39,9 +34,9 @@ const AdminRefundsTab = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filterStatus]);
 
-  const loadStats = async () => {
+  const loadStats = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE_URL}/api/refunds/admin/stats`, {
         credentials: "include",
@@ -56,7 +51,12 @@ const AdminRefundsTab = () => {
     } catch (err) {
       toast.error(err.message);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadRefunds();
+    loadStats();
+  }, [loadRefunds, loadStats]);
 
   const handleApproveRefund = async (refundId) => {
     try {

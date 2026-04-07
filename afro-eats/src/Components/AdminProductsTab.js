@@ -1,5 +1,5 @@
 /* eslint-disable jsx-a11y/label-has-associated-control */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { API_BASE_URL } from "../config/api";
 import { toast } from "react-toastify";
 
@@ -43,13 +43,7 @@ const AdminProductsTab = () => {
   const [stockQuantity, setStockQuantity] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
-    loadProducts();
-    loadStats();
-    loadCategories();
-  }, [filterCategory, filterAvailability, searchQuery]);
-
-  const loadProducts = async () => {
+  const loadProducts = useCallback(async () => {
     try {
       setLoading(true);
       const params = new URLSearchParams();
@@ -79,9 +73,9 @@ const AdminProductsTab = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filterCategory, filterAvailability, searchQuery]);
 
-  const loadStats = async () => {
+  const loadStats = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE_URL}/api/products/admin/stats`, {
         credentials: "include",
@@ -94,11 +88,12 @@ const AdminProductsTab = () => {
       const data = await res.json();
       setStats(data);
     } catch (err) {
+      // eslint-disable-next-line no-console
       console.error("Stats error:", err);
     }
-  };
+  }, []);
 
-  const loadCategories = async () => {
+  const loadCategories = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE_URL}/api/products/categories`, {
         credentials: "include",
@@ -111,9 +106,16 @@ const AdminProductsTab = () => {
       const data = await res.json();
       setCategories(data);
     } catch (err) {
+      // eslint-disable-next-line no-console
       console.error("Categories error:", err);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadProducts();
+    loadStats();
+    loadCategories();
+  }, [loadProducts, loadStats, loadCategories]);
 
   const openCreateModal = () => {
     setFormData({
