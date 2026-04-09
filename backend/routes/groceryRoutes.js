@@ -24,7 +24,7 @@ router.post('/calculate-delivery', async (req, res) => {
 
     // For grocery orders, we'll use a fixed warehouse location
     // In production, this would be the actual warehouse/distribution center address
-    const warehouseAddress = '123 Warehouse St, New York, NY 10001'; // TODO: Make this configurable
+    const warehouseAddress = '581 Timpson Pl, Bronx, NY 10455, United States';
 
     try {
       // Calculate distance and delivery fee using Google Maps
