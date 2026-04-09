@@ -65,12 +65,23 @@ function OrderSuccess() {
           return;
         }
 
-        // Get order details (skip for guest orders since they don't have access to protected endpoint)
-        if (!guestOrderInfo?.guestOrder && !isGuestFromStripe && user) {
-          const endpoint = isGroceryOrder
-            ? `${API_BASE_URL}/api/grocery/orders/${finalOrderId}`
-            : `${API_BASE_URL}/api/orders/${finalOrderId}`;
+        // Get order details
+        // For grocery orders, the endpoint supports both authenticated and guest users
+        // For restaurant orders, only authenticated users can access order details
+        if (isGroceryOrder) {
+          // Grocery orders: fetch details for both authenticated and guest users
+          const endpoint = `${API_BASE_URL}/api/grocery/orders/${finalOrderId}`;
+          const orderRes = await fetch(endpoint, {
+            credentials: "include",
+          });
 
+          if (orderRes.ok) {
+            const orderData = await orderRes.json();
+            setOrderDetails(orderData);
+          }
+        } else if (user && !isGuestFromStripe && !guestOrderInfo?.guestOrder) {
+          // Restaurant orders: only authenticated users
+          const endpoint = `${API_BASE_URL}/api/orders/${finalOrderId}`;
           const orderRes = await fetch(endpoint, {
             credentials: "include",
           });
@@ -80,10 +91,10 @@ function OrderSuccess() {
             setOrderDetails(orderData);
           }
         } else if (guestOrderInfo?.guestOrder || isGuestFromStripe) {
-          // For guest orders, we can set basic order info from what we have
+          // Guest restaurant orders: set basic info
           setOrderDetails({
             id: finalOrderId,
-            total: 0, // We don't have this info for guest orders
+            total: 0,
             platform_fee: 0,
             status: 'paid',
             guest_email: guestOrderInfo?.email || 'guest'
@@ -158,49 +169,97 @@ function OrderSuccess() {
         
         {orderDetails ? (
           <div className="space-y-4">
-            <div className="flex justify-between items-center">
-              <span className="text-gray-600">Order ID:</span>
-              <span className="font-medium">#{orderId}</span>
-            </div>
-            
-            <div className="flex justify-between items-center">
-              <span className="text-gray-600">Total Amount:</span>
-              <span className="font-bold text-lg text-green-600">
-                ${Number(orderDetails.total || 0).toFixed(2)}
-              </span>
+            <div className="flex justify-between items-center pb-3 border-b">
+              <span className="text-gray-600">Order Number:</span>
+              <span className="font-semibold text-lg">#{orderDetails.id}</span>
             </div>
 
-            <div className="flex justify-between items-center">
-              <span className="text-gray-600">Platform Fee:</span>
-              <span className="text-sm text-gray-500">${Number(orderDetails.platform_fee || 1.20).toFixed(2)}</span>
+            {/* Price Breakdown */}
+            <div className="space-y-2 py-3">
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Subtotal:</span>
+                <span className="font-medium">${Number(orderDetails.subtotal || 0).toFixed(2)}</span>
+              </div>
+
+              {orderDetails.delivery_fee !== undefined && (
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600">Delivery Fee:</span>
+                  <span className="font-medium">${Number(orderDetails.delivery_fee || 0).toFixed(2)}</span>
+                </div>
+              )}
+
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Platform Fee:</span>
+                <span className="font-medium">${Number(orderDetails.platform_fee || 0).toFixed(2)}</span>
+              </div>
+
+              <div className="flex justify-between items-center pt-3 border-t">
+                <span className="text-gray-800 font-semibold">Total Amount:</span>
+                <span className="font-bold text-xl text-green-600">
+                  ${Number(orderDetails.total || 0).toFixed(2)}
+                </span>
+              </div>
             </div>
 
-            <div className="flex justify-between items-center">
+            <div className="flex justify-between items-center pt-3 border-t">
               <span className="text-gray-600">Status:</span>
-              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                Confirmed
+              <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
+                ✓ Confirmed
               </span>
             </div>
+
+            {/* Delivery Address for Grocery Orders */}
+            {isGroceryOrder && orderDetails.delivery_address && (
+              <div className="pt-3 border-t">
+                <h3 className="font-semibold text-gray-700 mb-2">Delivery Address</h3>
+                <div className="text-gray-600 text-sm space-y-1">
+                  <p className="font-medium">{orderDetails.delivery_name}</p>
+                  <p>{orderDetails.delivery_address}</p>
+                  <p>
+                    {orderDetails.delivery_city}
+                    {orderDetails.delivery_state && `, ${orderDetails.delivery_state}`}
+                    {orderDetails.delivery_zip && ` ${orderDetails.delivery_zip}`}
+                  </p>
+                  {orderDetails.delivery_phone && (
+                    <p className="mt-2">Phone: {orderDetails.delivery_phone}</p>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Order Items */}
             {orderDetails.items && orderDetails.items.length > 0 && (
-              <div className="mt-6">
+              <div className="pt-4 border-t">
                 <h3 className="text-lg font-semibold mb-3">Order Items</h3>
                 <div className="space-y-3">
-                  {orderDetails.items.map((item, index) => (
-                    <div key={index} className="flex justify-between items-center py-2 border-b border-gray-100">
-                      <div>
-                        <p className="font-medium">{item.name}</p>
-                        {item.restaurant_name && (
-                          <p className="text-sm text-gray-500">From: {item.restaurant_name}</p>
-                        )}
+                  {orderDetails.items.map((item, index) => {
+                    // Support both grocery and restaurant order item formats
+                    const itemName = item.product_name || item.name;
+                    const itemPrice = Number(item.unit_price || item.price || 0);
+                    const itemQuantity = Number(item.quantity || 0);
+                    const itemUnit = item.unit || '';
+                    const itemTotal = Number(item.total_price || (itemPrice * itemQuantity));
+
+                    return (
+                      <div key={index} className="flex justify-between items-start py-2 border-b border-gray-100 last:border-b-0">
+                        <div className="flex-1">
+                          <p className="font-medium text-gray-800">{itemName}</p>
+                          {item.restaurant_name && (
+                            <p className="text-sm text-gray-500">From: {item.restaurant_name}</p>
+                          )}
+                          {itemUnit && (
+                            <p className="text-xs text-gray-400 mt-1">Unit: {itemUnit}</p>
+                          )}
+                        </div>
+                        <div className="text-right ml-4">
+                          <p className="font-semibold text-gray-800">${itemTotal.toFixed(2)}</p>
+                          <p className="text-sm text-gray-500">
+                            ${itemPrice.toFixed(2)} × {itemQuantity}
+                          </p>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <p className="font-medium">${(Number(item.price || 0) * Number(item.quantity || 0)).toFixed(2)}</p>
-                        <p className="text-sm text-gray-500">${Number(item.price || 0).toFixed(2)} x {item.quantity}</p>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
