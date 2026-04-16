@@ -384,7 +384,8 @@ router.post("/update-delivery-status", requireApprovedDriver, async (req, res) =
           sendOrderDeliveredEmail(customer.email, customer.name, {
             orderId,
             total: parseFloat(customer.total),
-            orderType: 'food'
+            orderType: 'food',
+            isGuestOrder: false
           }).catch(err => console.error('Failed to send delivery email to customer:', err));
         }
 

@@ -469,6 +469,189 @@ router.get('/orders', requireAdminAuth, async (req, res) => {
   }
 });
 
+// ============================================
+// GROCERY ORDERS MANAGEMENT
+// ============================================
+
+/**
+ * GET /api/admin/grocery-orders
+ * List all grocery orders with filtering and pagination
+ */
+router.get('/grocery-orders', requireAdminAuth, async (req, res) => {
+  try {
+    const { page = 1, limit = 20, status = 'all', period = '30' } = req.query;
+    const offset = (page - 1) * limit;
+
+    let whereClause = 'WHERE 1=1';
+    const params = [];
+    let paramCount = 0;
+
+    if (status !== 'all') {
+      paramCount++;
+      whereClause += ` AND go.status = $${paramCount}`;
+      params.push(status);
+    }
+
+    if (period !== 'all') {
+      paramCount++;
+      whereClause += ` AND go.created_at >= CURRENT_DATE - INTERVAL '${parseInt(period)} days'`;
+    }
+
+    // Get grocery orders with details
+    const ordersResult = await pool.query(`
+      SELECT
+        go.id,
+        go.total,
+        go.subtotal,
+        go.platform_fee,
+        go.delivery_fee,
+        go.status,
+        go.delivery_address,
+        go.delivery_city,
+        go.delivery_state,
+        go.delivery_zip,
+        go.delivery_name,
+        go.delivery_phone,
+        go.special_instructions,
+        go.created_at,
+        go.paid_at,
+        go.delivered_at,
+        go.user_id,
+        go.guest_email,
+        COALESCE(u.name, go.delivery_name, 'Guest') as customer_name,
+        COALESCE(u.email, go.guest_email) as customer_email,
+        u.phone as customer_phone,
+        COUNT(DISTINCT goi.id) as total_items,
+        json_agg(
+          json_build_object(
+            'id', goi.id,
+            'product_name', p.name,
+            'quantity', goi.quantity,
+            'unit_price', goi.unit_price,
+            'total_price', goi.total_price,
+            'unit', p.unit
+          ) ORDER BY goi.id
+        ) as items
+      FROM grocery_orders go
+      LEFT JOIN users u ON go.user_id = u.id
+      LEFT JOIN grocery_order_items goi ON go.id = goi.grocery_order_id
+      LEFT JOIN products p ON goi.product_id = p.id
+      ${whereClause}
+      GROUP BY go.id, u.name, u.email, u.phone
+      ORDER BY go.created_at DESC
+      LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}
+    `, [...params, limit, offset]);
+
+    // Get total count and revenue
+    const summaryResult = await pool.query(`
+      SELECT
+        COUNT(DISTINCT go.id) as total_orders,
+        COALESCE(SUM(go.total), 0) as total_revenue,
+        COALESCE(SUM(go.subtotal), 0) as total_subtotal,
+        COALESCE(SUM(go.platform_fee), 0) as total_fees,
+        COALESCE(SUM(go.delivery_fee), 0) as total_delivery_fees
+      FROM grocery_orders go
+      ${whereClause}
+    `, params);
+
+    res.json({
+      orders: ordersResult.rows,
+      summary: summaryResult.rows[0],
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: parseInt(summaryResult.rows[0].total_orders),
+        pages: Math.ceil(summaryResult.rows[0].total_orders / limit)
+      }
+    });
+  } catch (error) {
+    console.error('Grocery orders list error:', error);
+    res.status(500).json({ error: 'Failed to load grocery orders' });
+  }
+});
+
+/**
+ * PATCH /api/admin/grocery-orders/:id/status
+ * Update grocery order status
+ */
+router.patch('/grocery-orders/:id/status', requireAdminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    const validStatuses = ['pending', 'paid', 'preparing', 'ready', 'out_for_delivery', 'delivered', 'cancelled'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ error: 'Invalid status' });
+    }
+
+    const updateFields = { status };
+    if (status === 'delivered') {
+      updateFields.delivered_at = new Date();
+    }
+
+    const result = await pool.query(
+      `UPDATE grocery_orders
+       SET status = $1,
+           delivered_at = $2
+       WHERE id = $3
+       RETURNING *`,
+      [status, updateFields.delivered_at || null, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    res.json({
+      message: 'Order status updated successfully',
+      order: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Update grocery order status error:', error);
+    res.status(500).json({ error: 'Failed to update order status' });
+  }
+});
+
+/**
+ * DELETE /api/admin/grocery-orders/:id
+ * Delete/cancel a grocery order (admin only, use with caution)
+ */
+router.delete('/grocery-orders/:id', requireAdminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Check if order exists
+    const orderResult = await pool.query(
+      'SELECT * FROM grocery_orders WHERE id = $1',
+      [id]
+    );
+
+    if (orderResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    const order = orderResult.rows[0];
+
+    // Only allow deletion of pending or cancelled orders
+    if (!['pending', 'cancelled'].includes(order.status)) {
+      return res.status(400).json({
+        error: 'Can only delete pending or cancelled orders. Use status update to cancel active orders first.'
+      });
+    }
+
+    // Delete order items first (foreign key constraint)
+    await pool.query('DELETE FROM grocery_order_items WHERE grocery_order_id = $1', [id]);
+
+    // Delete order
+    await pool.query('DELETE FROM grocery_orders WHERE id = $1', [id]);
+
+    res.json({ message: 'Order deleted successfully' });
+  } catch (error) {
+    console.error('Delete grocery order error:', error);
+    res.status(500).json({ error: 'Failed to delete order' });
+  }
+});
+
 // Get system health and monitoring
 router.get('/system', requireAdminAuth, async (req, res) => {
   try {

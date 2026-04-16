@@ -216,7 +216,7 @@ export const sendRestaurantOwnerWelcomeEmail = async (ownerEmail, ownerName, res
  * Send order confirmation email to customer
  */
 export const sendOrderConfirmationEmail = async (customerEmail, customerName, orderDetails) => {
-  const { orderId, items, subtotal, deliveryFee, platformFee, total, orderType, deliveryAddress } = orderDetails;
+  const { orderId, items, subtotal, deliveryFee, platformFee, total, orderType, deliveryAddress, isGuestOrder } = orderDetails;
 
   const subject = `Order Confirmation #${orderId} - ${FROM_NAME}`;
 
@@ -311,7 +311,21 @@ export const sendOrderConfirmationEmail = async (customerEmail, customerName, or
             <li>📧 You'll receive updates via email</li>
           </ul>
 
+          ${isGuestOrder ? `
+          <div style="text-align: center; margin: 20px 0;">
+            <a href="${FRONTEND_URL}/track-order?orderId=${orderId}&email=${encodeURIComponent(customerEmail)}"
+               style="display: inline-block; background-color: #16a34a; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold;">
+              Track Your Order
+            </a>
+          </div>
+          <p style="text-align: center; color: #6b7280; font-size: 14px;">
+            You can track your order status anytime using the link above or by visiting:<br>
+            <strong>${FRONTEND_URL}/track-order</strong><br>
+            Order ID: <strong>#${orderId}</strong> | Email: <strong>${customerEmail}</strong>
+          </p>
+          ` : `
           <p>You can track your order status anytime from your account dashboard.</p>
+          `}
 
           <p>Thank you for choosing ${FROM_NAME}!</p>
           <p><strong>The ${FROM_NAME} Team</strong></p>
@@ -435,7 +449,7 @@ export const sendRestaurantOrderNotificationEmail = async (restaurantEmail, rest
  * Send order completion/delivery confirmation email to customer
  */
 export const sendOrderDeliveredEmail = async (customerEmail, customerName, orderDetails) => {
-  const { orderId, total, orderType } = orderDetails;
+  const { orderId, total, orderType, isGuestOrder } = orderDetails;
 
   const subject = `Order #${orderId} Delivered! - ${FROM_NAME}`;
 
@@ -470,9 +484,23 @@ export const sendOrderDeliveredEmail = async (customerEmail, customerName, order
           <p><strong>How was your experience?</strong></p>
           <p>We'd love to hear your feedback! Your review helps us improve our service and helps other customers make informed decisions.</p>
 
+          ${isGuestOrder ? `
+          <div style="text-align: center;">
+            <a href="${FRONTEND_URL}/track-order?orderId=${orderId}&email=${encodeURIComponent(customerEmail)}"
+               style="display: inline-block; background-color: #16a34a; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold;">
+              View Order Details
+            </a>
+          </div>
+          <p style="text-align: center; color: #6b7280; font-size: 14px;">
+            You can view your complete order details using the link above or by visiting:<br>
+            <strong>${FRONTEND_URL}/track-order</strong><br>
+            Order ID: <strong>#${orderId}</strong> | Email: <strong>${customerEmail}</strong>
+          </p>
+          ` : `
           <div style="text-align: center;">
             <a href="${FRONTEND_URL}/my-orders" class="button">View Order & Leave Review</a>
           </div>
+          `}
 
           <p><strong>Order Again:</strong></p>
           <ul>

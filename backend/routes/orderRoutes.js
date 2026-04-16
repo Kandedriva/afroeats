@@ -1206,6 +1206,63 @@ router.get("/:id", async (req, res) => {
 });
 */
 
+// GET /api/orders/guest-track - Track guest order by email and order ID
+router.post("/guest-track", async (req, res) => {
+  try {
+    const { orderId, email } = req.body;
+
+    if (!orderId || !email) {
+      return res.status(400).json({ error: "Order ID and email are required" });
+    }
+
+    // Get order with items - verify email matches
+    const orderResult = await pool.query(
+      `SELECT o.*,
+        json_agg(
+          json_build_object(
+            'id', oi.id,
+            'name', oi.name,
+            'quantity', oi.quantity,
+            'price', oi.price,
+            'restaurant_name', r.name,
+            'restaurant_id', oi.restaurant_id
+          ) ORDER BY oi.id
+        ) as items
+      FROM orders o
+      LEFT JOIN order_items oi ON o.id = oi.order_id
+      LEFT JOIN restaurants r ON oi.restaurant_id = r.id
+      WHERE o.id = $1 AND o.is_guest_order = true AND LOWER(o.guest_email) = LOWER($2)
+      GROUP BY o.id`,
+      [orderId, email]
+    );
+
+    if (orderResult.rows.length === 0) {
+      return res.status(404).json({
+        error: "Order not found. Please check your order ID and email address."
+      });
+    }
+
+    const order = orderResult.rows[0];
+
+    res.json({
+      id: order.id,
+      status: order.status,
+      total: order.total,
+      platform_fee: order.platform_fee,
+      delivery_type: order.delivery_type,
+      delivery_address: order.delivery_address,
+      guest_name: order.guest_name,
+      guest_email: order.guest_email,
+      created_at: order.created_at,
+      items: order.items,
+      special_instructions: order.special_instructions
+    });
+  } catch (err) {
+    console.error("Guest order tracking error:", err);
+    res.status(500).json({ error: "Failed to retrieve order details" });
+  }
+});
+
 // POST /api/orders/guest-checkout-session - Create Stripe checkout session for guest orders
 router.post("/guest-checkout-session", async (req, res) => {
   console.log("=== GUEST CHECKOUT SESSION START ===");

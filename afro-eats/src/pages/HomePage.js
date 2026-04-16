@@ -80,6 +80,25 @@ const HomePage = () => {
               >
                 🍽️ Order Food
               </a>
+              <Link
+                to="/driver/register"
+                className="inline-block px-8 py-4 bg-yellow-500 text-gray-900 rounded-lg hover:bg-yellow-400 transition-colors font-semibold text-lg shadow-lg border-2 border-yellow-300"
+              >
+                🚗 Become a Driver
+              </Link>
+            </div>
+
+            {/* Driver Login Link */}
+            <div className="mt-4 text-center">
+              <p className="text-green-100">
+                Already a driver?{" "}
+                <Link
+                  to="/driver/login"
+                  className="text-white font-semibold underline hover:text-yellow-300 transition-colors"
+                >
+                  Sign in here
+                </Link>
+              </p>
             </div>
           </div>
         </div>
@@ -178,6 +197,88 @@ const HomePage = () => {
               <p className="text-gray-600">
                 Fresh products and delicious food, every time
               </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Become a Driver Section */}
+      <div className="bg-gradient-to-r from-yellow-500 to-orange-500 text-gray-900 py-16">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+            <div>
+              <h2 className="text-4xl font-bold mb-4">🚗 Earn Money as a Driver</h2>
+              <p className="text-lg mb-6 text-gray-800">
+                Join our delivery team and earn on your own schedule. Deliver groceries and food to customers in your area.
+              </p>
+              <div className="space-y-4 mb-8">
+                <div className="flex items-start gap-3">
+                  <div className="text-2xl">✅</div>
+                  <div>
+                    <h3 className="font-semibold text-lg">Flexible Schedule</h3>
+                    <p className="text-gray-800">Work when you want, as much as you want</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="text-2xl">💰</div>
+                  <div>
+                    <h3 className="font-semibold text-lg">Competitive Earnings</h3>
+                    <p className="text-gray-800">Earn per delivery plus tips from customers</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="text-2xl">📱</div>
+                  <div>
+                    <h3 className="font-semibold text-lg">Easy to Use App</h3>
+                    <p className="text-gray-800">Simple interface to manage your deliveries</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="text-2xl">🎯</div>
+                  <div>
+                    <h3 className="font-semibold text-lg">Quick Approval</h3>
+                    <p className="text-gray-800">Get approved and start earning in days</p>
+                  </div>
+                </div>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-4">
+                <Link
+                  to="/driver/register"
+                  className="inline-block px-8 py-4 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors font-semibold text-lg text-center shadow-lg"
+                >
+                  Sign Up to Drive
+                </Link>
+                <Link
+                  to="/driver/login"
+                  className="inline-block px-8 py-4 bg-white text-gray-900 rounded-lg hover:bg-gray-100 transition-colors font-semibold text-lg text-center border-2 border-gray-900"
+                >
+                  Driver Login
+                </Link>
+              </div>
+            </div>
+            <div className="hidden md:block">
+              <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-8 border-2 border-white/20">
+                <div className="text-6xl mb-4 text-center">🚗💨</div>
+                <h3 className="text-2xl font-bold text-center mb-4">Join Our Team</h3>
+                <div className="space-y-3 text-gray-800">
+                  <p className="flex items-center gap-2">
+                    <span className="text-xl">📋</span>
+                    <span>Simple registration process</span>
+                  </p>
+                  <p className="flex items-center gap-2">
+                    <span className="text-xl">🚘</span>
+                    <span>Use your own vehicle</span>
+                  </p>
+                  <p className="flex items-center gap-2">
+                    <span className="text-xl">📍</span>
+                    <span>Deliver in your local area</span>
+                  </p>
+                  <p className="flex items-center gap-2">
+                    <span className="text-xl">⭐</span>
+                    <span>Build your driver rating</span>
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
