@@ -87,6 +87,7 @@ export const handleStripeWebhook = async (req, res) => {
                     platformFee: parseFloat(order.platform_fee),
                     total: parseFloat(order.total),
                     orderType: 'grocery',
+                    isGuestOrder: !!order.guest_email,
                     deliveryAddress: {
                       name: order.delivery_name,
                       address: order.delivery_address,
@@ -270,6 +271,7 @@ export const handleStripeWebhook = async (req, res) => {
                     platformFee,
                     total,
                     orderType: 'food',
+                    isGuestOrder: false,
                     deliveryAddress: deliveryType === 'delivery' ? {
                       name: customerName,
                       address: deliveryAddress,
@@ -289,7 +291,80 @@ export const handleStripeWebhook = async (req, res) => {
               console.error('❌ Notification error details:', notifError.stack);
             }
           } else {
-            console.log(`⚠️ Skipping customer notification - no valid userId (userId: ${userId})`);
+            console.log(`⚠️ Skipping authenticated customer notification - no valid userId (userId: ${userId})`);
+
+            // ✅ Handle guest order notifications
+            const guestInfo = orderData.guestInfo;
+            if (guestInfo && guestInfo.email) {
+              console.log(`📧 Sending notifications to guest customer: ${guestInfo.email}`);
+
+              try {
+                const customerEmail = guestInfo.email;
+                const customerName = guestInfo.name || 'Guest';
+                const customerPhone = guestInfo.phone;
+
+                // Get restaurant names for the notification message
+                const restaurantNames = Object.values(restaurantTotals || {})
+                  .map(r => r.restaurant.name)
+                  .join(', ');
+
+                // ✅ Send SMS to guest customer about order confirmation
+                if (customerPhone) {
+                  try {
+                    const { sendOrderStatusUpdateSMS } = require('../services/NotificationService.js');
+                    await sendOrderStatusUpdateSMS(customerPhone, {
+                      orderId,
+                      status: 'received',
+                      restaurantName: restaurantNames
+                    });
+                    console.log(`✅ Order confirmation SMS sent to guest: ${customerPhone}`);
+                  } catch (smsError) {
+                    console.error('❌ Failed to send guest order confirmation SMS:', smsError.message);
+                  }
+                }
+
+                // ✅ Send email confirmation to guest customer
+                try {
+                  // Prepare items with restaurant names
+                  const itemsWithRestaurants = items.map(item => {
+                    const restaurantId = item.restaurantId;
+                    const restaurantName = restaurantTotals[restaurantId]?.restaurant?.name || 'Restaurant';
+                    return {
+                      ...item,
+                      restaurant_name: restaurantName
+                    };
+                  });
+
+                  // Calculate fees (assuming 10% delivery fee if delivery, 0 if pickup)
+                  const deliveryFeeAmount = deliveryType === 'delivery' ? total * 0.1 : 0;
+                  const subtotal = total - platformFee - deliveryFeeAmount;
+
+                  await sendOrderConfirmationEmail(customerEmail, customerName, {
+                    orderId,
+                    items: itemsWithRestaurants,
+                    subtotal,
+                    deliveryFee: deliveryFeeAmount,
+                    platformFee,
+                    total,
+                    orderType: 'food',
+                    isGuestOrder: true,
+                    deliveryAddress: deliveryType === 'delivery' ? {
+                      name: customerName,
+                      address: guestInfo.address || deliveryAddress,
+                      city: '',
+                      state: '',
+                      zipCode: '',
+                      phone: customerPhone
+                    } : null
+                  });
+                  console.log(`✅ Order confirmation email sent to guest: ${customerEmail}`);
+                } catch (emailError) {
+                  console.error('❌ Failed to send guest order confirmation email:', emailError);
+                }
+              } catch (guestNotifError) {
+                console.error('❌ Failed to send guest notifications:', guestNotifError.message);
+              }
+            }
           }
 
           // ✅ CRITICAL FIX: Send notifications to restaurant owners
@@ -306,6 +381,13 @@ export const handleStripeWebhook = async (req, res) => {
               if (customerResult.rows.length > 0) {
                 customerInfo = customerResult.rows[0];
               }
+            } else if (orderData.guestInfo) {
+              // Use guest info for restaurant notifications
+              customerInfo = {
+                name: orderData.guestInfo.name || 'Guest Customer',
+                email: orderData.guestInfo.email || '',
+                phone: orderData.guestInfo.phone || deliveryPhone || ''
+              };
             }
 
             for (const [restaurantId, restaurantData] of Object.entries(restaurantTotals)) {
