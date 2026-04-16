@@ -61,6 +61,8 @@ import MarketplaceHome from "./pages/MarketplaceHome";
 import ProductDetails from "./pages/ProductDetails";
 import GroceryCart from "./pages/GroceryCart";
 import GroceryCheckout from "./pages/GroceryCheckout";
+import TrackGuestOrder from "./pages/TrackGuestOrder";
+import OwnerGroceryOrders from "./pages/OwnerGroceryOrders";
 
 
 function AppContent() {
@@ -91,6 +93,7 @@ function AppContent() {
         <Route path="/register" element={<Register />} />
         <Route path="/login" element={<Login />} />
         <Route path="/password-update" element={<UserPasswordUpdate />} />
+        <Route path="/track-order" element={<TrackGuestOrder />} />
         <Route 
           path="/my-orders" 
           element={
@@ -224,6 +227,10 @@ function AppContent() {
               <OwnerChat />
             </ProtectedOwnerRoute>
           }
+        />
+        <Route
+          path="/owner/grocery-orders"
+          element={<OwnerGroceryOrders />}
         />
 
         {/* Admin Routes */}

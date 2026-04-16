@@ -310,6 +310,64 @@ router.get('/orders/:id', async (req, res) => {
 });
 
 /**
+ * Track guest grocery order by email and order ID
+ * POST /api/grocery/guest-track
+ * Public endpoint for guests to track their orders
+ */
+router.post('/guest-track', async (req, res) => {
+  try {
+    const { orderId, email } = req.body;
+
+    if (!orderId || !email) {
+      return res.status(400).json({ error: 'Order ID and email are required' });
+    }
+
+    const orderIdNum = parseInt(orderId);
+    if (isNaN(orderIdNum)) {
+      return res.status(400).json({ error: 'Invalid order ID' });
+    }
+
+    // Get order with items - verify email matches guest_email
+    const result = await pool.query(
+      `SELECT
+        go.id, go.subtotal, go.platform_fee, go.delivery_fee, go.total,
+        go.status, go.created_at, go.paid_at, go.delivered_at,
+        go.delivery_address, go.delivery_city, go.delivery_state, go.delivery_zip,
+        go.delivery_name, go.delivery_phone, go.notes, go.guest_email,
+        go.distance_miles,
+        json_agg(
+          json_build_object(
+            'product_id', goi.product_id,
+            'product_name', p.name,
+            'quantity', goi.quantity,
+            'unit', p.unit,
+            'unit_price', goi.unit_price,
+            'total_price', goi.total_price,
+            'image_url', p.image_url
+          ) ORDER BY goi.id
+        ) as items
+      FROM grocery_orders go
+      LEFT JOIN grocery_order_items goi ON go.id = goi.grocery_order_id
+      LEFT JOIN products p ON goi.product_id = p.id
+      WHERE go.id = $1 AND LOWER(go.guest_email) = LOWER($2)
+      GROUP BY go.id`,
+      [orderIdNum, email]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        error: 'Order not found. Please check your order ID and email address.'
+      });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Guest grocery order tracking error:', err);
+    res.status(500).json({ error: 'Failed to retrieve order details' });
+  }
+});
+
+/**
  * Get user's grocery orders
  * GET /api/grocery/my-orders
  */
@@ -455,7 +513,8 @@ router.patch('/orders/:id/status', async (req, res) => {
             sendOrderDeliveredEmail(customerEmail, customerName, {
               orderId: customer.id,
               total: parseFloat(customer.total),
-              orderType: 'grocery'
+              orderType: 'grocery',
+              isGuestOrder: !!customer.guest_email
             }).catch(err => console.error('Failed to send grocery delivery email:', err));
 
             console.log(`✅ Grocery delivery email queued for ${customerEmail}`);
