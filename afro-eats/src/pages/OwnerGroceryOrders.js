@@ -28,6 +28,7 @@ const OwnerGroceryOrders = () => {
         toast.error('Failed to load orders');
       }
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Load orders error:', error);
       toast.error('Failed to load orders');
     } finally {
@@ -129,7 +130,7 @@ const OwnerGroceryOrders = () => {
                     <p className="font-semibold">Customer Information:</p>
                     <p>{printOrder.customer_name}</p>
                     <p>{printOrder.customer_email}</p>
-                    {printOrder.customer_phone && <p>{printOrder.customer_phone}</p>}
+                    <p>Phone: {printOrder.delivery_phone || printOrder.customer_phone || 'N/A'}</p>
                   </div>
                   <div>
                     <p className="font-semibold">Order Date:</p>
@@ -145,7 +146,6 @@ const OwnerGroceryOrders = () => {
                 <p>{printOrder.delivery_name}</p>
                 <p>{printOrder.delivery_address}</p>
                 <p>{printOrder.delivery_city}, {printOrder.delivery_state} {printOrder.delivery_zip}</p>
-                <p>Phone: {printOrder.delivery_phone}</p>
               </div>
 
               <table className="w-full mb-6 border-collapse border border-gray-300">
@@ -265,7 +265,7 @@ const OwnerGroceryOrders = () => {
                     <td className="px-6 py-4">
                       <div>
                         <div className="text-sm font-medium text-gray-900">{order.customer_name}</div>
-                        <div className="text-sm text-gray-500">{order.customer_email}</div>
+                        <div className="text-sm text-gray-500">📞 {order.delivery_phone || order.customer_phone || 'N/A'}</div>
                         {order.guest_email && (
                           <div className="text-xs text-purple-600 mt-1">Guest Order</div>
                         )}
@@ -359,15 +359,13 @@ const OwnerGroceryOrders = () => {
                       <p className="font-medium">{selectedOrder.customer_name}</p>
                     </div>
                     <div>
+                      <p className="text-sm text-gray-600">Phone</p>
+                      <p className="font-medium">{selectedOrder.delivery_phone || selectedOrder.customer_phone || 'N/A'}</p>
+                    </div>
+                    <div>
                       <p className="text-sm text-gray-600">Email</p>
                       <p className="font-medium">{selectedOrder.customer_email}</p>
                     </div>
-                    {selectedOrder.customer_phone && (
-                      <div>
-                        <p className="text-sm text-gray-600">Phone</p>
-                        <p className="font-medium">{selectedOrder.customer_phone}</p>
-                      </div>
-                    )}
                   </div>
                 </div>
 
@@ -377,7 +375,6 @@ const OwnerGroceryOrders = () => {
                   <p>{selectedOrder.delivery_name}</p>
                   <p>{selectedOrder.delivery_address}</p>
                   <p>{selectedOrder.delivery_city}, {selectedOrder.delivery_state} {selectedOrder.delivery_zip}</p>
-                  <p className="mt-2">Phone: {selectedOrder.delivery_phone}</p>
                 </div>
 
                 {/* Order Items */}
