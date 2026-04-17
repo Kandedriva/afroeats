@@ -2065,6 +2065,16 @@ const GroceryOrdersTab = ({ groceryOrders, onOrderUpdate }) => {
   );
 };
 
+GroceryOrdersTab.propTypes = {
+  groceryOrders: PropTypes.arrayOf(PropTypes.object),
+  onOrderUpdate: PropTypes.func,
+};
+
+GroceryOrdersTab.defaultProps = {
+  groceryOrders: [],
+  onOrderUpdate: () => {},
+};
+
 // Drivers Tab Component
 const DriversTab = ({ drivers, onDriverUpdate }) => {
   const [filterStatus, setFilterStatus] = useState('all');
