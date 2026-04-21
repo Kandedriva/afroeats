@@ -1,4 +1,5 @@
 import { createContext, useState, useEffect, useContext } from 'react';
+import PropTypes from 'prop-types';
 import { API_BASE_URL } from '../config/api';
 
 export const GroceryOwnerAuthContext = createContext();
@@ -70,3 +71,7 @@ export function GroceryOwnerAuthProvider({ children }) {
     </GroceryOwnerAuthContext.Provider>
   );
 }
+
+GroceryOwnerAuthProvider.propTypes = {
+  children: PropTypes.node.isRequired,
+};

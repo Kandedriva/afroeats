@@ -14,6 +14,7 @@ function GroceryOwnerNavbar() {
       toast.success('Logged out successfully');
       navigate('/grocery-owner/login');
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Logout error:', error);
       toast.error('Logout failed');
     }
