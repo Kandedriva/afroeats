@@ -124,6 +124,9 @@ function Navbar() {
                 <Link to="/register-owner" className="text-blue-600 hover:text-blue-800 transition-colors duration-200 text-sm">
                   Restaurant Owner
                 </Link>
+                <Link to="/register-grocery-owner" className="text-green-600 hover:text-green-800 transition-colors duration-200 text-sm">
+                  Grocery Owner
+                </Link>
               </>
             )}
           </div>
@@ -232,26 +235,33 @@ function Navbar() {
                 </>
               ) : (
                 <>
-                  <Link 
-                    to="/login" 
+                  <Link
+                    to="/login"
                     className="block px-3 py-2 text-gray-700 hover:text-green-600 hover:bg-gray-50 rounded-md transition-colors duration-200"
                     onClick={() => setIsMenuOpen(false)}
                   >
                     🔑 Login
                   </Link>
-                  <Link 
-                    to="/register" 
+                  <Link
+                    to="/register"
                     className="block px-3 py-2 text-gray-700 hover:text-green-600 hover:bg-gray-50 rounded-md transition-colors duration-200"
                     onClick={() => setIsMenuOpen(false)}
                   >
                     📝 Register
                   </Link>
-                  <Link 
-                    to="/register-owner" 
+                  <Link
+                    to="/register-owner"
                     className="block px-3 py-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-md transition-colors duration-200"
                     onClick={() => setIsMenuOpen(false)}
                   >
                     🍴 Restaurant Owner
+                  </Link>
+                  <Link
+                    to="/register-grocery-owner"
+                    className="block px-3 py-2 text-green-600 hover:text-green-800 hover:bg-green-50 rounded-md transition-colors duration-200"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    🛒 Grocery Owner
                   </Link>
                 </>
               )}
