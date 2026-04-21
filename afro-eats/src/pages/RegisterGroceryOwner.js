@@ -47,13 +47,20 @@ function RegisterGroceryOwner() {
   const validateForm = () => {
     const newErrors = {};
 
-    if (!formData.name.trim()) newErrors.name = 'Name is required';
-    if (!formData.email.trim()) newErrors.email = 'Email is required';
-    else if (!/\S+@\S+\.\S+/.test(formData.email)) newErrors.email = 'Email is invalid';
+    if (!formData.name.trim()) {
+      newErrors.name = 'Name is required';
+    }
+    if (!formData.email.trim()) {
+      newErrors.email = 'Email is required';
+    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
+      newErrors.email = 'Email is invalid';
+    }
 
-    if (!formData.password) newErrors.password = 'Password is required';
-    else if (formData.password.length < 12) newErrors.password = 'Password must be at least 12 characters';
-    else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])/.test(formData.password)) {
+    if (!formData.password) {
+      newErrors.password = 'Password is required';
+    } else if (formData.password.length < 12) {
+      newErrors.password = 'Password must be at least 12 characters';
+    } else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])/.test(formData.password)) {
       newErrors.password = 'Password must contain uppercase, lowercase, number, and special character';
     }
 
@@ -61,11 +68,21 @@ function RegisterGroceryOwner() {
       newErrors.confirmPassword = 'Passwords do not match';
     }
 
-    if (!formData.secret_word.trim()) newErrors.secret_word = 'Secret word is required for password recovery';
-    if (!formData.store_name.trim()) newErrors.store_name = 'Store name is required';
-    if (!formData.location.trim()) newErrors.location = 'Store location is required';
-    if (!formData.phone_number.trim()) newErrors.phone_number = 'Phone number is required';
-    if (!formData.acceptedTerms) newErrors.acceptedTerms = 'You must accept the terms and conditions';
+    if (!formData.secret_word.trim()) {
+      newErrors.secret_word = 'Secret word is required for password recovery';
+    }
+    if (!formData.store_name.trim()) {
+      newErrors.store_name = 'Store name is required';
+    }
+    if (!formData.location.trim()) {
+      newErrors.location = 'Store location is required';
+    }
+    if (!formData.phone_number.trim()) {
+      newErrors.phone_number = 'Phone number is required';
+    }
+    if (!formData.acceptedTerms) {
+      newErrors.acceptedTerms = 'You must accept the terms and conditions';
+    }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -136,10 +153,11 @@ function RegisterGroceryOwner() {
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
                     Full Name *
                   </label>
                   <input
+                    id="name"
                     type="text"
                     name="name"
                     value={formData.name}
@@ -153,10 +171,11 @@ function RegisterGroceryOwner() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
                     Email Address *
                   </label>
                   <input
+                    id="email"
                     type="email"
                     name="email"
                     value={formData.email}
@@ -170,10 +189,11 @@ function RegisterGroceryOwner() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
                     Password *
                   </label>
                   <input
+                    id="password"
                     type="password"
                     name="password"
                     value={formData.password}
@@ -187,10 +207,11 @@ function RegisterGroceryOwner() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
                     Confirm Password *
                   </label>
                   <input
+                    id="confirmPassword"
                     type="password"
                     name="confirmPassword"
                     value={formData.confirmPassword}
@@ -204,10 +225,11 @@ function RegisterGroceryOwner() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="secret_word" className="block text-sm font-medium text-gray-700 mb-1">
                     Secret Word * (for password recovery)
                   </label>
                   <input
+                    id="secret_word"
                     type="text"
                     name="secret_word"
                     value={formData.secret_word}
@@ -218,7 +240,7 @@ function RegisterGroceryOwner() {
                     placeholder="A memorable word only you know"
                   />
                   {errors.secret_word && <p className="text-red-500 text-sm mt-1">{errors.secret_word}</p>}
-                  <p className="text-xs text-gray-500 mt-1">Keep this safe - you'll need it to recover your password</p>
+                  <p className="text-xs text-gray-500 mt-1">Keep this safe - you&apos;ll need it to recover your password</p>
                 </div>
               </div>
             </div>
@@ -229,10 +251,11 @@ function RegisterGroceryOwner() {
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="store_name" className="block text-sm font-medium text-gray-700 mb-1">
                     Store Name *
                   </label>
                   <input
+                    id="store_name"
                     type="text"
                     name="store_name"
                     value={formData.store_name}
@@ -246,10 +269,11 @@ function RegisterGroceryOwner() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="location" className="block text-sm font-medium text-gray-700 mb-1">
                     Store Address *
                   </label>
                   <input
+                    id="location"
                     type="text"
                     name="location"
                     value={formData.location}
@@ -263,10 +287,11 @@ function RegisterGroceryOwner() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="phone_number" className="block text-sm font-medium text-gray-700 mb-1">
                     Phone Number *
                   </label>
                   <input
+                    id="phone_number"
                     type="tel"
                     name="phone_number"
                     value={formData.phone_number}
@@ -280,10 +305,11 @@ function RegisterGroceryOwner() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="logo" className="block text-sm font-medium text-gray-700 mb-1">
                     Store Logo (Optional)
                   </label>
                   <input
+                    id="logo"
                     type="file"
                     accept="image/*"
                     onChange={handleLogoChange}

@@ -17,6 +17,7 @@ function GroceryOwnerDashboard() {
 
   useEffect(() => {
     fetchDashboardData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchDashboardData = async () => {
@@ -48,6 +49,7 @@ function GroceryOwnerDashboard() {
         toast.error('Failed to load store information');
       }
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Dashboard data fetch error:', error);
       toast.error('Failed to load dashboard data');
     } finally {

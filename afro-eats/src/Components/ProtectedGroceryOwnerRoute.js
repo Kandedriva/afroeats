@@ -1,5 +1,6 @@
 import { useContext } from 'react';
 import { Navigate } from 'react-router-dom';
+import PropTypes from 'prop-types';
 import { GroceryOwnerAuthContext } from '../context/GroceryOwnerAuthContext';
 
 function ProtectedGroceryOwnerRoute({ children }) {
@@ -19,5 +20,9 @@ function ProtectedGroceryOwnerRoute({ children }) {
 
   return children;
 }
+
+ProtectedGroceryOwnerRoute.propTypes = {
+  children: PropTypes.node.isRequired,
+};
 
 export default ProtectedGroceryOwnerRoute;
