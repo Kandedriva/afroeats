@@ -271,6 +271,43 @@ export async function geocodeRestaurant(restaurantId) {
   }
 }
 
+/**
+ * Geocode a single grocery store by ID
+ * @param {number} storeId - Grocery store ID
+ * @returns {object|null} - Geocoded coordinates or null
+ */
+export async function geocodeGroceryStore(storeId) {
+  try {
+    const result = await pool.query(
+      "SELECT address FROM grocery_stores WHERE id = $1",
+      [storeId]
+    );
+
+    if (result.rows.length === 0) {
+      throw new Error('Grocery store not found');
+    }
+
+    const address = result.rows[0].address;
+    const geocoded = await geocodeAddress(address);
+
+    if (geocoded) {
+      await pool.query(
+        `UPDATE grocery_stores
+         SET latitude = $1, longitude = $2
+         WHERE id = $3`,
+        [geocoded.latitude, geocoded.longitude, storeId]
+      );
+
+      return geocoded;
+    }
+
+    return null;
+  } catch (error) {
+    console.error(`Failed to geocode grocery store ${storeId}:`, error);
+    return null;
+  }
+}
+
 export default {
   geocodeAddress,
   calculateDistance,
@@ -278,6 +315,7 @@ export default {
   calculateDistanceAndFee,
   geocodeRestaurants,
   geocodeRestaurant,
+  geocodeGroceryStore,
   getFallbackDeliveryFee,
   BASE_DELIVERY_FEE,
   PRICE_PER_MILE,

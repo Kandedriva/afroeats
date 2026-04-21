@@ -1,10 +1,10 @@
-const express = require('express');
+import express from 'express';
+import bcrypt from 'bcryptjs';
+import pool from '../db.js';
+import { uploadRestaurantLogo, handleR2UploadResult } from '../middleware/r2Upload.js';
+import sgMail from '@sendgrid/mail';
+
 const router = express.Router();
-const bcrypt = require('bcryptjs');
-const pool = require('../config/database');
-const { uploadToR2, deleteFromR2 } = require('../services/r2StorageService');
-const { sendEmail } = require('../services/emailService');
-const { geocodeAddress } = require('../utils/geocoding');
 
 // Middleware to require grocery owner authentication
 const requireGroceryOwnerAuth = (req, res, next) => {
@@ -26,7 +26,7 @@ const requireGroceryOwnerAuth = (req, res, next) => {
 // REGISTRATION
 // ===========================
 
-router.post('/register', uploadToR2.single('logo'), async (req, res) => {
+router.post('/register', uploadRestaurantLogo, async (req, res) => {
   const client = await pool.connect();
 
   try {
@@ -59,16 +59,8 @@ router.post('/register', uploadToR2.single('logo'), async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     const hashedSecretWord = await bcrypt.hash(secret_word, 10);
 
-    // Handle logo upload
-    let logoUrl = null;
-    if (req.file) {
-      const uploadResult = await uploadToR2(req.file);
-      if (uploadResult.success) {
-        logoUrl = uploadResult.url;
-      } else {
-        console.warn('Logo upload to R2 failed:', uploadResult.error);
-      }
-    }
+    // Handle logo upload (using middleware result)
+    const logoUrl = handleR2UploadResult(req);
 
     await client.query('BEGIN');
 
@@ -82,11 +74,21 @@ router.post('/register', uploadToR2.single('logo'), async (req, res) => {
 
     const ownerId = ownerResult.rows[0].id;
 
-    // Auto-geocode the address
-    let geocoded = { latitude: null, longitude: null };
+    // Create grocery store (without geocoding initially)
+    const storeResult = await client.query(
+      `INSERT INTO grocery_stores (name, address, phone_number, image_url, owner_id, created_at)
+       VALUES ($1, $2, $3, $4, $5, NOW())
+       RETURNING id`,
+      [store_name, location, phone_number, logoUrl, ownerId]
+    );
+
+    const storeId = storeResult.rows[0].id;
+
+    // Auto-geocode the store address (async, non-blocking)
     try {
-      geocoded = await geocodeAddress(location);
-      if (geocoded.latitude && geocoded.longitude) {
+      const { geocodeGroceryStore } = await import('../services/googleMapsService.js');
+      const geocoded = await geocodeGroceryStore(storeId);
+      if (geocoded) {
         console.log(`✅ Auto-geocoded grocery store ${store_name}: (${geocoded.latitude}, ${geocoded.longitude})`);
       } else {
         console.warn(`⚠️ Could not auto-geocode grocery store ${store_name} at address: ${location}`);
@@ -94,13 +96,6 @@ router.post('/register', uploadToR2.single('logo'), async (req, res) => {
     } catch (geocodeError) {
       console.warn(`⚠️ Auto-geocoding failed for grocery store ${store_name}:`, geocodeError.message);
     }
-
-    // Create grocery store
-    await client.query(
-      `INSERT INTO grocery_stores (name, address, phone_number, image_url, owner_id, latitude, longitude, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`,
-      [store_name, location, phone_number, logoUrl, ownerId, geocoded.latitude, geocoded.longitude]
-    );
 
     await client.query('COMMIT');
 
@@ -123,14 +118,19 @@ router.post('/register', uploadToR2.single('logo'), async (req, res) => {
         }
 
         // Send welcome email
-        sendEmail(
-          email,
-          'Welcome to Order Dabaly - Grocery Store Owner',
-          `<h1>Welcome, ${name}!</h1>
-           <p>Thank you for registering your grocery store <strong>${store_name}</strong> on Order Dabaly!</p>
-           <p>You can now start managing your store and receiving orders.</p>
-           <p><a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/grocery-owner/dashboard">Go to Dashboard</a></p>`
-        ).catch(err => console.error('Welcome email failed:', err));
+        if (process.env.SENDGRID_API_KEY) {
+          sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+          const msg = {
+            to: email,
+            from: process.env.SENDGRID_FROM_EMAIL || 'noreply@orderdabaly.com',
+            subject: 'Welcome to Order Dabaly - Grocery Store Owner',
+            html: `<h1>Welcome, ${name}!</h1>
+             <p>Thank you for registering your grocery store <strong>${store_name}</strong> on Order Dabaly!</p>
+             <p>You can now start managing your store and receiving orders.</p>
+             <p><a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/grocery-owner/dashboard">Go to Dashboard</a></p>`
+          };
+          sgMail.send(msg).catch(err => console.error('Welcome email failed:', err));
+        }
 
         res.status(201).json({
           message: 'Registration successful',
@@ -400,5 +400,5 @@ router.patch('/orders/:id/complete', requireGroceryOwnerAuth, async (req, res) =
   }
 });
 
-module.exports = router;
-module.exports.requireGroceryOwnerAuth = requireGroceryOwnerAuth;
+export default router;
+export { requireGroceryOwnerAuth };
