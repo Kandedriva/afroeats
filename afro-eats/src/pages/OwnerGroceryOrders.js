@@ -17,7 +17,7 @@ const OwnerGroceryOrders = () => {
   const loadOrders = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${API_BASE_URL}/api/owners/grocery-orders`, {
+      const res = await fetch(`${API_BASE_URL}/api/grocery-owners/orders`, {
         credentials: 'include',
       });
 
@@ -43,7 +43,7 @@ const OwnerGroceryOrders = () => {
 
     setIsProcessing(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/owners/grocery-orders/${orderId}/complete`, {
+      const res = await fetch(`${API_BASE_URL}/api/grocery-owners/orders/${orderId}/complete`, {
         method: 'PATCH',
         credentials: 'include',
       });
