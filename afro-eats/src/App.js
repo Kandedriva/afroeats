@@ -1,10 +1,12 @@
 import { Routes, Route, useLocation } from "react-router-dom";
 import Navbar from "./Components/Navbar";
 import OwnerNavbar from "./Components/OwnerNavbar";
+import GroceryOwnerNavbar from "./Components/GroceryOwnerNavbar";
 import RestaurantsPage from "./pages/RestaurantsPage";
 import RestaurantDetails from "./pages/RestaurantDetails";
 import Register from "./pages/Register";
 import RegisterOwner from "./pages/RegisterOwner";
+import RegisterGroceryOwner from "./pages/RegisterGroceryOwner";
 import OwnerDashboard from "./pages/OwnerDashboard";
 import AddDish from "./pages/AddDish";
 import CompletedOrders from "./pages/CompletedOrders";
@@ -20,6 +22,7 @@ import DeliveryOptions from "./pages/DeliveryOptions";
 import Checkout from "./pages/Checkout";
 import { useContext } from "react";
 import OwnerLogin from "./Components/OwnerLogin";
+import GroceryOwnerLogin from "./pages/GroceryOwnerLogin";
 import OwnerPasswordUpdate from "./pages/OwnerPasswordUpdate";
 import UserPasswordUpdate from "./pages/UserPasswordUpdate";
 import CustomerOrders from "./pages/CustomerOrders";
@@ -29,8 +32,10 @@ import OrderDetails from "./pages/OrderDetails";
 import OrderSuccess from "./pages/OrderSuccess";
 import GuestCheckout from "./pages/GuestCheckout";
 import ProtectedOwnerRoute from "./Components/ProtectedOwnerRoute";
+import ProtectedGroceryOwnerRoute from "./Components/ProtectedGroceryOwnerRoute";
 import ProtectedRoute from "./Components/ProtectedRoute";
 import { OwnerAuthProvider } from "./context/OwnerAuthContext";
+import { GroceryOwnerAuthProvider } from "./context/GroceryOwnerAuthContext";
 import { GuestProvider } from "./context/GuestContext";
 import { ToastContainer, Slide } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -63,19 +68,22 @@ import GroceryCart from "./pages/GroceryCart";
 import GroceryCheckout from "./pages/GroceryCheckout";
 import TrackGuestOrder from "./pages/TrackGuestOrder";
 import OwnerGroceryOrders from "./pages/OwnerGroceryOrders";
+import GroceryOwnerDashboard from "./pages/GroceryOwnerDashboard";
 
 
 function AppContent() {
   const { user } = useContext(AuthContext);
   const location = useLocation();
-  const isOwnerRoute = location.pathname.startsWith("/owner");
+  const isOwnerRoute = location.pathname.startsWith("/owner") && !location.pathname.startsWith("/owner/grocery");
+  const isGroceryOwnerRoute = location.pathname.startsWith("/grocery-owner");
   const isAdminRoute = location.pathname.startsWith("/admin");
   const isDriverRoute = location.pathname.startsWith("/driver");
 
   return (
     <>
-      {!isOwnerRoute && !isAdminRoute && !isDriverRoute && <Navbar />}
+      {!isOwnerRoute && !isGroceryOwnerRoute && !isAdminRoute && !isDriverRoute && <Navbar />}
       {isOwnerRoute && <OwnerNavbar />}
+      {isGroceryOwnerRoute && <GroceryOwnerNavbar />}
       {isDriverRoute && <DriverNavbar />}
       {/* Admin routes don't show any navbar */}
 
@@ -160,7 +168,9 @@ function AppContent() {
         <Route path="/checkout" element={<Checkout user={user} />} />
         <Route path="/guest-checkout" element={<GuestCheckout />} />
         <Route path="/register-owner" element={<RegisterOwner />} />
+        <Route path="/register-grocery-owner" element={<RegisterGroceryOwner />} />
         <Route path="/owner/login" element={<OwnerLogin />} />
+        <Route path="/grocery-owner/login" element={<GroceryOwnerLogin />} />
         <Route path="/owner/password-update" element={<OwnerPasswordUpdate />} />
         <Route 
           path="/order-success" 
@@ -233,6 +243,24 @@ function AppContent() {
           element={<OwnerGroceryOrders />}
         />
 
+        {/* Grocery Owner Routes */}
+        <Route
+          path="/grocery-owner/dashboard"
+          element={
+            <ProtectedGroceryOwnerRoute>
+              <GroceryOwnerDashboard />
+            </ProtectedGroceryOwnerRoute>
+          }
+        />
+        <Route
+          path="/grocery-owner/orders"
+          element={
+            <ProtectedGroceryOwnerRoute>
+              <OwnerGroceryOrders />
+            </ProtectedGroceryOwnerRoute>
+          }
+        />
+
         {/* Admin Routes */}
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
@@ -299,12 +327,13 @@ function App() {
         <div className="min-h-screen bg-gray-100">
           <AuthProvider>
             <OwnerAuthProvider>
-              <DriverAuthProvider>
-                <GuestProvider>
-                  <CartProvider>
-                    <GroceryCartProvider>
-                      <ChatProvider>
-                        <AppContent />
+              <GroceryOwnerAuthProvider>
+                <DriverAuthProvider>
+                  <GuestProvider>
+                    <CartProvider>
+                      <GroceryCartProvider>
+                        <ChatProvider>
+                          <AppContent />
                   <ToastContainer
                     position="top-right"
                     autoClose={4000}
@@ -326,11 +355,12 @@ function App() {
                       fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
                     }}
                   />
-                      </ChatProvider>
-                    </GroceryCartProvider>
-                  </CartProvider>
-                </GuestProvider>
-              </DriverAuthProvider>
+                        </ChatProvider>
+                      </GroceryCartProvider>
+                    </CartProvider>
+                  </GuestProvider>
+                </DriverAuthProvider>
+              </GroceryOwnerAuthProvider>
             </OwnerAuthProvider>
           </AuthProvider>
         </div>

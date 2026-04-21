@@ -34,6 +34,7 @@ import driverStripeRoutes from "./routes/driverStripeRoutes.js";
 import refundRoutes from "./routes/refundRoutes.js";
 import productRoutes from "./routes/productRoutes.js";
 import groceryRoutes from "./routes/groceryRoutes.js";
+import groceryOwnerRoutes from "./routes/groceryOwnerRoutes.js";
 
 // Import security and analytics
 import { 
@@ -437,6 +438,9 @@ app.use("/api/refunds", refundRoutes);
 
 // Product routes (marketplace)
 app.use("/api/products", productRoutes);
+
+// Grocery owner routes
+app.use("/api/grocery-owners", groceryOwnerRoutes);
 
 // Grocery order routes
 app.use("/api/grocery", groceryRoutes);
