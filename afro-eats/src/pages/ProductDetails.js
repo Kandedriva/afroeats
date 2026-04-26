@@ -75,8 +75,11 @@ const ProductDetails = () => {
   };
 
   const handleQuantityChange = (delta) => {
-    const newQuantity = quantity + delta;
-    if (newQuantity >= 1 && newQuantity <= product.stock_quantity) {
+    const isWeightBased = ['lb', 'kg', 'oz', 'g'].includes(product.unit);
+    const minQuantity = isWeightBased ? 0.1 : 1;
+    const newQuantity = parseFloat((quantity + delta).toFixed(1));
+
+    if (newQuantity >= minQuantity && newQuantity <= product.stock_quantity) {
       setQuantity(newQuantity);
     }
   };
@@ -121,7 +124,9 @@ const ProductDetails = () => {
 
   const badges = getBadges(product);
   const stockStatus = getStockStatus();
-  const totalPrice = (product.price * quantity).toFixed(2);
+  const isWeightBased = ['lb', 'kg', 'oz', 'g'].includes(product.unit);
+  const pricePerUnit = product.price + (product.platform_fee || 0);
+  const totalPrice = (pricePerUnit * quantity).toFixed(2);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -243,9 +248,12 @@ const ProductDetails = () => {
               {/* Price */}
               <div className="mb-6">
                 <div className="flex items-baseline gap-2 mb-2">
-                  <span className="text-5xl font-bold text-green-600">${formatPrice(product.price)}</span>
+                  <span className="text-5xl font-bold text-green-600">${formatPrice(pricePerUnit)}</span>
                   <span className="text-xl text-gray-500">/ {product.unit}</span>
                 </div>
+                {isWeightBased && (
+                  <p className="text-sm text-gray-600 mb-2">Price shown is per {product.unit}</p>
+                )}
                 {/* Stock Status */}
                 <p className={`text-lg font-semibold ${stockStatus.color}`}>{stockStatus.text}</p>
               </div>
@@ -275,12 +283,14 @@ const ProductDetails = () => {
               {stockStatus.available && product.is_available && (
                 <div className="bg-gray-50 rounded-lg p-6 mb-6">
                   <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Quantity</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      {isWeightBased ? `Amount (${product.unit})` : 'Quantity'}
+                    </label>
                     <div className="flex items-center gap-4">
                       <div className="flex items-center border-2 border-gray-300 rounded-lg overflow-hidden">
                         <button
-                          onClick={() => handleQuantityChange(-1)}
-                          disabled={quantity <= 1}
+                          onClick={() => handleQuantityChange(isWeightBased ? -0.1 : -1)}
+                          disabled={quantity <= (isWeightBased ? 0.1 : 1)}
                           className="px-4 py-3 bg-white hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed font-semibold text-lg"
                         >
                           -
@@ -289,17 +299,18 @@ const ProductDetails = () => {
                           type="number"
                           value={quantity}
                           onChange={(e) => {
-                            const val = parseInt(e.target.value);
-                            if (val >= 1 && val <= product.stock_quantity) {
+                            const val = parseFloat(e.target.value);
+                            if (!isNaN(val) && val >= (isWeightBased ? 0.1 : 1) && val <= product.stock_quantity) {
                               setQuantity(val);
                             }
                           }}
-                          className="w-20 text-center border-x-2 border-gray-300 py-3 font-semibold text-lg"
-                          min="1"
+                          className="w-24 text-center border-x-2 border-gray-300 py-3 font-semibold text-lg"
+                          min={isWeightBased ? "0.1" : "1"}
+                          step={isWeightBased ? "0.1" : "1"}
                           max={product.stock_quantity}
                         />
                         <button
-                          onClick={() => handleQuantityChange(1)}
+                          onClick={() => handleQuantityChange(isWeightBased ? 0.1 : 1)}
                           disabled={quantity >= product.stock_quantity}
                           className="px-4 py-3 bg-white hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed font-semibold text-lg"
                         >
@@ -308,6 +319,11 @@ const ProductDetails = () => {
                       </div>
                       <span className="text-gray-600">{product.unit}</span>
                     </div>
+                    {isWeightBased && (
+                      <p className="text-xs text-gray-500 mt-2">
+                        Enter the weight you want to purchase
+                      </p>
+                    )}
                   </div>
 
                   <div className="flex items-center justify-between mb-4">

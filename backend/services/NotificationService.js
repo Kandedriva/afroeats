@@ -22,42 +22,26 @@ class NotificationService {
    */
   initializeEmailService() {
     try {
-      // Check which email provider is configured
-      const emailProvider = process.env.EMAIL_PROVIDER || 'smtp'; // smtp, sendgrid, mailgun, ses
-
-      if (emailProvider === 'smtp') {
-        // Generic SMTP configuration (works with Gmail, Outlook, custom SMTP)
-        if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
-          this.emailTransporter = nodemailer.createTransport({
-            host: process.env.SMTP_HOST,
-            port: parseInt(process.env.SMTP_PORT || '587'),
-            secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
-            auth: {
-              user: process.env.SMTP_USER,
-              pass: process.env.SMTP_PASS,
-            },
-          });
-          console.log('✅ Email service initialized (SMTP)');
-        } else {
-          console.log('⚠️ Email service not configured (missing SMTP credentials)');
-        }
-      } else if (emailProvider === 'sendgrid') {
-        // SendGrid configuration
-        if (process.env.SENDGRID_API_KEY) {
-          this.emailTransporter = nodemailer.createTransport({
-            host: 'smtp.sendgrid.net',
-            port: 587,
-            auth: {
-              user: 'apikey',
-              pass: process.env.SENDGRID_API_KEY,
-            },
-          });
-          console.log('✅ Email service initialized (SendGrid)');
-        }
+      // Generic SMTP configuration (works with Gmail, Outlook, custom SMTP)
+      // Note: This is for restaurant owner notifications
+      // Main platform emails use AWS SES (see emailService.js)
+      if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+        this.emailTransporter = nodemailer.createTransport({
+          host: process.env.SMTP_HOST,
+          port: parseInt(process.env.SMTP_PORT || '587'),
+          secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
+          auth: {
+            user: process.env.SMTP_USER,
+            pass: process.env.SMTP_PASS,
+          },
+        });
+        console.log('✅ Notification email service initialized (SMTP)');
+      } else {
+        console.log('⚠️ Notification email service not configured (missing SMTP credentials)');
+        console.log('   Note: Main platform emails use AWS SES. This SMTP config is optional for restaurant notifications.');
       }
-      // Add more providers as needed (Mailgun, AWS SES, etc.)
     } catch (error) {
-      console.error('❌ Email service initialization failed:', error.message);
+      console.error('❌ Notification email service initialization failed:', error.message);
     }
   }
 

@@ -3,7 +3,7 @@ import Stripe from 'stripe';
 import pool from '../db.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
 import { calculateDistanceAndFee, getFallbackDeliveryFee } from '../services/googleMapsService.js';
-import { sendOrderDeliveredEmail } from '../services/emailService.js';
+import { sendOrderDeliveredEmail, sendGroceryRefundRequestEmail } from '../services/emailService.js';
 
 const router = express.Router();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
@@ -533,6 +533,190 @@ router.patch('/orders/:id/status', async (req, res) => {
   } catch (err) {
     console.error('Update grocery order status error:', err);
     res.status(500).json({ error: 'Failed to update order status' });
+  }
+});
+
+/**
+ * Request refund for grocery order
+ * POST /api/grocery/orders/:id/refund
+ * Requires authentication
+ */
+router.post('/orders/:id/refund', requireAuth, async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const orderId = parseInt(req.params.id);
+    const userId = req.session.userId;
+    const { reason, description } = req.body;
+
+    if (isNaN(orderId)) {
+      return res.status(400).json({ error: 'Invalid order ID' });
+    }
+
+    if (!reason) {
+      return res.status(400).json({ error: 'Refund reason is required' });
+    }
+
+    const validReasons = [
+      'customer_request',
+      'order_cancelled',
+      'item_unavailable',
+      'quality_issue',
+      'wrong_item',
+      'late_delivery',
+      'other'
+    ];
+
+    if (!validReasons.includes(reason)) {
+      return res.status(400).json({ error: 'Invalid refund reason' });
+    }
+
+    await client.query('BEGIN');
+
+    // Get order details and verify ownership
+    const orderResult = await client.query(
+      `SELECT
+        go.id, go.user_id, go.total, go.status, go.refund_status,
+        go.delivery_name, go.delivery_address, go.delivery_city, go.delivery_state, go.delivery_zip,
+        json_agg(
+          json_build_object(
+            'product_id', goi.product_id,
+            'product_name', p.name,
+            'quantity', goi.quantity,
+            'unit_price', goi.unit_price,
+            'total_price', goi.total_price,
+            'store_id', p.store_id
+          )
+        ) as items
+      FROM grocery_orders go
+      LEFT JOIN grocery_order_items goi ON go.id = goi.grocery_order_id
+      LEFT JOIN products p ON goi.product_id = p.id
+      WHERE go.id = $1 AND go.user_id = $2
+      GROUP BY go.id`,
+      [orderId, userId]
+    );
+
+    if (orderResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    const order = orderResult.rows[0];
+
+    // Check if order can be refunded
+    if (order.status !== 'paid' && order.status !== 'delivered') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        error: 'Order must be paid or delivered to request a refund',
+        currentStatus: order.status
+      });
+    }
+
+    if (order.refund_status === 'full') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'This order has already been fully refunded' });
+    }
+
+    // Create refund request record
+    const refundResult = await client.query(
+      `INSERT INTO grocery_refund_requests (
+        grocery_order_id, user_id, amount, reason, description, status, requested_at
+      ) VALUES ($1, $2, $3, $4, $5, 'pending', NOW())
+      RETURNING id`,
+      [orderId, userId, order.total, reason, description || '']
+    );
+
+    const refundRequestId = refundResult.rows[0].id;
+
+    // Update order refund status to pending
+    await client.query(
+      `UPDATE grocery_orders
+       SET refund_status = 'pending'
+       WHERE id = $1`,
+      [orderId]
+    );
+
+    await client.query('COMMIT');
+
+    // Get customer details for notifications
+    const customerResult = await client.query(
+      'SELECT name, email FROM users WHERE id = $1',
+      [userId]
+    );
+
+    const customerName = customerResult.rows[0]?.name || order.delivery_name || 'Customer';
+    const customerEmail = customerResult.rows[0]?.email || '';
+
+    // Get store owner(s) and send notifications
+    // Extract unique store IDs from items
+    const storeIds = [...new Set(order.items.map(item => item.store_id).filter(Boolean))];
+
+    for (const storeId of storeIds) {
+      try {
+        // Get grocery owner details
+        const ownerResult = await pool.query(
+          'SELECT id, name, email FROM grocery_store_owners WHERE id = $1',
+          [storeId]
+        );
+
+        if (ownerResult.rows.length > 0) {
+          const owner = ownerResult.rows[0];
+
+          // Create in-app notification for grocery owner
+          await pool.query(
+            `INSERT INTO grocery_owner_notifications (
+              grocery_owner_id, grocery_order_id, type, title, message, data
+            ) VALUES ($1, $2, $3, $4, $5, $6)`,
+            [
+              owner.id,
+              orderId,
+              'refund_request',
+              `Refund Request for Order #${orderId}`,
+              `${customerName} has requested a refund of $${parseFloat(order.total).toFixed(2)} for order #${orderId}. Reason: ${reason}`,
+              JSON.stringify({
+                orderId,
+                customerName,
+                customerEmail,
+                refundAmount: parseFloat(order.total).toFixed(2),
+                reason,
+                description: description || ''
+              })
+            ]
+          );
+
+          console.log(`✅ In-app refund notification created for grocery owner ${owner.id}, order ${orderId}`);
+
+          // Send email notification to grocery owner
+          await sendGroceryRefundRequestEmail(owner.email, owner.name, {
+            orderId,
+            customerName,
+            customerEmail,
+            refundReason: description || reason,
+            refundAmount: parseFloat(order.total),
+            requestDate: new Date().toISOString()
+          });
+
+          console.log(`✅ Refund request email sent to grocery owner ${owner.email} for order ${orderId}`);
+        }
+      } catch (notificationError) {
+        console.error(`❌ Failed to send refund notification for store ${storeId}:`, notificationError);
+        // Continue with other stores even if one fails
+      }
+    }
+
+    res.status(201).json({
+      message: 'Refund request submitted successfully',
+      refundRequestId,
+      orderId,
+      amount: order.total,
+      status: 'pending'
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Grocery refund request error:', err);
+    res.status(500).json({ error: 'Failed to create refund request' });
+  } finally {
+    client.release();
   }
 });
 

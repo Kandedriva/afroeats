@@ -10,7 +10,6 @@ export default function Register() {
     name: "",
     email: "",
     password: "",
-    secret_word: "",
     address: "",
     phone: ""
   });
@@ -53,10 +52,10 @@ export default function Register() {
   
       const data = await res.json();
       if (res.ok) {
-        toast.success("Registration successful! Welcome to A Food Zone!");
-        // Redirect to customer dashboard after successful registration
+        toast.success("Registration successful! Please check your email for the verification code.");
+        // Redirect to verification page with email
         setTimeout(() => {
-          navigate("/");
+          navigate("/verify-email", { state: { email: form.email } });
         }, 1000);
       } else {
         toast.error(data.error || "Registration failed.");
@@ -112,18 +111,6 @@ export default function Register() {
           className="w-full px-4 py-2 border rounded"
           required
         />
-        <input
-          type="text"
-          name="secret_word"
-          placeholder="Secret Word (for password recovery)"
-          value={form.secret_word}
-          onChange={handleChange}
-          className="w-full px-4 py-2 border rounded"
-          required
-        />
-        <p className="text-sm text-gray-600 -mt-2">
-          💡 Remember this word - you&apos;ll need it to update your password later
-        </p>
         <input
           type="text"
           name="address"
