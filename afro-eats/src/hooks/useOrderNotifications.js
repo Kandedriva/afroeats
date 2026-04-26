@@ -108,12 +108,18 @@ export const useOrderNotifications = (userRole = null, _restaurantId = null) => 
 
     try {
       let endpoint = '';
+      let notificationTitle = '🍽️ New Order Received!';
 
       // Different endpoints based on user role
       if (userRole === 'owner') {
         endpoint = `${API_BASE_URL}/api/owners/orders`;
+        notificationTitle = '🍽️ New Order Received!';
+      } else if (userRole === 'grocery-owner') {
+        endpoint = `${API_BASE_URL}/api/grocery-owners/orders`;
+        notificationTitle = '🛒 New Grocery Order Received!';
       } else if (userRole === 'admin') {
         endpoint = `${API_BASE_URL}/api/admin/orders`;
+        notificationTitle = '📋 New Order Received!';
       } else {
         return; // No notifications for regular customers
       }
@@ -144,7 +150,7 @@ export const useOrderNotifications = (userRole = null, _restaurantId = null) => 
             startRepeatingSound();
 
             showBrowserNotification(
-              '🍽️ New Order Received!',
+              notificationTitle,
               `Order #${latestOrder.id} - $${Number(latestOrder.total || 0).toFixed(2)}`
             );
           }

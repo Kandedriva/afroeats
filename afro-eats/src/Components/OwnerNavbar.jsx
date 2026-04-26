@@ -146,9 +146,6 @@ const OwnerNavbar = () => {
             <Link to="/owner/completed-orders" className="hover:underline bg-blue-600 px-3 py-2 rounded transition-colors">
               📋 Completed Orders
             </Link>
-            <Link to="/owner/grocery-orders" className="hover:underline bg-teal-600 px-3 py-2 rounded transition-colors">
-              🛒 Grocery Orders
-            </Link>
             <Link to="/owner/account" className="hover:underline bg-indigo-600 px-3 py-2 rounded transition-colors">
               ⚙️ Account
             </Link>
@@ -239,13 +236,6 @@ const OwnerNavbar = () => {
               onClick={() => setIsMobileMenuOpen(false)}
             >
               📋 Completed Orders
-            </Link>
-            <Link
-              to="/owner/grocery-orders"
-              className="block bg-teal-600 hover:bg-teal-700 px-4 py-3 rounded transition-colors text-center font-medium"
-              onClick={() => setIsMobileMenuOpen(false)}
-            >
-              🛒 Grocery Orders
             </Link>
             <Link
               to="/owner/account"

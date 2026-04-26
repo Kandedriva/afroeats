@@ -7,18 +7,18 @@ import {
   handleSuccessfulLogin
 } from "../middleware/accountLockout.js";
 import { requireAuth } from "../middleware/authMiddleware.js";
-import { sendUserWelcomeEmail } from "../services/emailService.js";
+import { sendUserWelcomeEmail, sendEmailVerificationCode } from "../services/emailService.js";
 
 const router = express.Router();
 
 // 🔐 REGISTER
 router.post("/register", async (req, res) => {
-  const { name, email, password, secret_word, address, phone } = req.body;
+  const { name, email, password, address, phone } = req.body;
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    
+
     const userExists = await client.query("SELECT * FROM users WHERE email = $1", [email]);
     if (userExists.rows.length > 0) {
       await client.query('ROLLBACK');
@@ -27,7 +27,10 @@ router.post("/register", async (req, res) => {
 
     const saltRounds = 10;
     const hashedPassword = await bcryptjs.hash(password, saltRounds);
-    const hashedSecretWord = secret_word ? await bcryptjs.hash(secret_word, saltRounds) : null;
+
+    // Generate 6-digit verification code
+    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const codeExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes from now
 
     console.log('Registering user:', { name, email });
 
@@ -35,47 +38,199 @@ router.post("/register", async (req, res) => {
     let newUser;
     try {
       newUser = await client.query(
-        "INSERT INTO users (name, email, password, secret_word, address, phone) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, name, email",
-        [name, email, hashedPassword, hashedSecretWord, address, phone]
+        `INSERT INTO users (name, email, password, address, phone, email_verified, verification_code, verification_code_expires_at, verification_attempts)
+         VALUES ($1, $2, $3, $4, $5, false, $6, $7, 0)
+         RETURNING id, name, email`,
+        [name, email, hashedPassword, address, phone, verificationCode, codeExpiresAt]
       );
     } catch (err) {
-      try {
-        // Try with just secret_word (no address/phone)
-        newUser = await client.query(
-          "INSERT INTO users (name, email, password, secret_word) VALUES ($1, $2, $3, $4) RETURNING id, name, email",
-          [name, email, hashedPassword, hashedSecretWord]
-        );
-      } catch (err2) {
-        // Fallback to basic registration if other columns don't exist
-        newUser = await client.query(
-          "INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING id, name, email",
-          [name, email, hashedPassword]
-        );
-      }
+      // Fallback to basic registration if address/phone columns don't exist
+      newUser = await client.query(
+        `INSERT INTO users (name, email, password, email_verified, verification_code, verification_code_expires_at, verification_attempts)
+         VALUES ($1, $2, $3, false, $4, $5, 0)
+         RETURNING id, name, email`,
+        [name, email, hashedPassword, verificationCode, codeExpiresAt]
+      );
     }
 
     // Commit the transaction
     await client.query('COMMIT');
 
-    req.session.userId = newUser.rows[0].id;
-    req.session.userName = newUser.rows[0].name.split(" ")[0];
+    // Send verification code email (non-blocking)
+    sendEmailVerificationCode(newUser.rows[0].email, newUser.rows[0].name, verificationCode)
+      .catch(err => console.error('Failed to send verification email:', err));
 
-    // Force session save for mobile compatibility
-    req.session.save((err) => {
-      if (err) console.error('Session save error:', err);
+    console.log(`✅ User registered, verification code sent to ${email}`);
+
+    res.status(201).json({
+      success: true,
+      message: 'Registration successful! Please check your email for the verification code.',
+      userId: newUser.rows[0].id,
+      email: newUser.rows[0].email
     });
-
-    // Send welcome email (non-blocking)
-    sendUserWelcomeEmail(newUser.rows[0].email, newUser.rows[0].name)
-      .catch(err => console.error('Failed to send welcome email:', err));
-
-    res.status(201).json({ user: newUser.rows[0] });
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('Registration error:', err);
     res.status(500).json({ error: "Server error" });
-  } finally {
+  } finally{
     client.release();
+  }
+});
+
+// 📧 VERIFY EMAIL
+router.post("/verify-email", async (req, res) => {
+  const { email, code } = req.body;
+
+  try {
+    if (!email || !code) {
+      return res.status(400).json({ error: "Email and verification code are required" });
+    }
+
+    // Find user by email
+    const userResult = await pool.query(
+      "SELECT * FROM users WHERE email = $1",
+      [email]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const user = userResult.rows[0];
+
+    // Check if already verified
+    if (user.email_verified) {
+      return res.status(400).json({ error: "Email already verified" });
+    }
+
+    // Check if too many attempts
+    if (user.verification_attempts >= 5) {
+      return res.status(429).json({
+        error: "Too many verification attempts. Please request a new code."
+      });
+    }
+
+    // Check if code expired
+    const now = new Date();
+    const expiresAt = new Date(user.verification_code_expires_at);
+    if (now > expiresAt) {
+      return res.status(400).json({
+        error: "Verification code expired. Please request a new code."
+      });
+    }
+
+    // Verify code
+    if (user.verification_code !== code) {
+      // Increment failed attempts
+      await pool.query(
+        "UPDATE users SET verification_attempts = verification_attempts + 1 WHERE id = $1",
+        [user.id]
+      );
+
+      const attemptsLeft = 5 - (user.verification_attempts + 1);
+      return res.status(400).json({
+        error: `Invalid verification code. ${attemptsLeft} attempt${attemptsLeft !== 1 ? 's' : ''} remaining.`
+      });
+    }
+
+    // Mark email as verified
+    await pool.query(
+      "UPDATE users SET email_verified = true, verification_code = NULL, verification_code_expires_at = NULL, verification_attempts = 0 WHERE id = $1",
+      [user.id]
+    );
+
+    // Create session for the user
+    req.session.regenerate((err) => {
+      if (err) {
+        console.error('Session regeneration error:', err);
+        return res.status(500).json({ error: "Session error" });
+      }
+
+      req.session.userId = user.id;
+      req.session.userName = user.name.split(" ")[0];
+      req.session.userEmail = user.email;
+      req.session.loginTime = new Date().toISOString();
+
+      req.session.save((saveErr) => {
+        if (saveErr) {
+          console.error('Session save error:', saveErr);
+          return res.status(500).json({ error: "Session save error" });
+        }
+
+        console.log(`✅ Email verified for user: ${user.email}`);
+
+        // Send welcome email (non-blocking)
+        sendUserWelcomeEmail(user.email, user.name)
+          .catch(err => console.error('Failed to send welcome email:', err));
+
+        res.json({
+          success: true,
+          message: "Email verified successfully!",
+          user: {
+            id: user.id,
+            name: user.name,
+            email: user.email
+          }
+        });
+      });
+    });
+
+  } catch (err) {
+    console.error('Email verification error:', err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// 🔄 RESEND VERIFICATION CODE
+router.post("/resend-verification", async (req, res) => {
+  const { email } = req.body;
+
+  try {
+    if (!email) {
+      return res.status(400).json({ error: "Email is required" });
+    }
+
+    // Find user by email
+    const userResult = await pool.query(
+      "SELECT * FROM users WHERE email = $1",
+      [email]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const user = userResult.rows[0];
+
+    // Check if already verified
+    if (user.email_verified) {
+      return res.status(400).json({ error: "Email already verified" });
+    }
+
+    // Generate new 6-digit verification code
+    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const codeExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes from now
+
+    // Update verification code and reset attempts
+    await pool.query(
+      "UPDATE users SET verification_code = $1, verification_code_expires_at = $2, verification_attempts = 0 WHERE id = $3",
+      [verificationCode, codeExpiresAt, user.id]
+    );
+
+    // Send verification code email (non-blocking)
+    sendEmailVerificationCode(user.email, user.name, verificationCode)
+      .catch(err => console.error('Failed to send verification email:', err));
+
+    console.log(`✅ New verification code sent to ${email}`);
+
+    res.json({
+      success: true,
+      message: "Verification code sent! Please check your email."
+    });
+
+  } catch (err) {
+    console.error('Resend verification error:', err);
+    res.status(500).json({ error: "Server error" });
   }
 });
 
@@ -97,16 +252,25 @@ router.post("/login", checkAccountLockout, async (req, res) => {
       }
   
       const user = userResult.rows[0];
-  
+
       // 2. Compare password with hashed password
       const isMatch = await bcryptjs.compare(password, user.password);
       if (!isMatch) {
         return await handleFailedLogin(req, res, () => {
           const attemptInfo = req.loginAttempts ? ` (${req.loginAttempts.remaining} attempts remaining)` : '';
-          res.status(400).json({ 
+          res.status(400).json({
             error: "Invalid email or password" + attemptInfo,
             attemptsRemaining: req.loginAttempts?.remaining
           });
+        });
+      }
+
+      // 2.5. Check if email is verified
+      if (!user.email_verified) {
+        return res.status(403).json({
+          error: "Please verify your email before logging in",
+          emailVerificationRequired: true,
+          email: user.email
         });
       }
   
@@ -285,26 +449,13 @@ router.post("/refresh-session", (req, res) => {
   
   
 
-// POST /api/auth/update-password - Update user password using secret word
-router.post("/update-password", async (req, res) => {
+// POST /api/auth/request-password-reset - Request password reset code
+router.post("/request-password-reset", async (req, res) => {
   try {
-    const { email, secret_word, new_password } = req.body;
+    const { email } = req.body;
 
-    // Validate input
-    if (!email || !secret_word || !new_password) {
-      return res.status(400).json({ error: "Email, secret word, and new password are required" });
-    }
-
-    if (new_password.length < 12) {
-      return res.status(400).json({ error: "New password must be at least 12 characters long" });
-    }
-
-    // Enhanced password strength validation
-    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])/;
-    if (!passwordRegex.test(new_password)) {
-      return res.status(400).json({ 
-        error: "Password must contain at least one uppercase letter, lowercase letter, number, and special character (@$!%*?&)" 
-      });
+    if (!email) {
+      return res.status(400).json({ error: "Email is required" });
     }
 
     // Find user by email
@@ -314,40 +465,117 @@ router.post("/update-password", async (req, res) => {
     );
 
     if (userResult.rows.length === 0) {
-      return res.status(404).json({ error: "No account found with this email address" });
+      // Don't reveal if email exists for security
+      return res.json({
+        success: true,
+        message: "If an account exists with this email, a password reset code has been sent."
+      });
     }
 
     const user = userResult.rows[0];
 
-    // Verify secret word
-    if (!user.secret_word) {
-      return res.status(400).json({ 
-        error: "This account was created before secret word feature. Please contact support." 
+    // Generate 6-digit verification code
+    const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const codeExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    // Store reset code in verification columns (reusing existing columns)
+    await pool.query(
+      "UPDATE users SET verification_code = $1, verification_code_expires_at = $2, verification_attempts = 0 WHERE id = $3",
+      [resetCode, codeExpiresAt, user.id]
+    );
+
+    // Send reset code email (non-blocking)
+    sendEmailVerificationCode(user.email, user.name, resetCode)
+      .catch(err => console.error('Failed to send password reset email:', err));
+
+    console.log(`✅ Password reset code sent to ${email}`);
+
+    res.json({
+      success: true,
+      message: "If an account exists with this email, a password reset code has been sent."
+    });
+
+  } catch (err) {
+    console.error('Password reset request error:', err);
+    res.status(500).json({ error: "Server error during password reset request" });
+  }
+});
+
+// POST /api/auth/reset-password - Reset password with verification code
+router.post("/reset-password", async (req, res) => {
+  try {
+    const { email, code, new_password } = req.body;
+
+    // Validate input
+    if (!email || !code || !new_password) {
+      return res.status(400).json({ error: "Email, verification code, and new password are required" });
+    }
+
+    if (new_password.length < 6) {
+      return res.status(400).json({ error: "New password must be at least 6 characters long" });
+    }
+
+    // Find user by email
+    const userResult = await pool.query(
+      "SELECT * FROM users WHERE email = $1",
+      [email]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const user = userResult.rows[0];
+
+    // Check if too many attempts
+    if (user.verification_attempts >= 5) {
+      return res.status(429).json({
+        error: "Too many attempts. Please request a new code."
       });
     }
 
-    const secretWordMatch = await bcryptjs.compare(secret_word, user.secret_word);
-    if (!secretWordMatch) {
-      return res.status(400).json({ error: "Invalid secret word" });
+    // Check if code expired
+    const now = new Date();
+    const expiresAt = new Date(user.verification_code_expires_at);
+    if (now > expiresAt) {
+      return res.status(400).json({
+        error: "Reset code expired. Please request a new code."
+      });
+    }
+
+    // Verify code
+    if (user.verification_code !== code) {
+      // Increment failed attempts
+      await pool.query(
+        "UPDATE users SET verification_attempts = verification_attempts + 1 WHERE id = $1",
+        [user.id]
+      );
+
+      const attemptsLeft = 5 - (user.verification_attempts + 1);
+      return res.status(400).json({
+        error: `Invalid reset code. ${attemptsLeft} attempt${attemptsLeft !== 1 ? 's' : ''} remaining.`
+      });
     }
 
     // Hash new password
     const hashedNewPassword = await bcryptjs.hash(new_password, 10);
 
-    // Update password
+    // Update password and clear verification code
     await pool.query(
-      "UPDATE users SET password = $1 WHERE id = $2",
+      "UPDATE users SET password = $1, verification_code = NULL, verification_code_expires_at = NULL, verification_attempts = 0 WHERE id = $2",
       [hashedNewPassword, user.id]
     );
 
+    console.log(`✅ Password reset successfully for ${email}`);
 
-    res.json({ 
-      success: true, 
-      message: "Password updated successfully" 
+    res.json({
+      success: true,
+      message: "Password reset successfully. You can now login with your new password."
     });
 
   } catch (err) {
-    res.status(500).json({ error: "Server error during password update" });
+    console.error('Password reset error:', err);
+    res.status(500).json({ error: "Server error during password reset" });
   }
 });
 

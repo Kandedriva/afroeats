@@ -4,7 +4,8 @@ import NotificationService from '../services/NotificationService.js';
 import socketService from '../services/socketService.js';
 import {
   sendOrderConfirmationEmail,
-  sendRestaurantOrderNotificationEmail
+  sendRestaurantOrderNotificationEmail,
+  sendGroceryOrderNotificationEmail
 } from '../services/emailService.js';
 
 export const handleStripeWebhook = async (req, res) => {
@@ -102,6 +103,172 @@ export const handleStripeWebhook = async (req, res) => {
               }
             } catch (emailError) {
               console.error('❌ Failed to send grocery order confirmation email:', emailError);
+            }
+
+            // ✅ Send notification to grocery store owner
+            try {
+              // Get product details including store_id
+              const productResult = await pool.query(
+                `SELECT DISTINCT p.store_id
+                 FROM grocery_order_items goi
+                 JOIN products p ON goi.product_id = p.id
+                 WHERE goi.grocery_order_id = $1
+                 LIMIT 1`,
+                [orderId]
+              );
+
+              if (productResult.rows.length > 0 && productResult.rows[0].store_id) {
+                const storeId = productResult.rows[0].store_id;
+
+                // Get grocery owner details
+                const ownerResult = await pool.query(
+                  'SELECT id, name, email FROM grocery_store_owners WHERE id = $1',
+                  [storeId]
+                );
+
+                if (ownerResult.rows.length > 0) {
+                  const owner = ownerResult.rows[0];
+                  const orderData = orderResult.rows[0];
+                  const customerEmail = orderData.user_email || orderData.guest_email;
+                  const customerName = orderData.user_name || orderData.delivery_name || 'Customer';
+
+                  // Create in-app notification
+                  await pool.query(
+                    `INSERT INTO grocery_owner_notifications (
+                      grocery_owner_id, grocery_order_id, type, title, message, data
+                    ) VALUES ($1, $2, $3, $4, $5, $6)`,
+                    [
+                      owner.id,
+                      orderId,
+                      'new_order',
+                      `New Order #${orderId}`,
+                      `You have a new grocery order from ${customerName} for $${parseFloat(orderData.total).toFixed(2)}`,
+                      JSON.stringify({
+                        orderId,
+                        customerName,
+                        total: parseFloat(orderData.total).toFixed(2)
+                      })
+                    ]
+                  );
+
+                  console.log(`✅ In-app notification created for grocery owner ${owner.id}, order ${orderId}`);
+
+                  // Send email notification to grocery owner
+                  await sendGroceryOrderNotificationEmail(owner.email, owner.name, {
+                    orderId,
+                    items: orderData.items,
+                    total: parseFloat(orderData.total),
+                    customerName,
+                    customerPhone: orderData.delivery_phone,
+                    deliveryAddress: orderData.delivery_address,
+                    deliveryCity: orderData.delivery_city,
+                    deliveryState: orderData.delivery_state,
+                    deliveryZip: orderData.delivery_zip
+                  });
+
+                  console.log(`✅ Grocery owner notification email sent to ${owner.email} for order ${orderId}`);
+                }
+              }
+            } catch (ownerNotificationError) {
+              console.error('❌ Failed to send grocery owner notifications:', ownerNotificationError);
+              // Don't fail the webhook if notification fails
+            }
+
+            // ✅ Handle Stripe Connect payout to grocery owner
+            try {
+              // Get order details and owner's Stripe account
+              const payoutInfoResult = await pool.query(
+                `SELECT
+                  go.total, go.platform_fee, go.delivery_fee, go.subtotal,
+                  gso.stripe_account_id, gso.stripe_charges_enabled,
+                  gs.name as store_name
+                 FROM grocery_orders go
+                 JOIN grocery_order_items goi ON go.id = goi.grocery_order_id
+                 JOIN products p ON goi.product_id = p.id
+                 JOIN grocery_store_owners gso ON p.store_id = gso.id
+                 JOIN grocery_stores gs ON gso.id = gs.owner_id
+                 WHERE go.id = $1
+                 LIMIT 1`,
+                [orderId]
+              );
+
+              if (payoutInfoResult.rows.length > 0) {
+                const payoutInfo = payoutInfoResult.rows[0];
+
+                if (payoutInfo.stripe_account_id && payoutInfo.stripe_charges_enabled) {
+                  // Calculate payout amount
+                  // Grocery owner gets: subtotal - platform_fee
+                  // Platform keeps: platform_fee + delivery_fee
+                  const platformFee = parseFloat(payoutInfo.platform_fee || 0);
+                  const deliveryFee = parseFloat(payoutInfo.delivery_fee || 0);
+                  const subtotal = parseFloat(payoutInfo.subtotal);
+
+                  // Grocery owner receives subtotal minus their share of platform fee
+                  const ownerAmount = Math.round((subtotal - platformFee) * 100); // in cents
+
+                  if (ownerAmount >= 50) { // Minimum 50 cents ($0.50)
+                    console.log(
+                      `💸 Transferring $${(ownerAmount / 100).toFixed(2)} to grocery owner ${payoutInfo.stripe_account_id} for order ${orderId}`
+                    );
+
+                    const transfer = await stripe.transfers.create({
+                      amount: ownerAmount,
+                      currency: 'usd',
+                      destination: payoutInfo.stripe_account_id,
+                      transfer_group: `grocery_order_${orderId}`,
+                      metadata: {
+                        orderId: orderId.toString(),
+                        orderType: 'grocery',
+                        storeName: payoutInfo.store_name,
+                        platformFee: platformFee.toFixed(2),
+                        deliveryFee: deliveryFee.toFixed(2),
+                      },
+                    });
+
+                    // Create payment record
+                    await pool.query(
+                      `INSERT INTO grocery_owner_payments (
+                        grocery_order_id, grocery_owner_id, amount,
+                        stripe_transfer_id, status, processed_at
+                      ) SELECT $1, gso.id, $2, $3, 'completed', NOW()
+                       FROM grocery_order_items goi
+                       JOIN products p ON goi.product_id = p.id
+                       JOIN grocery_store_owners gso ON p.store_id = gso.id
+                       WHERE goi.grocery_order_id = $1
+                       LIMIT 1
+                       ON CONFLICT DO NOTHING`,
+                      [orderId, (ownerAmount / 100).toFixed(2), transfer.id]
+                    );
+
+                    console.log(`✅ Transfer completed for grocery order ${orderId}: ${transfer.id}`);
+                  } else {
+                    console.warn(
+                      `⚠️ Skipping transfer for order ${orderId}: Amount too small ($${(ownerAmount / 100).toFixed(2)})`
+                    );
+                  }
+                } else {
+                  console.log(
+                    `⚠️ Grocery owner for order ${orderId} has no Stripe account or charges not enabled - payment held on platform`
+                  );
+
+                  // Create payment record as awaiting connection
+                  await pool.query(
+                    `INSERT INTO grocery_owner_payments (
+                      grocery_order_id, grocery_owner_id, amount, status, processed_at
+                    ) SELECT $1, gso.id, $2, 'awaiting_connect', NOW()
+                     FROM grocery_order_items goi
+                     JOIN products p ON goi.product_id = p.id
+                     JOIN grocery_store_owners gso ON p.store_id = gso.id
+                     WHERE goi.grocery_order_id = $1
+                     LIMIT 1
+                     ON CONFLICT DO NOTHING`,
+                    [orderId, parseFloat(payoutInfo.subtotal) - parseFloat(payoutInfo.platform_fee)]
+                  );
+                }
+              }
+            } catch (payoutError) {
+              console.error(`❌ Failed to process payout for grocery order ${orderId}:`, payoutError);
+              // Don't fail the entire webhook if payout fails
             }
 
             break;

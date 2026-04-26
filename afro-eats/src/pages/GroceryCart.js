@@ -155,24 +155,33 @@ const GroceryCart = () => {
 
 // Cart Item Component
 const CartItem = ({ item, onQuantityChange, onRemove }) => {
+  const isWeightBased = ['lb', 'kg', 'oz', 'g'].includes(item.unit);
+  const increment = isWeightBased ? 0.1 : 1;
+  const minQuantity = isWeightBased ? 0.1 : 1;
+
   const handleIncrement = () => {
-    onQuantityChange(item.id, item.quantity + 1);
+    const newQuantity = parseFloat((item.quantity + increment).toFixed(1));
+    if (newQuantity <= item.stock_quantity) {
+      onQuantityChange(item.id, newQuantity);
+    }
   };
 
   const handleDecrement = () => {
-    if (item.quantity > 1) {
-      onQuantityChange(item.id, item.quantity - 1);
+    const newQuantity = parseFloat((item.quantity - increment).toFixed(1));
+    if (newQuantity >= minQuantity) {
+      onQuantityChange(item.id, newQuantity);
     }
   };
 
   const handleInputChange = (e) => {
-    const value = parseInt(e.target.value);
-    if (!isNaN(value) && value >= 1 && value <= item.stock_quantity) {
+    const value = parseFloat(e.target.value);
+    if (!isNaN(value) && value >= minQuantity && value <= item.stock_quantity) {
       onQuantityChange(item.id, value);
     }
   };
 
-  const itemTotal = (item.price * item.quantity).toFixed(2);
+  const pricePerUnit = item.price + (item.platform_fee || 0);
+  const itemTotal = (pricePerUnit * item.quantity).toFixed(2);
   const isLowStock = item.quantity >= item.stock_quantity;
 
   return (
@@ -247,18 +256,18 @@ const CartItem = ({ item, onQuantityChange, onRemove }) => {
 
           {/* Price per unit */}
           <div className="mb-4">
-            <span className="text-2xl font-bold text-green-600">${item.price.toFixed(2)}</span>
+            <span className="text-2xl font-bold text-green-600">${pricePerUnit.toFixed(2)}</span>
             <span className="text-gray-600 ml-2">/ {item.unit}</span>
           </div>
 
           {/* Quantity Selector */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="flex items-center gap-3">
-              <span className="text-gray-700 font-medium">Quantity:</span>
+              <span className="text-gray-700 font-medium">{isWeightBased ? 'Amount:' : 'Quantity:'}</span>
               <div className="flex items-center border-2 border-gray-300 rounded-lg overflow-hidden">
                 <button
                   onClick={handleDecrement}
-                  disabled={item.quantity <= 1}
+                  disabled={item.quantity <= minQuantity}
                   className="px-4 py-2 bg-white hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
                 >
                   -
@@ -267,8 +276,9 @@ const CartItem = ({ item, onQuantityChange, onRemove }) => {
                   type="number"
                   value={item.quantity}
                   onChange={handleInputChange}
-                  className="w-16 text-center border-x-2 border-gray-300 py-2 font-semibold"
-                  min="1"
+                  className="w-20 text-center border-x-2 border-gray-300 py-2 font-semibold"
+                  min={isWeightBased ? "0.1" : "1"}
+                  step={isWeightBased ? "0.1" : "1"}
                   max={item.stock_quantity}
                 />
                 <button
@@ -311,6 +321,7 @@ CartItem.propTypes = {
     image_url: PropTypes.string,
     stock_quantity: PropTypes.number,
     category: PropTypes.string,
+    platform_fee: PropTypes.number,
   }).isRequired,
   onQuantityChange: PropTypes.func.isRequired,
   onRemove: PropTypes.func.isRequired,

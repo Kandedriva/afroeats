@@ -37,6 +37,13 @@ export default function Login() {
 
       if (!response.ok) {
         const errorData = await response.json();
+
+        // Check if email verification is required
+        if (errorData.emailVerificationRequired && errorData.email) {
+          navigate("/verify-email", { state: { email: errorData.email } });
+          return;
+        }
+
         throw new Error(errorData.error || "Login failed");
       }
 

@@ -6,7 +6,7 @@ import { useOrderNotifications } from '../hooks/useOrderNotifications';
  * Shows a bell icon with a badge for new order notifications
  * Includes sound alerts and browser notifications
  */
-const NotificationBell = ({ userRole, restaurantId }) => {
+const NotificationBell = ({ userRole, restaurantId, theme = 'light' }) => {
   const {
     newOrderCount,
     clearNotificationCount,
@@ -31,20 +31,30 @@ const NotificationBell = ({ userRole, restaurantId }) => {
   };
 
   // Don't show for regular customers
-  if (userRole !== 'owner' && userRole !== 'admin') {
+  if (userRole !== 'owner' && userRole !== 'admin' && userRole !== 'grocery-owner') {
     return null;
   }
+
+  // Dynamic styles based on theme
+  const isDark = theme === 'dark';
+  const bellColor = newOrderCount > 0
+    ? 'text-yellow-400 animate-bounce'
+    : isDark ? 'text-white' : 'text-gray-600';
+  const hoverBg = isDark ? 'hover:bg-white hover:bg-opacity-20' : 'hover:bg-gray-100';
+  const toggleActiveColor = isDark ? 'text-yellow-400 hover:bg-white hover:bg-opacity-20' : 'text-green-600 hover:bg-green-50';
+  const toggleInactiveColor = isDark ? 'text-gray-300 hover:bg-white hover:bg-opacity-20' : 'text-gray-400 hover:bg-gray-100';
+  const statusTextColor = isDark ? 'text-yellow-300' : 'text-orange-600';
 
   return (
     <div className="flex items-center gap-2">
       {/* Notification Bell */}
       <button
         onClick={handleBellClick}
-        className="relative p-2 rounded-full hover:bg-gray-100 transition-colors"
+        className={`relative p-2 rounded-full ${hoverBg} transition-colors`}
         aria-label="Notifications"
       >
         <svg
-          className={`w-6 h-6 ${newOrderCount > 0 ? 'text-orange-600 animate-bounce' : 'text-gray-600'}`}
+          className={`w-6 h-6 ${bellColor}`}
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -70,8 +80,8 @@ const NotificationBell = ({ userRole, restaurantId }) => {
         onClick={handleToggleNotifications}
         className={`p-2 rounded-full transition-colors ${
           isEnabled
-            ? 'text-green-600 hover:bg-green-50'
-            : 'text-gray-400 hover:bg-gray-100'
+            ? toggleActiveColor
+            : toggleInactiveColor
         }`}
         title={isEnabled ? 'Disable notifications' : 'Enable notifications'}
         aria-label={isEnabled ? 'Disable notifications' : 'Enable notifications'}
@@ -95,7 +105,7 @@ const NotificationBell = ({ userRole, restaurantId }) => {
       {/* Notification Status Indicator */}
       {newOrderCount > 0 && (
         <div className="hidden sm:block">
-          <span className="text-xs font-medium text-orange-600">
+          <span className={`text-xs font-medium ${statusTextColor}`}>
             {newOrderCount} new {newOrderCount === 1 ? 'order' : 'orders'}
           </span>
         </div>
@@ -107,6 +117,7 @@ const NotificationBell = ({ userRole, restaurantId }) => {
 NotificationBell.propTypes = {
   userRole: PropTypes.string,
   restaurantId: PropTypes.number,
+  theme: PropTypes.oneOf(['light', 'dark']),
 };
 
 export default NotificationBell;

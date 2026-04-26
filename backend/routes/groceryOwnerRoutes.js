@@ -1,10 +1,13 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
+import Stripe from 'stripe';
 import pool from '../db.js';
-import { uploadRestaurantLogo, handleR2UploadResult } from '../middleware/r2Upload.js';
-import sgMail from '@sendgrid/mail';
+import { uploadRestaurantLogo, uploadProductImage, handleR2UploadResult } from '../middleware/r2Upload.js';
+import { sendGroceryOwnerWelcomeEmail } from '../services/emailService.js';
 
 const router = express.Router();
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
 
 // Middleware to require grocery owner authentication
 const requireGroceryOwnerAuth = (req, res, next) => {
@@ -118,19 +121,8 @@ router.post('/register', uploadRestaurantLogo, async (req, res) => {
         }
 
         // Send welcome email
-        if (process.env.SENDGRID_API_KEY) {
-          sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-          const msg = {
-            to: email,
-            from: process.env.SENDGRID_FROM_EMAIL || 'noreply@orderdabaly.com',
-            subject: 'Welcome to Order Dabaly - Grocery Store Owner',
-            html: `<h1>Welcome, ${name}!</h1>
-             <p>Thank you for registering your grocery store <strong>${store_name}</strong> on Order Dabaly!</p>
-             <p>You can now start managing your store and receiving orders.</p>
-             <p><a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/grocery-owner/dashboard">Go to Dashboard</a></p>`
-          };
-          sgMail.send(msg).catch(err => console.error('Welcome email failed:', err));
-        }
+        sendGroceryOwnerWelcomeEmail(email, name, store_name)
+          .catch(err => console.error('Welcome email failed:', err));
 
         res.status(201).json({
           message: 'Registration successful',
@@ -282,6 +274,298 @@ router.get('/store', requireGroceryOwnerAuth, async (req, res) => {
 });
 
 // ===========================
+// UPDATE GROCERY STORE
+// ===========================
+
+router.patch('/store', requireGroceryOwnerAuth, uploadRestaurantLogo, async (req, res) => {
+  try {
+    const { name, address, phone_number, active } = req.body;
+
+    // Validate required fields
+    if (!name || !address || !phone_number) {
+      return res.status(400).json({ error: 'Name, address, and phone number are required' });
+    }
+
+    // Get current store info
+    const storeResult = await pool.query(
+      'SELECT * FROM grocery_stores WHERE owner_id = $1',
+      [req.groceryOwner.id]
+    );
+
+    if (storeResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Grocery store not found' });
+    }
+
+    const currentStore = storeResult.rows[0];
+
+    // Handle logo upload (using middleware result)
+    const logoUrl = handleR2UploadResult(req) || currentStore.image_url;
+
+    // Convert active to boolean
+    const isActive = active === 'true' || active === true;
+
+    // Update store information
+    const updateResult = await pool.query(
+      `UPDATE grocery_stores
+       SET name = $1, address = $2, phone_number = $3, image_url = $4, active = $5, updated_at = NOW()
+       WHERE owner_id = $6
+       RETURNING *`,
+      [name, address, phone_number, logoUrl, isActive, req.groceryOwner.id]
+    );
+
+    // Auto-geocode the updated address if address changed (async, non-blocking)
+    if (address !== currentStore.address) {
+      try {
+        const { geocodeGroceryStore } = await import('../services/googleMapsService.js');
+        const geocoded = await geocodeGroceryStore(currentStore.id);
+        if (geocoded) {
+          console.log(`✅ Auto-geocoded updated grocery store ${name}: (${geocoded.latitude}, ${geocoded.longitude})`);
+        } else {
+          console.warn(`⚠️ Could not auto-geocode updated grocery store ${name} at address: ${address}`);
+        }
+      } catch (geocodeError) {
+        console.warn(`⚠️ Auto-geocoding failed for updated grocery store ${name}:`, geocodeError.message);
+      }
+    }
+
+    res.json(updateResult.rows[0]);
+  } catch (error) {
+    console.error('Update grocery store error:', error);
+    res.status(500).json({ error: 'Failed to update grocery store information' });
+  }
+});
+
+// ===========================
+// PRODUCT MANAGEMENT
+// ===========================
+
+/**
+ * POST /api/grocery-owners/products
+ * Create a new product for the grocery store
+ */
+router.post('/products', requireGroceryOwnerAuth, ...uploadProductImage, async (req, res) => {
+  try {
+    const {
+      name,
+      description,
+      price,
+      platform_fee,
+      category,
+      subcategory,
+      unit,
+      stock_quantity,
+      low_stock_threshold,
+      is_available,
+      origin,
+      organic,
+      gluten_free,
+      vegan,
+    } = req.body;
+
+    // Validate required fields
+    if (!name || !price || !platform_fee || !category || !unit || stock_quantity === undefined) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Get store for this owner
+    const storeResult = await pool.query(
+      'SELECT id FROM grocery_stores WHERE owner_id = $1',
+      [req.groceryOwner.id]
+    );
+
+    if (storeResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Grocery store not found' });
+    }
+
+    const storeId = storeResult.rows[0].id;
+
+    // Handle image upload
+    const uploadResult = handleR2UploadResult(req);
+    const imageUrl = uploadResult.success ? uploadResult.imageUrl : null;
+
+    // Convert boolean strings from FormData
+    const isAvailable = is_available === 'true' || is_available === true;
+    const isOrganic = organic === 'true' || organic === true;
+    const isGlutenFree = gluten_free === 'true' || gluten_free === true;
+    const isVegan = vegan === 'true' || vegan === true;
+
+    // Insert product
+    const productResult = await pool.query(
+      `INSERT INTO products (
+        name, description, price, platform_fee, category, subcategory, unit,
+        stock_quantity, low_stock_threshold, is_available,
+        image_url, origin, organic, gluten_free, vegan, store_id,
+        created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW(), NOW())
+      RETURNING *`,
+      [
+        name,
+        description || null,
+        parseFloat(price),
+        parseFloat(platform_fee),
+        category,
+        subcategory || null,
+        unit,
+        parseInt(stock_quantity),
+        low_stock_threshold ? parseInt(low_stock_threshold) : 10,
+        isAvailable,
+        imageUrl,
+        origin || null,
+        isOrganic,
+        isGlutenFree,
+        isVegan,
+        storeId,
+      ]
+    );
+
+    res.status(201).json({
+      message: 'Product created successfully',
+      product: productResult.rows[0],
+    });
+  } catch (error) {
+    console.error('Create product error:', error);
+    res.status(500).json({ error: 'Failed to create product' });
+  }
+});
+
+/**
+ * PUT /api/grocery-owners/products/:id
+ * Update product details (full update)
+ */
+router.put('/products/:id', requireGroceryOwnerAuth, ...uploadProductImage, async (req, res) => {
+  try {
+    const productId = parseInt(req.params.id);
+    const {
+      name,
+      description,
+      price,
+      platform_fee,
+      category,
+      unit,
+      stock_quantity,
+      low_stock_threshold,
+      is_available,
+    } = req.body;
+
+    // Verify product belongs to this owner's store
+    const verifyResult = await pool.query(
+      `SELECT p.id, p.image_url FROM products p
+       INNER JOIN grocery_stores gs ON p.store_id = gs.id
+       WHERE p.id = $1 AND gs.owner_id = $2`,
+      [productId, req.groceryOwner.id]
+    );
+
+    if (verifyResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Product not found or unauthorized' });
+    }
+
+    const currentProduct = verifyResult.rows[0];
+
+    // Handle image upload
+    const uploadResult = handleR2UploadResult(req);
+    const imageUrl = uploadResult.success ? uploadResult.imageUrl : currentProduct.image_url;
+
+    // Convert boolean strings from FormData
+    const isAvailable = is_available === 'true' || is_available === true;
+
+    // Update product
+    const updateResult = await pool.query(
+      `UPDATE products
+       SET name = $1, description = $2, price = $3, platform_fee = $4, category = $5,
+           unit = $6, stock_quantity = $7, low_stock_threshold = $8, is_available = $9,
+           image_url = $10, updated_at = NOW()
+       WHERE id = $11
+       RETURNING *`,
+      [
+        name,
+        description || null,
+        parseFloat(price),
+        parseFloat(platform_fee),
+        category,
+        unit,
+        parseInt(stock_quantity),
+        low_stock_threshold ? parseInt(low_stock_threshold) : 10,
+        isAvailable,
+        imageUrl,
+        productId,
+      ]
+    );
+
+    res.json({
+      message: 'Product updated successfully',
+      product: updateResult.rows[0],
+    });
+  } catch (error) {
+    console.error('Update product error:', error);
+    res.status(500).json({ error: 'Failed to update product' });
+  }
+});
+
+/**
+ * PATCH /api/products/:id
+ * Update product availability (quick toggle)
+ */
+router.patch('/products/:id', requireGroceryOwnerAuth, async (req, res) => {
+  try {
+    const productId = parseInt(req.params.id);
+    const { is_available } = req.body;
+
+    // Verify product belongs to this owner's store
+    const verifyResult = await pool.query(
+      `SELECT p.id FROM products p
+       INNER JOIN grocery_stores gs ON p.store_id = gs.id
+       WHERE p.id = $1 AND gs.owner_id = $2`,
+      [productId, req.groceryOwner.id]
+    );
+
+    if (verifyResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Product not found or unauthorized' });
+    }
+
+    // Update availability
+    const updateResult = await pool.query(
+      'UPDATE products SET is_available = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
+      [is_available, productId]
+    );
+
+    res.json(updateResult.rows[0]);
+  } catch (error) {
+    console.error('Update product availability error:', error);
+    res.status(500).json({ error: 'Failed to update product' });
+  }
+});
+
+/**
+ * DELETE /api/products/:id
+ * Delete a product
+ */
+router.delete('/products/:id', requireGroceryOwnerAuth, async (req, res) => {
+  try {
+    const productId = parseInt(req.params.id);
+
+    // Verify product belongs to this owner's store
+    const verifyResult = await pool.query(
+      `SELECT p.id FROM products p
+       INNER JOIN grocery_stores gs ON p.store_id = gs.id
+       WHERE p.id = $1 AND gs.owner_id = $2`,
+      [productId, req.groceryOwner.id]
+    );
+
+    if (verifyResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Product not found or unauthorized' });
+    }
+
+    // Delete product
+    await pool.query('DELETE FROM products WHERE id = $1', [productId]);
+
+    res.json({ message: 'Product deleted successfully' });
+  } catch (error) {
+    console.error('Delete product error:', error);
+    res.status(500).json({ error: 'Failed to delete product' });
+  }
+});
+
+// ===========================
 // GROCERY ORDERS MANAGEMENT
 // ===========================
 
@@ -305,9 +589,9 @@ router.get('/orders', requireGroceryOwnerAuth, async (req, res) => {
 
     const storeId = storeResult.rows[0].id;
 
-    // Get all grocery orders with items
+    // Get all grocery orders that contain at least one product from this store
     const ordersResult = await pool.query(`
-      SELECT
+      SELECT DISTINCT
         go.id,
         go.total,
         go.subtotal,
@@ -324,27 +608,41 @@ router.get('/orders', requireGroceryOwnerAuth, async (req, res) => {
         go.user_id,
         u.name AS customer_name,
         u.email AS customer_email,
-        u.phone AS customer_phone,
-        json_agg(
-          json_build_object(
-            'id', goi.id,
-            'product_id', goi.product_id,
-            'quantity', goi.quantity,
-            'price', goi.price,
-            'product_name', p.name,
-            'product_image', p.image_url
-          )
-        ) AS items
+        u.phone AS customer_phone
       FROM grocery_orders go
       LEFT JOIN users u ON go.user_id = u.id
-      LEFT JOIN grocery_order_items goi ON go.id = goi.order_id
-      LEFT JOIN products p ON goi.product_id = p.id
-      WHERE p.grocery_store_id = $1
-      GROUP BY go.id, u.id
+      INNER JOIN grocery_order_items goi ON go.id = goi.grocery_order_id
+      INNER JOIN products p ON goi.product_id = p.id
+      WHERE p.store_id = $1
       ORDER BY go.created_at DESC
     `, [storeId]);
 
-    res.json({ orders: ordersResult.rows });
+    // For each order, get its items
+    const ordersWithItems = await Promise.all(
+      ordersResult.rows.map(async (order) => {
+        const itemsResult = await pool.query(`
+          SELECT
+            goi.id,
+            goi.product_id,
+            goi.quantity,
+            goi.unit_price,
+            goi.total_price,
+            p.name AS product_name,
+            p.image_url AS product_image
+          FROM grocery_order_items goi
+          LEFT JOIN products p ON goi.product_id = p.id
+          WHERE goi.grocery_order_id = $1
+          ORDER BY goi.id
+        `, [order.id]);
+
+        return {
+          ...order,
+          items: itemsResult.rows
+        };
+      })
+    );
+
+    res.json(ordersWithItems);
   } catch (error) {
     console.error('Get grocery orders error:', error);
     res.status(500).json({ error: 'Failed to get grocery orders' });
@@ -397,6 +695,443 @@ router.patch('/orders/:id/complete', requireGroceryOwnerAuth, async (req, res) =
   } catch (error) {
     console.error('Complete grocery order error:', error);
     res.status(500).json({ error: 'Failed to complete order' });
+  }
+});
+
+// ===========================
+// NOTIFICATIONS MANAGEMENT
+// ===========================
+
+/**
+ * GET /api/grocery-owners/notifications
+ * Get all notifications for the grocery store owner
+ */
+router.get('/notifications', requireGroceryOwnerAuth, async (req, res) => {
+  try {
+    const groceryOwnerId = req.groceryOwner.id;
+
+    // Get all notifications for this grocery owner
+    const notificationsResult = await pool.query(`
+      SELECT *
+      FROM grocery_owner_notifications
+      WHERE grocery_owner_id = $1
+      ORDER BY created_at DESC
+      LIMIT 100
+    `, [groceryOwnerId]);
+
+    res.json({
+      notifications: notificationsResult.rows,
+      unreadCount: notificationsResult.rows.filter(n => !n.read).length
+    });
+  } catch (error) {
+    console.error('Get grocery notifications error:', error);
+    res.status(500).json({ error: 'Failed to get notifications' });
+  }
+});
+
+/**
+ * POST /api/grocery-owners/notifications/:id/mark-read
+ * Mark a notification as read
+ */
+router.post('/notifications/:id/mark-read', requireGroceryOwnerAuth, async (req, res) => {
+  try {
+    const notificationId = req.params.id;
+    const groceryOwnerId = req.groceryOwner.id;
+
+    // Mark notification as read (ensure it belongs to this owner)
+    const result = await pool.query(`
+      UPDATE grocery_owner_notifications
+      SET read = true
+      WHERE id = $1 AND grocery_owner_id = $2
+      RETURNING *
+    `, [notificationId, groceryOwnerId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Notification not found' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Mark notification read error:', error);
+    res.status(500).json({ error: 'Failed to mark notification as read' });
+  }
+});
+
+/**
+ * POST /api/grocery-owners/notifications/mark-all-read
+ * Mark all notifications as read
+ */
+router.post('/notifications/mark-all-read', requireGroceryOwnerAuth, async (req, res) => {
+  try {
+    const groceryOwnerId = req.groceryOwner.id;
+
+    await pool.query(`
+      UPDATE grocery_owner_notifications
+      SET read = true
+      WHERE grocery_owner_id = $1 AND read = false
+    `, [groceryOwnerId]);
+
+    res.json({ message: 'All notifications marked as read' });
+  } catch (error) {
+    console.error('Mark all notifications read error:', error);
+    res.status(500).json({ error: 'Failed to mark all notifications as read' });
+  }
+});
+
+/**
+ * GET /api/grocery-owners/reports
+ * Get reports and analytics for grocery owner
+ */
+router.get('/reports', requireGroceryOwnerAuth, async (req, res) => {
+  try {
+    const groceryOwnerId = req.groceryOwner.id;
+    const range = req.query.range || 'week';
+
+    // Calculate date range
+    const now = new Date();
+    let startDate;
+
+    switch (range) {
+      case 'week':
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        break;
+      case 'month':
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        break;
+      case 'year':
+        startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+        break;
+      case 'all':
+        startDate = new Date('2020-01-01');
+        break;
+      default:
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    }
+
+    // Get all orders for this grocery owner's store
+    const ordersResult = await pool.query(`
+      SELECT
+        go.id,
+        go.total,
+        go.status,
+        go.refund_status,
+        go.created_at,
+        go.paid_at,
+        go.delivered_at
+      FROM grocery_orders go
+      JOIN grocery_order_items goi ON go.id = goi.grocery_order_id
+      JOIN products p ON goi.product_id = p.id
+      WHERE p.store_id = $1
+        AND go.created_at >= $2
+      GROUP BY go.id
+      ORDER BY go.created_at DESC
+    `, [groceryOwnerId, startDate]);
+
+    const orders = ordersResult.rows;
+
+    // Calculate stats
+    const totalOrders = orders.length;
+    const completedOrders = orders.filter(o => o.status === 'delivered').length;
+    const cancelledOrders = orders.filter(o => o.status === 'cancelled').length;
+    const refundedOrders = orders.filter(o => o.refund_status === 'full' || o.refund_status === 'partial').length;
+
+    const totalRevenue = orders
+      .filter(o => o.status === 'delivered')
+      .reduce((sum, o) => sum + parseFloat(o.total || 0), 0);
+
+    const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+
+    // Get top products
+    const topProductsResult = await pool.query(`
+      SELECT
+        p.name,
+        SUM(goi.quantity) as total_sold,
+        SUM(goi.total_price) as revenue
+      FROM grocery_order_items goi
+      JOIN products p ON goi.product_id = p.id
+      JOIN grocery_orders go ON goi.grocery_order_id = go.id
+      WHERE p.store_id = $1
+        AND go.status = 'delivered'
+        AND go.created_at >= $2
+      GROUP BY p.id, p.name
+      ORDER BY revenue DESC
+      LIMIT 5
+    `, [groceryOwnerId, startDate]);
+
+    const topProducts = topProductsResult.rows.map(p => ({
+      name: p.name,
+      total_sold: parseInt(p.total_sold),
+      revenue: parseFloat(p.revenue)
+    }));
+
+    // Get recent activity
+    const activityResult = await pool.query(`
+      SELECT
+        'new_order' as type,
+        CONCAT('New order #', go.id, ' placed by ', go.delivery_name) as description,
+        go.total as amount,
+        go.created_at
+      FROM grocery_orders go
+      JOIN grocery_order_items goi ON go.id = goi.grocery_order_id
+      JOIN products p ON goi.product_id = p.id
+      WHERE p.store_id = $1
+        AND go.created_at >= $2
+      GROUP BY go.id
+
+      UNION ALL
+
+      SELECT
+        'order_completed' as type,
+        CONCAT('Order #', go.id, ' delivered to ', go.delivery_name) as description,
+        go.total as amount,
+        go.delivered_at as created_at
+      FROM grocery_orders go
+      JOIN grocery_order_items goi ON go.id = goi.grocery_order_id
+      JOIN products p ON goi.product_id = p.id
+      WHERE p.store_id = $1
+        AND go.status = 'delivered'
+        AND go.delivered_at >= $2
+      GROUP BY go.id
+
+      UNION ALL
+
+      SELECT
+        'refund_request' as type,
+        CONCAT('Refund request for order #', grr.grocery_order_id) as description,
+        grr.amount,
+        grr.requested_at as created_at
+      FROM grocery_refund_requests grr
+      JOIN grocery_orders go ON grr.grocery_order_id = go.id
+      JOIN grocery_order_items goi ON go.id = goi.grocery_order_id
+      JOIN products p ON goi.product_id = p.id
+      WHERE p.store_id = $1
+        AND grr.requested_at >= $2
+      GROUP BY grr.id
+
+      ORDER BY created_at DESC
+      LIMIT 20
+    `, [groceryOwnerId, startDate]);
+
+    const recentActivity = activityResult.rows;
+
+    res.json({
+      totalRevenue,
+      totalOrders,
+      averageOrderValue,
+      completedOrders,
+      cancelledOrders,
+      refundedOrders,
+      topProducts,
+      recentActivity
+    });
+  } catch (error) {
+    console.error('Get reports error:', error);
+    res.status(500).json({ error: 'Failed to fetch reports' });
+  }
+});
+
+// ===========================
+// STRIPE CONNECT ENDPOINTS
+// ===========================
+
+/**
+ * POST /api/grocery-owners/stripe/create-account
+ * Create a Stripe Connect account for grocery owner
+ */
+router.post('/stripe/create-account', requireGroceryOwnerAuth, async (req, res) => {
+  try {
+    const groceryOwnerId = req.groceryOwner.id;
+
+    // Check if owner already has a Stripe account
+    const ownerResult = await pool.query(
+      'SELECT stripe_account_id FROM grocery_store_owners WHERE id = $1',
+      [groceryOwnerId]
+    );
+
+    if (ownerResult.rows[0]?.stripe_account_id) {
+      return res.status(400).json({
+        error: 'Stripe account already exists',
+        accountId: ownerResult.rows[0].stripe_account_id
+      });
+    }
+
+    // Create Stripe Connect account
+    const account = await stripe.accounts.create({
+      type: 'express',
+      country: 'US',
+      email: req.groceryOwner.email,
+      capabilities: {
+        card_payments: { requested: true },
+        transfers: { requested: true },
+      },
+    });
+
+    // Save Stripe account ID to database
+    await pool.query(
+      `UPDATE grocery_store_owners
+       SET stripe_account_id = $1
+       WHERE id = $2`,
+      [account.id, groceryOwnerId]
+    );
+
+    console.log(`✅ Created Stripe Connect account ${account.id} for grocery owner ${groceryOwnerId}`);
+
+    res.json({
+      accountId: account.id,
+      message: 'Stripe account created successfully'
+    });
+  } catch (error) {
+    console.error('Create Stripe account error:', error);
+    console.error('Error details:', error.message);
+    console.error('Error type:', error.type);
+    res.status(500).json({
+      error: 'Failed to create Stripe account',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/grocery-owners/stripe/create-onboarding-link
+ * Create Stripe Connect onboarding link
+ */
+router.post('/stripe/create-onboarding-link', requireGroceryOwnerAuth, async (req, res) => {
+  try {
+    const groceryOwnerId = req.groceryOwner.id;
+
+    // Get owner's Stripe account ID
+    const ownerResult = await pool.query(
+      'SELECT stripe_account_id FROM grocery_store_owners WHERE id = $1',
+      [groceryOwnerId]
+    );
+
+    const stripeAccountId = ownerResult.rows[0]?.stripe_account_id;
+
+    if (!stripeAccountId) {
+      return res.status(400).json({ error: 'No Stripe account found. Please create one first.' });
+    }
+
+    // Create account link for onboarding
+    const accountLink = await stripe.accountLinks.create({
+      account: stripeAccountId,
+      refresh_url: `${FRONTEND_URL}/grocery-owner/store?stripe_refresh=true`,
+      return_url: `${FRONTEND_URL}/grocery-owner/store?stripe_success=true`,
+      type: 'account_onboarding',
+    });
+
+    console.log(`✅ Created onboarding link for Stripe account ${stripeAccountId}`);
+
+    res.json({
+      url: accountLink.url,
+      accountId: stripeAccountId
+    });
+  } catch (error) {
+    console.error('Create onboarding link error:', error);
+    res.status(500).json({ error: 'Failed to create onboarding link' });
+  }
+});
+
+/**
+ * POST /api/grocery-owners/stripe/create-login-link
+ * Create Stripe Connect dashboard login link
+ */
+router.post('/stripe/create-login-link', requireGroceryOwnerAuth, async (req, res) => {
+  try {
+    const groceryOwnerId = req.groceryOwner.id;
+
+    // Get owner's Stripe account ID
+    const ownerResult = await pool.query(
+      'SELECT stripe_account_id FROM grocery_store_owners WHERE id = $1',
+      [groceryOwnerId]
+    );
+
+    const stripeAccountId = ownerResult.rows[0]?.stripe_account_id;
+
+    if (!stripeAccountId) {
+      return res.status(400).json({ error: 'No Stripe account found' });
+    }
+
+    // Create login link
+    const loginLink = await stripe.accounts.createLoginLink(stripeAccountId);
+
+    console.log(`✅ Created login link for Stripe account ${stripeAccountId}`);
+
+    res.json({
+      url: loginLink.url
+    });
+  } catch (error) {
+    console.error('Create login link error:', error);
+    res.status(500).json({ error: 'Failed to create login link' });
+  }
+});
+
+/**
+ * GET /api/grocery-owners/stripe/account-status
+ * Get Stripe Connect account status
+ */
+router.get('/stripe/account-status', requireGroceryOwnerAuth, async (req, res) => {
+  try {
+    const groceryOwnerId = req.groceryOwner.id;
+
+    // Get owner's Stripe account ID
+    const ownerResult = await pool.query(
+      `SELECT
+        stripe_account_id,
+        stripe_onboarding_complete,
+        stripe_details_submitted,
+        stripe_charges_enabled,
+        stripe_payouts_enabled
+       FROM grocery_store_owners
+       WHERE id = $1`,
+      [groceryOwnerId]
+    );
+
+    const owner = ownerResult.rows[0];
+
+    if (!owner?.stripe_account_id) {
+      return res.json({
+        hasAccount: false,
+        onboardingComplete: false,
+        detailsSubmitted: false,
+        chargesEnabled: false,
+        payoutsEnabled: false
+      });
+    }
+
+    // Get account details from Stripe
+    const account = await stripe.accounts.retrieve(owner.stripe_account_id);
+
+    // Update database with latest status
+    await pool.query(
+      `UPDATE grocery_store_owners
+       SET stripe_onboarding_complete = $1,
+           stripe_details_submitted = $2,
+           stripe_charges_enabled = $3,
+           stripe_payouts_enabled = $4,
+           stripe_connected_at = CASE WHEN $3 = true AND stripe_connected_at IS NULL THEN NOW() ELSE stripe_connected_at END
+       WHERE id = $5`,
+      [
+        account.details_submitted && account.charges_enabled,
+        account.details_submitted,
+        account.charges_enabled,
+        account.payouts_enabled,
+        groceryOwnerId
+      ]
+    );
+
+    res.json({
+      hasAccount: true,
+      accountId: owner.stripe_account_id,
+      onboardingComplete: account.details_submitted && account.charges_enabled,
+      detailsSubmitted: account.details_submitted,
+      chargesEnabled: account.charges_enabled,
+      payoutsEnabled: account.payouts_enabled,
+      requirementsCurrentlyDue: account.requirements?.currently_due || [],
+      requirementsEventuallyDue: account.requirements?.eventually_due || []
+    });
+  } catch (error) {
+    console.error('Get account status error:', error);
+    res.status(500).json({ error: 'Failed to get account status' });
   }
 });
 

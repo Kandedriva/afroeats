@@ -5,6 +5,7 @@ import GroceryOwnerNavbar from "./Components/GroceryOwnerNavbar";
 import RestaurantsPage from "./pages/RestaurantsPage";
 import RestaurantDetails from "./pages/RestaurantDetails";
 import Register from "./pages/Register";
+import VerifyEmail from "./pages/VerifyEmail";
 import RegisterOwner from "./pages/RegisterOwner";
 import RegisterGroceryOwner from "./pages/RegisterGroceryOwner";
 import OwnerDashboard from "./pages/OwnerDashboard";
@@ -35,7 +36,7 @@ import ProtectedOwnerRoute from "./Components/ProtectedOwnerRoute";
 import ProtectedGroceryOwnerRoute from "./Components/ProtectedGroceryOwnerRoute";
 import ProtectedRoute from "./Components/ProtectedRoute";
 import { OwnerAuthProvider } from "./context/OwnerAuthContext";
-import { GroceryOwnerAuthProvider } from "./context/GroceryOwnerAuthContext";
+import { GroceryOwnerAuthProvider, GroceryOwnerAuthContext } from "./context/GroceryOwnerAuthContext";
 import { GuestProvider } from "./context/GuestContext";
 import { ToastContainer, Slide } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -69,21 +70,32 @@ import GroceryCheckout from "./pages/GroceryCheckout";
 import TrackGuestOrder from "./pages/TrackGuestOrder";
 import OwnerGroceryOrders from "./pages/OwnerGroceryOrders";
 import GroceryOwnerDashboard from "./pages/GroceryOwnerDashboard";
+import GroceryOwnerProducts from "./pages/GroceryOwnerProducts";
+import GroceryOwnerStoreSettings from "./pages/GroceryOwnerStoreSettings";
+import GroceryOwnerAddProduct from "./pages/GroceryOwnerAddProduct";
+import GroceryOwnerEditProduct from "./pages/GroceryOwnerEditProduct";
+import GroceryOwnerNotifications from "./pages/GroceryOwnerNotifications";
+import GroceryOwnerReports from "./pages/GroceryOwnerReports";
 
 
 function AppContent() {
   const { user } = useContext(AuthContext);
+  const { groceryOwner } = useContext(GroceryOwnerAuthContext);
   const location = useLocation();
   const isOwnerRoute = location.pathname.startsWith("/owner") && !location.pathname.startsWith("/owner/grocery");
   const isGroceryOwnerRoute = location.pathname.startsWith("/grocery-owner");
   const isAdminRoute = location.pathname.startsWith("/admin");
   const isDriverRoute = location.pathname.startsWith("/driver");
 
+  // Public grocery owner routes (no navbar needed)
+  const groceryOwnerPublicRoutes = ["/grocery-owner/login", "/register-grocery-owner", "/grocery-owner/password-update"];
+  const isGroceryOwnerPublicRoute = groceryOwnerPublicRoutes.includes(location.pathname);
+
   return (
     <>
       {!isOwnerRoute && !isGroceryOwnerRoute && !isAdminRoute && !isDriverRoute && <Navbar />}
       {isOwnerRoute && <OwnerNavbar />}
-      {isGroceryOwnerRoute && <GroceryOwnerNavbar />}
+      {isGroceryOwnerRoute && !isGroceryOwnerPublicRoute && groceryOwner && <GroceryOwnerNavbar />}
       {isDriverRoute && <DriverNavbar />}
       {/* Admin routes don't show any navbar */}
 
@@ -99,6 +111,7 @@ function AppContent() {
         <Route path="/grocery-checkout" element={<GroceryCheckout />} />
         <Route path="/restaurants/:id" element={<RestaurantDetails />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/login" element={<Login />} />
         <Route path="/password-update" element={<UserPasswordUpdate />} />
         <Route path="/track-order" element={<TrackGuestOrder />} />
@@ -238,10 +251,6 @@ function AppContent() {
             </ProtectedOwnerRoute>
           }
         />
-        <Route
-          path="/owner/grocery-orders"
-          element={<OwnerGroceryOrders />}
-        />
 
         {/* Grocery Owner Routes */}
         <Route
@@ -257,6 +266,54 @@ function AppContent() {
           element={
             <ProtectedGroceryOwnerRoute>
               <OwnerGroceryOrders />
+            </ProtectedGroceryOwnerRoute>
+          }
+        />
+        <Route
+          path="/grocery-owner/products"
+          element={
+            <ProtectedGroceryOwnerRoute>
+              <GroceryOwnerProducts />
+            </ProtectedGroceryOwnerRoute>
+          }
+        />
+        <Route
+          path="/grocery-owner/store"
+          element={
+            <ProtectedGroceryOwnerRoute>
+              <GroceryOwnerStoreSettings />
+            </ProtectedGroceryOwnerRoute>
+          }
+        />
+        <Route
+          path="/grocery-owner/products/add"
+          element={
+            <ProtectedGroceryOwnerRoute>
+              <GroceryOwnerAddProduct />
+            </ProtectedGroceryOwnerRoute>
+          }
+        />
+        <Route
+          path="/grocery-owner/products/edit/:productId"
+          element={
+            <ProtectedGroceryOwnerRoute>
+              <GroceryOwnerEditProduct />
+            </ProtectedGroceryOwnerRoute>
+          }
+        />
+        <Route
+          path="/grocery-owner/notifications"
+          element={
+            <ProtectedGroceryOwnerRoute>
+              <GroceryOwnerNotifications />
+            </ProtectedGroceryOwnerRoute>
+          }
+        />
+        <Route
+          path="/grocery-owner/reports"
+          element={
+            <ProtectedGroceryOwnerRoute>
+              <GroceryOwnerReports />
             </ProtectedGroceryOwnerRoute>
           }
         />
