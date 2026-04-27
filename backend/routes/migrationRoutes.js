@@ -226,4 +226,34 @@ router.post('/add-stripe-to-grocery-owners', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/migration/create-grocery-carts
+ * Creates grocery_carts table if it doesn't exist
+ */
+router.post('/create-grocery-carts', async (req, res) => {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS grocery_carts (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        product_id INTEGER REFERENCES products(id) ON DELETE CASCADE,
+        quantity INTEGER NOT NULL DEFAULT 1,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_grocery_carts_user_id ON grocery_carts(user_id)
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_grocery_carts_product_id ON grocery_carts(product_id)
+    `);
+    logger.info('grocery_carts table ensured');
+    res.json({ success: true, message: 'grocery_carts table ready' });
+  } catch (error) {
+    logger.error('create-grocery-carts migration failed:', error);
+    res.status(500).json({ success: false, error: 'Migration failed', details: error.message });
+  }
+});
+
 export default router;
