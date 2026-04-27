@@ -16,26 +16,35 @@ class ProductService {
     try {
       let query = `
         SELECT
-          id, name, description, price, category, subcategory, unit,
-          stock_quantity, low_stock_threshold, is_available,
-          image_url, additional_images, origin, organic, gluten_free, vegan,
-          tags, created_at, updated_at
-        FROM products
-        WHERE is_deleted = false
+          p.id, p.name, p.description, p.price, p.category, p.subcategory, p.unit,
+          p.stock_quantity, p.low_stock_threshold, p.is_available, p.store_id,
+          p.image_url, p.additional_images, p.origin, p.organic, p.gluten_free, p.vegan,
+          p.tags, p.platform_fee, p.created_at, p.updated_at,
+          gs.name AS store_name
+        FROM products p
+        LEFT JOIN grocery_stores gs ON p.store_id = gs.id
+        WHERE p.is_deleted = false
       `;
       const params = [];
       let paramCount = 1;
 
+      // Filter by store
+      if (filters.store_id) {
+        query += ` AND p.store_id = $${paramCount}`;
+        params.push(filters.store_id);
+        paramCount++;
+      }
+
       // Filter by category
       if (filters.category) {
-        query += ` AND category = $${paramCount}`;
+        query += ` AND p.category = $${paramCount}`;
         params.push(filters.category);
         paramCount++;
       }
 
       // Filter by availability
       if (filters.is_available !== undefined) {
-        query += ` AND is_available = $${paramCount}`;
+        query += ` AND p.is_available = $${paramCount}`;
         params.push(filters.is_available);
         paramCount++;
       }
@@ -43,9 +52,9 @@ class ProductService {
       // Search by name or description
       if (filters.search) {
         query += ` AND (
-          name ILIKE $${paramCount} OR
-          description ILIKE $${paramCount} OR
-          search_terms ILIKE $${paramCount}
+          p.name ILIKE $${paramCount} OR
+          p.description ILIKE $${paramCount} OR
+          p.search_terms ILIKE $${paramCount}
         )`;
         params.push(`%${filters.search}%`);
         paramCount++;
@@ -53,13 +62,13 @@ class ProductService {
 
       // Filter by tags
       if (filters.tags && Array.isArray(filters.tags)) {
-        query += ` AND tags ?| $${paramCount}`;
+        query += ` AND p.tags ?| $${paramCount}`;
         params.push(filters.tags);
         paramCount++;
       }
 
       // Order by
-      query += ' ORDER BY created_at DESC';
+      query += ' ORDER BY p.created_at DESC';
 
       // Pagination
       if (filters.limit) {

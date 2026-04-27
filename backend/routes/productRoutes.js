@@ -37,7 +37,8 @@ router.get('/', async (req, res) => {
       search: req.query.search,
       limit: req.query.limit ? parseInt(req.query.limit) : undefined,
       offset: req.query.offset ? parseInt(req.query.offset) : undefined,
-      tags: req.query.tags ? req.query.tags.split(',') : undefined
+      tags: req.query.tags ? req.query.tags.split(',') : undefined,
+      store_id: req.query.store_id ? parseInt(req.query.store_id) : undefined,
     };
 
     const products = await ProductService.getAllProducts(filters);

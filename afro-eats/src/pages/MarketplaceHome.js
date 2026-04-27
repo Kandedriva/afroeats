@@ -358,6 +358,13 @@ const ProductCard = ({ product }) => {
             {product.name}
           </h3>
 
+          {/* Store Name */}
+          {product.store_name && (
+            <p className="text-xs text-green-700 font-medium bg-green-50 px-2 py-1 rounded-full inline-block mb-2">
+              🏪 {product.store_name}
+            </p>
+          )}
+
           {/* Origin */}
           {product.origin && (
             <p className="text-sm text-gray-500 mb-2">📍 {product.origin}</p>
@@ -531,6 +538,7 @@ ProductCard.propTypes = {
     vegan: PropTypes.bool,
     low_stock_threshold: PropTypes.number,
     platform_fee: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    store_name: PropTypes.string,
   }).isRequired,
 };
 
