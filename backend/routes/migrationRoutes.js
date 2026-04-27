@@ -256,4 +256,81 @@ router.post('/create-grocery-carts', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/migration/diagnose-notifications?orderId=123
+ * Runs every step of the owner notification chain for a given grocery order.
+ * Use this to diagnose why notifications aren't being written.
+ */
+router.get('/diagnose-notifications', async (req, res) => {
+  const orderId = parseInt(req.query.orderId);
+  if (!orderId || isNaN(orderId)) {
+    return res.status(400).json({ error: 'Pass ?orderId=<id>' });
+  }
+
+  const report = { orderId, steps: {} };
+
+  try {
+    // Step 1: does the order exist?
+    const orderRow = await pool.query(
+      `SELECT id, status, total, user_id, guest_email FROM grocery_orders WHERE id = $1`,
+      [orderId]
+    );
+    report.steps.order = orderRow.rows[0] || null;
+
+    // Step 2: order items and their store_ids
+    const items = await pool.query(
+      `SELECT goi.product_id, p.name, p.store_id
+       FROM grocery_order_items goi
+       LEFT JOIN products p ON goi.product_id = p.id
+       WHERE goi.grocery_order_id = $1`,
+      [orderId]
+    );
+    report.steps.orderItems = items.rows;
+
+    // Step 3: distinct non-null store_ids
+    const storeIdResult = await pool.query(
+      `SELECT DISTINCT p.store_id
+       FROM grocery_order_items goi
+       JOIN products p ON goi.product_id = p.id
+       WHERE goi.grocery_order_id = $1 AND p.store_id IS NOT NULL
+       LIMIT 1`,
+      [orderId]
+    );
+    report.steps.storeId = storeIdResult.rows[0]?.store_id || null;
+
+    // Step 4: owner lookup
+    if (report.steps.storeId) {
+      const ownerResult = await pool.query(
+        `SELECT gso.id, gso.name, gso.email
+         FROM grocery_store_owners gso
+         JOIN grocery_stores gs ON gs.owner_id = gso.id
+         WHERE gs.id = $1`,
+        [report.steps.storeId]
+      );
+      report.steps.owner = ownerResult.rows[0] || null;
+    } else {
+      report.steps.owner = null;
+    }
+
+    // Step 5: existing notifications for this order
+    const existingNotifs = await pool.query(
+      `SELECT * FROM grocery_owner_notifications WHERE grocery_order_id = $1`,
+      [orderId]
+    );
+    report.steps.existingNotifications = existingNotifs.rows;
+
+    // Step 6: all grocery_store_owners and their stores
+    const allOwners = await pool.query(
+      `SELECT gso.id, gso.name, gso.email, gs.id as store_id, gs.name as store_name
+       FROM grocery_store_owners gso
+       LEFT JOIN grocery_stores gs ON gs.owner_id = gso.id`
+    );
+    report.steps.allOwnersAndStores = allOwners.rows;
+
+    res.json({ success: true, report });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message, report });
+  }
+});
+
 export default router;
