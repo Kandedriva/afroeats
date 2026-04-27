@@ -1089,6 +1089,9 @@ router.post('/stripe/create-onboarding-link', requireGroceryOwnerAuth, async (re
       accountId: stripeAccountId
     });
   } catch (error) {
+    if (error.code === '42703') {
+      return res.status(503).json({ error: 'Stripe setup is not yet configured. Please contact support.' });
+    }
     console.error('Create onboarding link error:', error);
     res.status(500).json({ error: 'Failed to create onboarding link' });
   }
@@ -1193,6 +1196,16 @@ router.get('/stripe/account-status', requireGroceryOwnerAuth, async (req, res) =
       requirementsEventuallyDue: account.requirements?.eventually_due || []
     });
   } catch (error) {
+    // If Stripe columns don't exist yet in DB, return safe default instead of crashing
+    if (error.code === '42703') {
+      return res.json({
+        hasAccount: false,
+        onboardingComplete: false,
+        detailsSubmitted: false,
+        chargesEnabled: false,
+        payoutsEnabled: false
+      });
+    }
     console.error('Get account status error:', error);
     res.status(500).json({ error: 'Failed to get account status' });
   }
