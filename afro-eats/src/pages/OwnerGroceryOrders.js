@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { API_BASE_URL } from '../config/api';
 import { toast } from 'react-toastify';
+import ConfirmDialog from '../Components/ConfirmDialog';
 
 const OwnerGroceryOrders = () => {
   const [orders, setOrders] = useState([]);
@@ -9,6 +10,14 @@ const OwnerGroceryOrders = () => {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [printOrder, setPrintOrder] = useState(null);
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: null,
+    confirmColor: 'red',
+    icon: '⚠️',
+  });
 
   useEffect(() => {
     loadOrders();
@@ -36,11 +45,18 @@ const OwnerGroceryOrders = () => {
     }
   };
 
-  const handleCompleteOrder = async (orderId) => {
-    if (!window.confirm('Mark this order as delivered?')) {
-      return;
-    }
+  const handleCompleteOrder = (orderId) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Mark as Delivered?',
+      message: 'Are you sure you want to mark this order as delivered? The customer will be notified.',
+      confirmColor: 'green',
+      icon: '✓',
+      onConfirm: () => executeCompleteOrder(orderId),
+    });
+  };
 
+  const executeCompleteOrder = async (orderId) => {
     setIsProcessing(true);
     try {
       const res = await fetch(`${API_BASE_URL}/api/grocery-owners/orders/${orderId}/complete`, {
@@ -58,6 +74,40 @@ const OwnerGroceryOrders = () => {
       }
     } catch (error) {
       toast.error('An error occurred while completing order');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleDeleteOrder = (orderId) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Delete Order?',
+      message: 'Are you sure you want to delete this order? This action cannot be undone and the order will be permanently removed from your records.',
+      confirmColor: 'red',
+      icon: '🗑️',
+      onConfirm: () => executeDeleteOrder(orderId),
+    });
+  };
+
+  const executeDeleteOrder = async (orderId) => {
+    setIsProcessing(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/grocery-owners/orders/${orderId}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+
+      if (res.ok) {
+        toast.success('Order deleted successfully');
+        setSelectedOrder(null);
+        loadOrders();
+      } else {
+        const data = await res.json();
+        toast.error(data.error || 'Failed to delete order');
+      }
+    } catch (error) {
+      toast.error('An error occurred while deleting order');
     } finally {
       setIsProcessing(false);
     }
@@ -134,7 +184,7 @@ const OwnerGroceryOrders = () => {
                   </div>
                   <div>
                     <p className="font-semibold">Order Date:</p>
-                    <p>{new Date(printOrder.created_at).toLocaleDateString()}</p>
+                    <p>{new Date(printOrder.created_at).toLocaleDateString('en-US', { timeZone: 'America/New_York' })} {new Date(printOrder.created_at).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit' })}</p>
                     <p className="font-semibold mt-2">Status:</p>
                     <p>{printOrder.status}</p>
                   </div>
@@ -286,8 +336,8 @@ const OwnerGroceryOrders = () => {
                       {getStatusBadge(order.status)}
                     </td>
                     <td className="px-6 py-4">
-                      <div className="text-sm text-gray-900">{new Date(order.created_at).toLocaleDateString()}</div>
-                      <div className="text-xs text-gray-500">{new Date(order.created_at).toLocaleTimeString()}</div>
+                      <div className="text-sm text-gray-900">{new Date(order.created_at).toLocaleDateString('en-US', { timeZone: 'America/New_York' })}</div>
+                      <div className="text-xs text-gray-500">{new Date(order.created_at).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit' })}</div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex gap-2">
@@ -298,7 +348,7 @@ const OwnerGroceryOrders = () => {
                         >
                           🖨️
                         </button>
-                        {order.status !== 'delivered' && (
+                        {order.status !== 'delivered' ? (
                           <button
                             onClick={() => handleCompleteOrder(order.id)}
                             disabled={isProcessing}
@@ -306,6 +356,15 @@ const OwnerGroceryOrders = () => {
                             title="Mark as Delivered"
                           >
                             ✓ Complete
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleDeleteOrder(order.id)}
+                            disabled={isProcessing}
+                            className="text-red-600 hover:text-red-900 text-sm disabled:opacity-50"
+                            title="Delete Order"
+                          >
+                            🗑️ Delete
                           </button>
                         )}
                       </div>
@@ -340,7 +399,7 @@ const OwnerGroceryOrders = () => {
                 <div className="flex justify-between items-start mb-6">
                   <div>
                     <h2 className="text-2xl font-bold">Order #{selectedOrder.id}</h2>
-                    <p className="text-gray-600">Placed on {new Date(selectedOrder.created_at).toLocaleString()}</p>
+                    <p className="text-gray-600">Placed on {new Date(selectedOrder.created_at).toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' })}</p>
                   </div>
                   <button
                     onClick={() => setSelectedOrder(null)}
@@ -435,7 +494,7 @@ const OwnerGroceryOrders = () => {
                   >
                     🖨️ Print Order
                   </button>
-                  {selectedOrder.status !== 'delivered' && (
+                  {selectedOrder.status !== 'delivered' ? (
                     <button
                       onClick={() => handleCompleteOrder(selectedOrder.id)}
                       disabled={isProcessing}
@@ -443,12 +502,31 @@ const OwnerGroceryOrders = () => {
                     >
                       ✓ Mark as Delivered
                     </button>
+                  ) : (
+                    <button
+                      onClick={() => handleDeleteOrder(selectedOrder.id)}
+                      disabled={isProcessing}
+                      className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+                    >
+                      🗑️ Delete Order
+                    </button>
                   )}
                 </div>
               </div>
             </div>
           </div>
         )}
+
+        {/* Confirm Dialog */}
+        <ConfirmDialog
+          isOpen={confirmDialog.isOpen}
+          onClose={() => setConfirmDialog({ ...confirmDialog, isOpen: false })}
+          onConfirm={confirmDialog.onConfirm}
+          title={confirmDialog.title}
+          message={confirmDialog.message}
+          confirmColor={confirmDialog.confirmColor}
+          icon={confirmDialog.icon}
+        />
 
         {/* Print Styles */}
         <style>{`

@@ -31,7 +31,7 @@ const GroceryCheckout = () => {
     notes: "",
   });
 
-  // Redirect if cart is empty (but allow returning from cancelled Stripe checkout)
+  // Redirect if cart is empty
   useEffect(() => {
     // Check if user is returning from a cancelled Stripe checkout
     const urlParams = new URLSearchParams(window.location.search);
@@ -138,8 +138,6 @@ const GroceryCheckout = () => {
       return;
     }
 
-    // Guest checkout is allowed - no login required
-
     try {
       setLoading(true);
 
@@ -147,7 +145,7 @@ const GroceryCheckout = () => {
       const platformFee = getGroceryPlatformFee();
       const total = subtotal + platformFee + deliveryFee;
 
-      // Create grocery order (supports both authenticated and guest users)
+      // Create grocery order (supports both guest and authenticated users)
       const res = await fetch(`${API_BASE_URL}/api/grocery/create-order`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -161,7 +159,7 @@ const GroceryCheckout = () => {
             zipCode: formData.zipCode,
             name: formData.name,
             phone: formData.phone,
-            email: formData.email, // Include email in delivery address
+            email: formData.email,
           },
           notes: formData.notes,
           subtotal,
@@ -169,7 +167,7 @@ const GroceryCheckout = () => {
           deliveryFee,
           total,
           deliveryInfo,
-          guestEmail: !user ? formData.email : undefined, // For guest checkout
+          guestEmail: user ? null : formData.email, // For guest checkout
         }),
       });
 
@@ -203,20 +201,13 @@ const GroceryCheckout = () => {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-800 mb-2">Checkout</h1>
           <p className="text-gray-600">Complete your grocery order</p>
-          {!user && (
-            <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3">
-              <span className="text-blue-600 text-xl">ℹ️</span>
+          {user && (
+            <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-4 flex items-start gap-3">
+              <span className="text-green-600 text-xl">✓</span>
               <div>
-                <p className="text-sm text-blue-800 font-medium">Guest Checkout Available</p>
-                <p className="text-sm text-blue-700 mt-1">
-                  You can checkout as a guest, or{" "}
-                  <a href="/login" className="underline font-semibold hover:text-blue-900">
-                    log in
-                  </a>{" "}
-                  /{" "}
-                  <a href="/register" className="underline font-semibold hover:text-blue-900">
-                    create an account
-                  </a>{" "}
+                <p className="text-sm text-green-800 font-medium">Logged in as {user.name}</p>
+                <p className="text-sm text-green-700 mt-1">
+                  Your order will be linked to your account for easy tracking{" "}
                   to track your orders.
                 </p>
               </div>

@@ -6,6 +6,7 @@ import PropTypes from 'prop-types';
 import { API_BASE_URL } from '../config/api';
 import AdminRefundsTab from '../Components/AdminRefundsTab';
 import AdminProductsTab from '../Components/AdminProductsTab';
+import ConfirmDialog from '../Components/ConfirmDialog';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -1595,12 +1596,27 @@ const GroceryOrdersTab = ({ groceryOrders, onOrderUpdate }) => {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [printOrder, setPrintOrder] = useState(null);
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: null,
+    confirmColor: 'red',
+    icon: '⚠️',
+  });
 
-  const handleCompleteOrder = async (orderId) => {
-    if (!window.confirm('Mark this order as delivered?')) {
-      return;
-    }
+  const handleCompleteOrder = (orderId) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Mark as Delivered?',
+      message: 'Are you sure you want to mark this order as delivered?',
+      confirmColor: 'green',
+      icon: '✓',
+      onConfirm: () => executeCompleteOrder(orderId),
+    });
+  };
 
+  const executeCompleteOrder = async (orderId) => {
     setIsProcessing(true);
     try {
       const res = await fetch(`${API_BASE_URL}/api/admin/grocery-orders/${orderId}/status`, {
@@ -1627,16 +1643,23 @@ const GroceryOrdersTab = ({ groceryOrders, onOrderUpdate }) => {
     }
   };
 
-  const handleRemoveOrder = async (orderId, orderStatus) => {
+  const handleRemoveOrder = (orderId, orderStatus) => {
     if (!['pending', 'cancelled'].includes(orderStatus)) {
       showToast.warning('Only pending or cancelled orders can be deleted');
       return;
     }
 
-    if (!window.confirm('Are you sure you want to delete this order? This action cannot be undone.')) {
-      return;
-    }
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Delete Order?',
+      message: 'Are you sure you want to delete this order? This action cannot be undone and will permanently remove the order from the system.',
+      confirmColor: 'red',
+      icon: '🗑️',
+      onConfirm: () => executeRemoveOrder(orderId),
+    });
+  };
 
+  const executeRemoveOrder = async (orderId) => {
     setIsProcessing(true);
     try {
       const res = await fetch(`${API_BASE_URL}/api/admin/grocery-orders/${orderId}`, {
@@ -2061,6 +2084,17 @@ const GroceryOrdersTab = ({ groceryOrders, onOrderUpdate }) => {
           }
         }
       `}</style>
+
+      {/* Confirm Dialog */}
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={() => setConfirmDialog({ ...confirmDialog, isOpen: false })}
+        onConfirm={confirmDialog.onConfirm}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmColor={confirmDialog.confirmColor}
+        icon={confirmDialog.icon}
+      />
     </div>
   );
 };

@@ -35,7 +35,7 @@ function GroceryOwnerDashboard() {
 
         // Fetch orders statistics
         const ordersResponse = await fetch(
-          `${API_BASE_URL}/api/grocery-orders?store_id=${storeData.id}`,
+          `${API_BASE_URL}/api/grocery-owners/orders`,
           {
             credentials: 'include',
           }
@@ -65,7 +65,7 @@ function GroceryOwnerDashboard() {
     const completedOrders = orders.filter((order) => order.status === 'delivered').length;
     const totalRevenue = orders
       .filter((order) => order.status === 'delivered')
-      .reduce((sum, order) => sum + parseFloat(order.total_amount || 0), 0);
+      .reduce((sum, order) => sum + parseFloat(order.total || 0), 0);
 
     setStats({
       totalOrders,

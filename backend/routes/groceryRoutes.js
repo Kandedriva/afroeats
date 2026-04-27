@@ -70,7 +70,7 @@ router.post('/create-order', async (req, res) => {
       deliveryFee,
       total,
       deliveryInfo,
-      guestEmail // For guest orders
+      guestEmail // For guest checkout
     } = req.body;
 
     const userId = req.session?.userId || null;
@@ -89,14 +89,14 @@ router.post('/create-order', async (req, res) => {
       return res.status(400).json({ error: 'Email is required' });
     }
 
-    // For guest orders, require email
+    // For guest orders, require guest email
     if (isGuest && !guestEmail) {
       return res.status(400).json({ error: 'Email is required for guest checkout' });
     }
 
     await client.query('BEGIN');
 
-    // Create grocery order (user_id can be NULL for guest orders)
+    // Create grocery order (supports both authenticated and guest users)
     const orderResult = await client.query(
       `INSERT INTO grocery_orders (
         user_id, guest_email, subtotal, platform_fee, delivery_fee, total,
@@ -480,7 +480,7 @@ router.patch('/orders/:id/status', async (req, res) => {
       `UPDATE grocery_orders
        SET status = $1, delivered_at = CASE WHEN $1 = 'delivered' THEN NOW() ELSE delivered_at END
        WHERE id = $2
-       RETURNING id, user_id, guest_email, total, status`,
+       RETURNING id, user_id, total, status`,
       [status, orderId]
     );
 

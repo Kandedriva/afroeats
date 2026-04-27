@@ -3,10 +3,17 @@ import { Link } from 'react-router-dom';
 import PropTypes from 'prop-types';
 import { API_BASE_URL } from '../config/api';
 import { toast } from 'react-toastify';
+import ConfirmDialog from '../Components/ConfirmDialog';
 
 function GroceryOwnerProducts() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: null,
+  });
 
   useEffect(() => {
     fetchStoreAndProducts();
@@ -78,11 +85,18 @@ function GroceryOwnerProducts() {
     }
   };
 
-  const handleDeleteProduct = async (productId) => {
-    if (!window.confirm('Are you sure you want to delete this product?')) {
-      return;
-    }
+  const handleDeleteProduct = (productId) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Delete Product?',
+      message: 'Are you sure you want to delete this product? This action cannot be undone.',
+      confirmColor: 'red',
+      icon: '🗑️',
+      onConfirm: () => executeDeleteProduct(productId),
+    });
+  };
 
+  const executeDeleteProduct = async (productId) => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/products/${productId}`, {
         method: 'DELETE',
@@ -180,6 +194,17 @@ function GroceryOwnerProducts() {
           </div>
         )}
       </div>
+
+      {/* Confirm Dialog */}
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={() => setConfirmDialog({ ...confirmDialog, isOpen: false })}
+        onConfirm={confirmDialog.onConfirm}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmColor={confirmDialog.confirmColor}
+        icon={confirmDialog.icon}
+      />
     </div>
   );
 }
@@ -292,5 +317,9 @@ ProductManagementCard.propTypes = {
   onToggleAvailability: PropTypes.func.isRequired,
   onDelete: PropTypes.func.isRequired,
 };
+
+// Add ConfirmDialog before closing the component
+// This needs to be added inside the return statement of GroceryOwnerProducts
+// Search for the closing tag of the main container and add before it
 
 export default GroceryOwnerProducts;

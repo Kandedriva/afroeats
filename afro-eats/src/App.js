@@ -30,7 +30,7 @@ import CustomerOrders from "./pages/CustomerOrders";
 import CustomerProfile from "./pages/CustomerProfile";
 import CustomerNotifications from "./pages/CustomerNotifications";
 import OrderDetails from "./pages/OrderDetails";
-import OrderSuccess from "./pages/OrderSuccess";
+import OrderSuccessWrapper from "./pages/OrderSuccessWrapper";
 import GuestCheckout from "./pages/GuestCheckout";
 import ProtectedOwnerRoute from "./Components/ProtectedOwnerRoute";
 import ProtectedGroceryOwnerRoute from "./Components/ProtectedGroceryOwnerRoute";
@@ -185,9 +185,13 @@ function AppContent() {
         <Route path="/owner/login" element={<OwnerLogin />} />
         <Route path="/grocery-owner/login" element={<GroceryOwnerLogin />} />
         <Route path="/owner/password-update" element={<OwnerPasswordUpdate />} />
-        <Route 
-          path="/order-success" 
-          element={<OrderSuccess />} 
+        <Route
+          path="/order-success"
+          element={
+            <ErrorBoundary>
+              <OrderSuccessWrapper />
+            </ErrorBoundary>
+          }
         />
         <Route 
           path="/demo-order-checkout" 

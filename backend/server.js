@@ -35,6 +35,7 @@ import refundRoutes from "./routes/refundRoutes.js";
 import productRoutes from "./routes/productRoutes.js";
 import groceryRoutes from "./routes/groceryRoutes.js";
 import groceryOwnerRoutes from "./routes/groceryOwnerRoutes.js";
+import groceryCartRoutes from "./routes/groceryCartRoutes.js";
 
 // Import security and analytics
 import { 
@@ -95,8 +96,8 @@ app.use((req, res, next) => {
     'https://orderdabaly.netlify.app',
   ];
 
-  // Determine origin to use - default to localhost:3002
-  const corsOrigin = (origin && allowedOrigins.includes(origin)) ? origin : 'http://localhost:3002';
+  // Determine origin to use - default to localhost:3000
+  const corsOrigin = (origin && allowedOrigins.includes(origin)) ? origin : 'http://localhost:3000';
 
   // Intercept writeHead to force CORS headers before sending response
   const originalWriteHead = res.writeHead;
@@ -131,7 +132,8 @@ app.use((req, res, next) => {
 
   // CRITICAL: Skip body parsing for Stripe webhook endpoint
   // Stripe webhooks need the raw body buffer for signature verification
-  if (req.url === '/api/webhook' || req.url.startsWith('/api/webhook?')) {
+  if (req.url === '/api/webhook' || req.url.startsWith('/api/webhook?') ||
+      req.url === '/api/webhooks/stripe' || req.url.startsWith('/api/webhooks/stripe?')) {
     console.log('⚡ Skipping body parsing for Stripe webhook:', req.url);
     return next();
   }
@@ -444,6 +446,9 @@ app.use("/api/grocery-owners", groceryOwnerRoutes);
 
 // Grocery order routes
 app.use("/api/grocery", groceryRoutes);
+
+// Grocery cart routes (database-backed)
+app.use("/api/grocery-cart", groceryCartRoutes);
 
 // Root route for deployment health checks
 app.get('/', (req, res) => {
