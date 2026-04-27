@@ -148,4 +148,41 @@ router.get('/image-path-status', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/migration/add-stripe-to-grocery-owners
+ * Run once to add Stripe Connect columns to grocery_store_owners table
+ */
+router.post('/add-stripe-to-grocery-owners', async (req, res) => {
+  try {
+    await pool.query(`
+      ALTER TABLE grocery_store_owners
+      ADD COLUMN IF NOT EXISTS stripe_account_id VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS stripe_onboarding_complete BOOLEAN DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS stripe_details_submitted BOOLEAN DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS stripe_charges_enabled BOOLEAN DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS stripe_payouts_enabled BOOLEAN DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS stripe_connected_at TIMESTAMP
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_grocery_store_owners_stripe_account
+      ON grocery_store_owners(stripe_account_id)
+    `);
+
+    logger.info('Stripe columns migration completed for grocery_store_owners');
+
+    res.json({
+      success: true,
+      message: 'Stripe columns added to grocery_store_owners successfully'
+    });
+  } catch (error) {
+    logger.error('Stripe migration failed:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Migration failed',
+      details: error.message
+    });
+  }
+});
+
 export default router;
