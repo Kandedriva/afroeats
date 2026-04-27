@@ -1,7 +1,9 @@
 import { Link, useNavigate } from "react-router-dom";
+import { useState } from "react";
 import PropTypes from "prop-types";
 import { useGroceryCart } from "../context/GroceryCartContext";
 import { toast } from "react-toastify";
+import ConfirmDialog from "../Components/ConfirmDialog";
 
 const GroceryCart = () => {
   const navigate = useNavigate();
@@ -14,6 +16,13 @@ const GroceryCart = () => {
     getGroceryPlatformFee,
     getGroceryTotal,
   } = useGroceryCart();
+
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: null,
+  });
 
   const handleQuantityChange = (productId, newQuantity) => {
     try {
@@ -29,10 +38,17 @@ const GroceryCart = () => {
   };
 
   const handleClearCart = () => {
-    if (window.confirm("Are you sure you want to clear your entire grocery cart?")) {
-      clearGroceryCart();
-      toast.success("Grocery cart cleared");
-    }
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Clear Cart?',
+      message: 'Are you sure you want to clear your entire grocery cart? All items will be removed.',
+      confirmColor: 'red',
+      icon: '🗑️',
+      onConfirm: () => {
+        clearGroceryCart();
+        toast.success("Grocery cart cleared");
+      },
+    });
   };
 
   const handleCheckout = () => {
@@ -149,6 +165,17 @@ const GroceryCart = () => {
           </div>
         </div>
       </div>
+
+      {/* Confirm Dialog */}
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={() => setConfirmDialog({ ...confirmDialog, isOpen: false })}
+        onConfirm={confirmDialog.onConfirm}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmColor={confirmDialog.confirmColor}
+        icon={confirmDialog.icon}
+      />
     </div>
   );
 };

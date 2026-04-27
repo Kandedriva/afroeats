@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import { useGuest } from "../context/GuestContext";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { toast } from 'react-toastify';
+import ConfirmDialog from '../Components/ConfirmDialog';
 
 export default function CartPage() {
   const { cart, loading, updateQuantity, removeFromCart, clearCart, total } = useCart();
@@ -13,6 +14,12 @@ export default function CartPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [restaurantInstructions, setRestaurantInstructions] = useState({});
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: null,
+  });
 
   // Handle checkout cancellation
   useEffect(() => {
@@ -49,17 +56,22 @@ export default function CartPage() {
       });
     } else {
       // Guest checkout - show options
-      const guestCheckoutConfirm = window.confirm(
-        "You can checkout as a guest or create an account. Would you like to continue as guest? (Click OK for guest checkout, Cancel to login/register)"
-      );
-      
-      if (guestCheckoutConfirm) {
-        startGuestSession();
-        navigate("/guest-checkout");
-      } else {
-        navigate("/login");
-      }
+      setConfirmDialog({
+        isOpen: true,
+        title: 'Checkout Options',
+        message: 'You can checkout as a guest or create an account for faster future orders. Would you like to continue as guest?',
+        confirmColor: 'green',
+        confirmText: 'Continue as Guest',
+        cancelText: 'Login/Register',
+        icon: '🛒',
+        onConfirm: () => executeGuestCheckout(),
+      });
     }
+  };
+
+  const executeGuestCheckout = () => {
+    startGuestSession();
+    navigate("/guest-checkout");
   };
 
   const handleGuestCheckout = () => {
@@ -247,6 +259,18 @@ export default function CartPage() {
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={() => setConfirmDialog({ ...confirmDialog, isOpen: false })}
+        onConfirm={confirmDialog.onConfirm}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmText="Continue as Guest"
+        cancelText="Login/Register"
+        confirmColor={confirmDialog.confirmColor}
+        icon={confirmDialog.icon}
+      />
     </div>
   );
 }

@@ -10,13 +10,23 @@ import { API_BASE_URL } from "../config/api";
 function OrderSuccess() {
   const [orderDetails, setOrderDetails] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const { forceRefreshCart, clearCart } = useCart();
-  const { clearGroceryCart } = useGroceryCart();
-  const { user } = useAuth();
-  const { clearGuestCartAfterSuccessfulOrder } = useGuest();
+
+  // Safely get context values with fallbacks
+  const cartContext = useCart();
+  const groceryCartContext = useGroceryCart();
+  const authContext = useAuth();
+  const guestContext = useGuest();
+
+  const forceRefreshCart = cartContext?.forceRefreshCart;
+  const clearCart = cartContext?.clearCart;
+  const clearGroceryCart = groceryCartContext?.clearGroceryCart;
+  const user = authContext?.user;
+  const clearGuestCartAfterSuccessfulOrder = guestContext?.clearGuestCartAfterSuccessfulOrder;
+
   const orderId = searchParams.get('order_id');
   const sessionId = searchParams.get('session_id');
   const orderType = searchParams.get('type'); // 'grocery' or undefined (restaurant)
@@ -30,19 +40,29 @@ function OrderSuccess() {
   useEffect(() => {
     const handleOrderSuccess = async () => {
       try {
+        // Reset error state
+        setError(null);
         let finalOrderId = orderId;
 
         if (sessionId && !isDemo) {
           if (isGroceryOrder) {
             // For grocery orders, the order is already created by the webhook
             // We just need to verify the session
-            const res = await fetch(`${API_BASE_URL}/api/grocery/verify-session?session_id=${sessionId}`, {
-              credentials: "include",
-            });
+            try {
+              const res = await fetch(`${API_BASE_URL}/api/grocery/verify-session?session_id=${sessionId}`, {
+                credentials: "include",
+              });
 
-            if (res.ok) {
-              const data = await res.json();
-              finalOrderId = data.orderId;
+              if (res.ok) {
+                const data = await res.json();
+                finalOrderId = data.orderId;
+              } else {
+                // eslint-disable-next-line no-console
+                console.warn('Failed to verify grocery session:', res.status);
+              }
+            } catch (verifyError) {
+              // eslint-disable-next-line no-console
+              console.error('Error verifying grocery session:', verifyError);
             }
           } else {
             // Handle restaurant order - this will create the order
@@ -61,7 +81,15 @@ function OrderSuccess() {
         }
 
         if (!finalOrderId) {
-          navigate('/');
+          // eslint-disable-next-line no-console
+          console.warn('No order ID found, redirecting to home');
+          try {
+            navigate('/');
+          } catch (navError) {
+            // eslint-disable-next-line no-console
+            console.error('Navigation error:', navError);
+            window.location.href = '/';
+          }
           return;
         }
 
@@ -71,13 +99,41 @@ function OrderSuccess() {
         if (isGroceryOrder) {
           // Grocery orders: fetch details for both authenticated and guest users
           const endpoint = `${API_BASE_URL}/api/grocery/orders/${finalOrderId}`;
-          const orderRes = await fetch(endpoint, {
-            credentials: "include",
-          });
+          try {
+            const orderRes = await fetch(endpoint, {
+              credentials: "include",
+            });
 
-          if (orderRes.ok) {
-            const orderData = await orderRes.json();
-            setOrderDetails(orderData);
+            if (orderRes.ok) {
+              const orderData = await orderRes.json();
+              setOrderDetails(orderData);
+            } else {
+              // If we can't fetch details, set basic info from URL
+              // eslint-disable-next-line no-console
+              console.warn('Could not fetch order details, using basic info');
+              setOrderDetails({
+                id: finalOrderId,
+                total: 0,
+                subtotal: 0,
+                delivery_fee: 0,
+                platform_fee: 0,
+                status: 'paid',
+                items: []
+              });
+            }
+          } catch (fetchError) {
+            // eslint-disable-next-line no-console
+            console.error('Error fetching grocery order details:', fetchError);
+            // Set basic info so page doesn't crash
+            setOrderDetails({
+              id: finalOrderId,
+              total: 0,
+              subtotal: 0,
+              delivery_fee: 0,
+              platform_fee: 0,
+              status: 'paid',
+              items: []
+            });
           }
         } else if (user && !isGuestFromStripe && !guestOrderInfo?.guestOrder) {
           // Restaurant orders: only authenticated users
@@ -95,39 +151,68 @@ function OrderSuccess() {
           setOrderDetails({
             id: finalOrderId,
             total: 0,
+            subtotal: 0,
+            delivery_fee: 0,
             platform_fee: 0,
             status: 'paid',
-            guest_email: guestOrderInfo?.email || 'guest'
+            items: []
           });
         }
 
         // Clear appropriate cart based on order type and user type
-        if (user && !isGuestFromStripe) {
-          if (isGroceryOrder) {
-            // Clear grocery cart
-            clearGroceryCart();
-          } else {
-            // Authenticated user - clear restaurant cart
-            await clearCart();
-            await new Promise(resolve => setTimeout(resolve, 500));
-            await forceRefreshCart();
+        try {
+          if (user && !isGuestFromStripe) {
+            if (isGroceryOrder) {
+              // Clear grocery cart
+              if (clearGroceryCart) {
+                clearGroceryCart();
+              }
+            } else {
+              // Authenticated user - clear restaurant cart
+              if (clearCart) {
+                await clearCart();
+              }
+              await new Promise(resolve => setTimeout(resolve, 500));
+              if (forceRefreshCart) {
+                await forceRefreshCart();
+              }
+            }
+          } else if (isGuestFromStripe || guestOrderInfo?.guestOrder) {
+            // Guest user - clear guest cart after successful order
+            if (clearGuestCartAfterSuccessfulOrder) {
+              clearGuestCartAfterSuccessfulOrder();
+            }
           }
-        } else if (isGuestFromStripe || guestOrderInfo?.guestOrder) {
-          // Guest user - clear guest cart after successful order
-          clearGuestCartAfterSuccessfulOrder();
+        } catch (cartError) {
+          // eslint-disable-next-line no-console
+          console.error('Error clearing cart:', cartError);
+          // Don't block the success page if cart clearing fails
         }
       } catch (err) {
         // eslint-disable-next-line no-console
         console.error('Order success error:', err);
+        setError(err.message || 'An error occurred');
         // Don't block the success page if we can't fetch details
-        // The order was still successful
+        // The order was still successful - set minimal order info
+        if (!orderDetails && (orderId || sessionId)) {
+          setOrderDetails({
+            id: orderId || 'unknown',
+            status: 'paid',
+            total: 0,
+            subtotal: 0,
+            delivery_fee: 0,
+            platform_fee: 0,
+            items: []
+          });
+        }
       } finally {
         setLoading(false);
       }
     };
 
     handleOrderSuccess();
-  }, [orderId, sessionId, isDemo, isGroceryOrder, isGuestFromStripe, guestOrderInfo?.guestOrder, guestOrderInfo?.email, navigate, forceRefreshCart, clearCart, clearGroceryCart, clearGuestCartAfterSuccessfulOrder, user]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderId, sessionId, isDemo, isGroceryOrder, isGuestFromStripe]);
 
   if (loading) {
     return (
@@ -136,6 +221,12 @@ function OrderSuccess() {
         <p className="text-gray-600">Confirming your order...</p>
       </div>
     );
+  }
+
+  // Show error state but still show success message
+  if (error) {
+    // eslint-disable-next-line no-console
+    console.warn('Order success page had errors, but order was still successful:', error);
   }
 
   return (
@@ -314,10 +405,16 @@ function OrderSuccess() {
         <button
           onClick={async () => {
             if (isGroceryOrder) {
-              clearGroceryCart(); // Ensure grocery cart is cleared
+              if (clearGroceryCart) {
+                clearGroceryCart(); // Ensure grocery cart is cleared
+              }
             } else {
-              await clearCart(); // Ensure restaurant cart is cleared
-              await forceRefreshCart(); // Ensure cart is refreshed
+              if (clearCart) {
+                await clearCart(); // Ensure restaurant cart is cleared
+              }
+              if (forceRefreshCart) {
+                await forceRefreshCart(); // Ensure cart is refreshed
+              }
             }
             navigate('/');
           }}

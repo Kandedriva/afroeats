@@ -251,7 +251,7 @@ const ProductCard = ({ product }) => {
     return badges;
   };
 
-  const handleAddToCart = (e) => {
+  const handleAddToCart = async (e) => {
     e.preventDefault(); // Prevent navigation to product details
     e.stopPropagation();
 
@@ -268,26 +268,26 @@ const ProductCard = ({ product }) => {
 
     // For non-weight items, add directly
     try {
-      addToGroceryCart(product, 1); // Add 1 unit by default
+      await addToGroceryCart(product, 1); // Add 1 unit by default
       toast.success(`Added ${product.name} to grocery cart!`);
     } catch (err) {
-      toast.error(err.message);
+      toast.error(err.message || 'Failed to add to cart');
     }
   };
 
-  const handleConfirmWeight = () => {
+  const handleConfirmWeight = async () => {
     if (weight < 0.1 || weight > product.stock_quantity) {
       toast.error(`Please enter a valid weight between 0.1 and ${product.stock_quantity} ${product.unit}`);
       return;
     }
 
     try {
-      addToGroceryCart(product, parseFloat(weight));
+      await addToGroceryCart(product, parseFloat(weight));
       toast.success(`Added ${weight} ${product.unit} of ${product.name} to grocery cart!`);
       setShowWeightModal(false);
       setWeight(0); // Reset weight
     } catch (err) {
-      toast.error(err.message);
+      toast.error(err.message || 'Failed to add to cart');
     }
   };
 

@@ -49,6 +49,16 @@ export const handleStripeWebhook = async (req, res) => {
 
             console.log(`✅ Grocery order ${orderId} marked as paid`);
 
+            // Clear the user's grocery cart after successful payment
+            const userId = session.metadata.userId;
+            if (userId) {
+              await pool.query(
+                'DELETE FROM grocery_carts WHERE user_id = $1',
+                [parseInt(userId)]
+              );
+              console.log(`✅ Cleared grocery cart for user ${userId}`);
+            }
+
             // Send order confirmation email to customer
             try {
               const orderResult = await pool.query(

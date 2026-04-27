@@ -698,6 +698,68 @@ router.patch('/orders/:id/complete', requireGroceryOwnerAuth, async (req, res) =
   }
 });
 
+/**
+ * DELETE /api/grocery-owners/orders/:id
+ * Delete a completed grocery order
+ */
+router.delete('/orders/:id', requireGroceryOwnerAuth, async (req, res) => {
+  try {
+    const orderId = parseInt(req.params.id);
+    const groceryOwnerId = req.groceryOwner.id;
+
+    // First get the grocery store for this owner
+    const storeResult = await pool.query(
+      'SELECT id FROM grocery_stores WHERE owner_id = $1',
+      [groceryOwnerId]
+    );
+
+    if (storeResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Grocery store not found' });
+    }
+
+    const storeId = storeResult.rows[0].id;
+
+    // Check if order exists and belongs to this store
+    const orderCheck = await pool.query(
+      `SELECT go.id, go.status
+       FROM grocery_orders go
+       INNER JOIN grocery_order_items goi ON go.id = goi.grocery_order_id
+       INNER JOIN products p ON goi.product_id = p.id
+       WHERE go.id = $1 AND p.store_id = $2
+       LIMIT 1`,
+      [orderId, storeId]
+    );
+
+    if (orderCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Order not found or unauthorized' });
+    }
+
+    const order = orderCheck.rows[0];
+
+    // Only allow deletion of delivered orders
+    if (order.status !== 'delivered') {
+      return res.status(400).json({ error: 'Only delivered orders can be deleted' });
+    }
+
+    // Delete order items first (foreign key constraint)
+    await pool.query(
+      'DELETE FROM grocery_order_items WHERE grocery_order_id = $1',
+      [orderId]
+    );
+
+    // Delete the order
+    await pool.query(
+      'DELETE FROM grocery_orders WHERE id = $1',
+      [orderId]
+    );
+
+    res.json({ message: 'Order deleted successfully' });
+  } catch (error) {
+    console.error('Delete grocery order error:', error);
+    res.status(500).json({ error: 'Failed to delete order' });
+  }
+});
+
 // ===========================
 // NOTIFICATIONS MANAGEMENT
 // ===========================

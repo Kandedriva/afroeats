@@ -4,12 +4,19 @@ import { toast } from 'react-toastify';
 import { useNavigate } from "react-router-dom";
 import { useDriverAuth } from "../context/DriverAuthContext";
 import { useDriverSocket } from "../hooks/useDriverSocket";
+import ConfirmDialog from '../Components/ConfirmDialog';
 
 function DriverAvailableOrders() {
   const { driver } = useDriverAuth();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: null,
+  });
 
   // Connect to socket for real-time notifications
   const { newOrderNotification, acknowledgeNotification } = useDriverSocket(
@@ -53,11 +60,18 @@ function DriverAvailableOrders() {
     }
   }, [newOrderNotification, fetchAvailableOrders, acknowledgeNotification]);
 
-  const claimOrder = async (orderId) => {
-    if (!window.confirm("Are you sure you want to claim this order?")) {
-      return;
-    }
+  const handleClaimOrder = (orderId) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Claim Order?',
+      message: 'Are you sure you want to claim this order? Once claimed, you will be responsible for completing this delivery.',
+      confirmColor: 'green',
+      icon: '📦',
+      onConfirm: () => executeClaimOrder(orderId),
+    });
+  };
 
+  const executeClaimOrder = async (orderId) => {
     try {
       const res = await fetch(`${API_BASE_URL}/api/drivers/claim-order/${orderId}`, {
         method: "POST",
@@ -177,7 +191,7 @@ function DriverAvailableOrders() {
                   </div>
 
                   <button
-                    onClick={() => claimOrder(order.order_id)}
+                    onClick={() => handleClaimOrder(order.order_id)}
                     className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-semibold transition"
                   >
                     Claim Order
@@ -188,6 +202,16 @@ function DriverAvailableOrders() {
           })}
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={() => setConfirmDialog({ ...confirmDialog, isOpen: false })}
+        onConfirm={confirmDialog.onConfirm}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmColor={confirmDialog.confirmColor}
+        icon={confirmDialog.icon}
+      />
     </div>
   );
 }

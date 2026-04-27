@@ -65,12 +65,12 @@ const ProductDetails = () => {
     }
   }, [product, loadRelatedProducts]);
 
-  const handleAddToCart = () => {
+  const handleAddToCart = async () => {
     try {
-      addToGroceryCart(product, quantity);
+      await addToGroceryCart(product, quantity);
       toast.success(`Added ${quantity} ${product.unit} of ${product.name} to grocery cart!`);
     } catch (err) {
-      toast.error(err.message);
+      toast.error(err.message || 'Failed to add to cart');
     }
   };
 

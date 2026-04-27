@@ -89,8 +89,8 @@ export const corsOptions = {
 
     // Allow requests with no origin (mobile apps, Postman, etc.)
     if (!origin || origin === 'undefined') {
-      console.log('✅ CORS: Allowing request with no origin, returning:', origin || 'http://localhost:3002');
-      return callback(null, origin || 'http://localhost:3002');
+      console.log('✅ CORS: Allowing request with no origin, returning:', origin || 'http://localhost:3000');
+      return callback(null, origin || 'http://localhost:3000');
     }
 
     // Check if origin is in allowed list or matches Netlify deploy preview pattern
