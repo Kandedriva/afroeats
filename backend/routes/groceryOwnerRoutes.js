@@ -1092,8 +1092,8 @@ router.post('/stripe/create-onboarding-link', requireGroceryOwnerAuth, async (re
     if (error.code === '42703') {
       return res.status(503).json({ error: 'Stripe setup is not yet configured. Please contact support.' });
     }
-    console.error('Create onboarding link error:', error);
-    res.status(500).json({ error: 'Failed to create onboarding link' });
+    console.error('Create onboarding link error:', error.message, '| type:', error.type, '| FRONTEND_URL:', FRONTEND_URL);
+    res.status(500).json({ error: 'Failed to create onboarding link', details: error.message });
   }
 });
 
@@ -1105,7 +1105,6 @@ router.post('/stripe/create-login-link', requireGroceryOwnerAuth, async (req, re
   try {
     const groceryOwnerId = req.groceryOwner.id;
 
-    // Get owner's Stripe account ID
     const ownerResult = await pool.query(
       'SELECT stripe_account_id FROM grocery_store_owners WHERE id = $1',
       [groceryOwnerId]
@@ -1117,17 +1116,24 @@ router.post('/stripe/create-login-link', requireGroceryOwnerAuth, async (req, re
       return res.status(400).json({ error: 'No Stripe account found' });
     }
 
-    // Create login link
-    const loginLink = await stripe.accounts.createLoginLink(stripeAccountId);
-
-    console.log(`✅ Created login link for Stripe account ${stripeAccountId}`);
-
-    res.json({
-      url: loginLink.url
-    });
+    try {
+      const loginLink = await stripe.accounts.createLoginLink(stripeAccountId);
+      console.log(`✅ Created login link for Stripe account ${stripeAccountId}`);
+      return res.json({ url: loginLink.url });
+    } catch (stripeError) {
+      // Login link only works for fully onboarded accounts — fall back to onboarding link
+      console.warn(`Login link failed (${stripeError.message}), falling back to onboarding link`);
+      const accountLink = await stripe.accountLinks.create({
+        account: stripeAccountId,
+        refresh_url: `${FRONTEND_URL}/grocery-owner/store?stripe_refresh=true`,
+        return_url: `${FRONTEND_URL}/grocery-owner/store?stripe_success=true`,
+        type: 'account_onboarding',
+      });
+      return res.json({ url: accountLink.url, isOnboarding: true });
+    }
   } catch (error) {
-    console.error('Create login link error:', error);
-    res.status(500).json({ error: 'Failed to create login link' });
+    console.error('Create login link error:', error.message, '| type:', error.type, '| FRONTEND_URL:', FRONTEND_URL);
+    res.status(500).json({ error: 'Failed to create link' });
   }
 });
 

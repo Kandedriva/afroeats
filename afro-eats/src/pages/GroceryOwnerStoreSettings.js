@@ -193,7 +193,6 @@ function GroceryOwnerStoreSettings() {
         const data = await response.json();
         setStripeStatus(data);
       } else {
-        // Set default status if fetch fails
         setStripeStatus({
           hasAccount: false,
           onboardingComplete: false,
@@ -205,7 +204,6 @@ function GroceryOwnerStoreSettings() {
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error('Stripe status fetch error:', error);
-      // Set default status on error
       setStripeStatus({
         hasAccount: false,
         onboardingComplete: false,
@@ -213,6 +211,18 @@ function GroceryOwnerStoreSettings() {
         payoutsEnabled: false,
         accountId: null
       });
+    }
+  };
+
+  const handleRefreshStatus = async () => {
+    setStripeLoading(true);
+    try {
+      await fetchStripeStatus();
+      toast.success('Stripe status refreshed');
+    } catch (error) {
+      toast.error('Failed to refresh status');
+    } finally {
+      setStripeLoading(false);
     }
   };
 
@@ -280,8 +290,12 @@ function GroceryOwnerStoreSettings() {
 
       if (response.ok) {
         const data = await response.json();
-        // Open Stripe dashboard in new tab
-        window.open(data.url, '_blank');
+        if (data.isOnboarding) {
+          // Account not fully set up yet — redirect to complete onboarding
+          window.location.href = data.url;
+        } else {
+          window.open(data.url, '_blank');
+        }
       } else {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
         toast.error(errorData.error || 'Failed to open dashboard');
@@ -571,7 +585,7 @@ function GroceryOwnerStoreSettings() {
                     </button>
                     <button
                       type="button"
-                      onClick={fetchStripeStatus}
+                      onClick={handleRefreshStatus}
                       disabled={stripeLoading}
                       className="border border-gray-300 hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-lg font-medium transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed flex items-center"
                     >
