@@ -59,9 +59,10 @@ export const handleStripeWebhook = async (req, res) => {
               console.log(`✅ Cleared grocery cart for user ${userId}`);
             }
 
-            // Send order confirmation email to customer
+            // Fetch order data once; used for both customer email and owner notification
+            let orderResult = null;
             try {
-              const orderResult = await pool.query(
+              orderResult = await pool.query(
                 `SELECT
                   go.id, go.subtotal, go.platform_fee, go.delivery_fee, go.total,
                   go.delivery_address, go.delivery_city, go.delivery_state, go.delivery_zip,
@@ -142,6 +143,10 @@ export const handleStripeWebhook = async (req, res) => {
 
                 if (ownerResult.rows.length > 0) {
                   const owner = ownerResult.rows[0];
+                  if (!orderResult || orderResult.rows.length === 0) {
+                    console.error(`❌ No order data available for notification, order ${orderId}`);
+                    return;
+                  }
                   const orderData = orderResult.rows[0];
                   const customerEmail = orderData.user_email || orderData.guest_email;
                   const customerName = orderData.user_name || orderData.delivery_name || 'Customer';
@@ -199,8 +204,8 @@ export const handleStripeWebhook = async (req, res) => {
                  FROM grocery_orders go
                  JOIN grocery_order_items goi ON go.id = goi.grocery_order_id
                  JOIN products p ON goi.product_id = p.id
-                 JOIN grocery_store_owners gso ON p.store_id = gso.id
-                 JOIN grocery_stores gs ON gso.id = gs.owner_id
+                 JOIN grocery_stores gs ON p.store_id = gs.id
+                 JOIN grocery_store_owners gso ON gs.owner_id = gso.id
                  WHERE go.id = $1
                  LIMIT 1`,
                 [orderId]
@@ -247,7 +252,8 @@ export const handleStripeWebhook = async (req, res) => {
                       ) SELECT $1, gso.id, $2, $3, 'completed', NOW()
                        FROM grocery_order_items goi
                        JOIN products p ON goi.product_id = p.id
-                       JOIN grocery_store_owners gso ON p.store_id = gso.id
+                       JOIN grocery_stores gs ON p.store_id = gs.id
+                       JOIN grocery_store_owners gso ON gs.owner_id = gso.id
                        WHERE goi.grocery_order_id = $1
                        LIMIT 1
                        ON CONFLICT DO NOTHING`,
@@ -272,7 +278,8 @@ export const handleStripeWebhook = async (req, res) => {
                     ) SELECT $1, gso.id, $2, 'awaiting_connect', NOW()
                      FROM grocery_order_items goi
                      JOIN products p ON goi.product_id = p.id
-                     JOIN grocery_store_owners gso ON p.store_id = gso.id
+                     JOIN grocery_stores gs ON p.store_id = gs.id
+                     JOIN grocery_store_owners gso ON gs.owner_id = gso.id
                      WHERE goi.grocery_order_id = $1
                      LIMIT 1
                      ON CONFLICT DO NOTHING`,
