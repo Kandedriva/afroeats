@@ -149,6 +149,47 @@ router.get('/image-path-status', async (req, res) => {
 });
 
 /**
+ * POST /api/migration/create-grocery-owner-notifications
+ * Run once to create the grocery_owner_notifications table if it doesn't exist
+ */
+router.post('/create-grocery-owner-notifications', async (req, res) => {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS grocery_owner_notifications (
+        id SERIAL PRIMARY KEY,
+        grocery_owner_id INTEGER REFERENCES grocery_store_owners(id) ON DELETE CASCADE,
+        grocery_order_id INTEGER REFERENCES grocery_orders(id) ON DELETE CASCADE,
+        type VARCHAR(50) NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        message TEXT NOT NULL,
+        data JSONB,
+        read BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_grocery_owner_notifications_owner_id
+      ON grocery_owner_notifications(grocery_owner_id)
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_grocery_owner_notifications_read
+      ON grocery_owner_notifications(read)
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_grocery_owner_notifications_created_at
+      ON grocery_owner_notifications(created_at DESC)
+    `);
+
+    logger.info('grocery_owner_notifications table ensured');
+    res.json({ success: true, message: 'grocery_owner_notifications table ready' });
+  } catch (error) {
+    logger.error('create-grocery-owner-notifications migration failed:', error);
+    res.status(500).json({ success: false, error: 'Migration failed', details: error.message });
+  }
+});
+
+/**
  * POST /api/migration/add-stripe-to-grocery-owners
  * Run once to add Stripe Connect columns to grocery_store_owners table
  */
