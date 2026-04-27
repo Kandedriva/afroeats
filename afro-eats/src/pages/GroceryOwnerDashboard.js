@@ -14,6 +14,7 @@ function GroceryOwnerDashboard() {
     totalRevenue: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
 
   useEffect(() => {
     fetchDashboardData();
@@ -24,21 +25,18 @@ function GroceryOwnerDashboard() {
     try {
       setLoading(true);
 
-      // Fetch store information
-      const storeResponse = await fetch(`${API_BASE_URL}/api/grocery-owners/store`, {
-        credentials: 'include',
-      });
+      const [storeResponse, notifResponse] = await Promise.all([
+        fetch(`${API_BASE_URL}/api/grocery-owners/store`, { credentials: 'include' }),
+        fetch(`${API_BASE_URL}/api/grocery-owners/notifications`, { credentials: 'include' }),
+      ]);
 
       if (storeResponse.ok) {
         const storeData = await storeResponse.json();
         setStore(storeData);
 
-        // Fetch orders statistics
         const ordersResponse = await fetch(
           `${API_BASE_URL}/api/grocery-owners/orders`,
-          {
-            credentials: 'include',
-          }
+          { credentials: 'include' }
         );
 
         if (ordersResponse.ok) {
@@ -47,6 +45,11 @@ function GroceryOwnerDashboard() {
         }
       } else {
         toast.error('Failed to load store information');
+      }
+
+      if (notifResponse.ok) {
+        const notifData = await notifResponse.json();
+        setUnreadNotifications(notifData.unreadCount || 0);
       }
     } catch (error) {
       // eslint-disable-next-line no-console
@@ -210,6 +213,24 @@ function GroceryOwnerDashboard() {
                 <p className="font-semibold text-gray-900">View Reports</p>
                 <p className="text-sm text-gray-600">Sales and analytics</p>
               </div>
+            </Link>
+
+            <Link
+              to="/grocery-owner/notifications"
+              className="flex items-center space-x-3 p-4 border-2 border-gray-200 rounded-lg hover:border-green-500 hover:bg-green-50 transition-all relative"
+            >
+              <span className="text-2xl">🔔</span>
+              <div>
+                <p className="font-semibold text-gray-900">Notifications</p>
+                <p className="text-sm text-gray-600">
+                  {unreadNotifications > 0 ? `${unreadNotifications} unread` : 'All caught up'}
+                </p>
+              </div>
+              {unreadNotifications > 0 && (
+                <span className="absolute top-2 right-2 inline-flex items-center justify-center w-6 h-6 text-xs font-bold text-white bg-red-500 rounded-full">
+                  {unreadNotifications > 99 ? '99+' : unreadNotifications}
+                </span>
+              )}
             </Link>
           </div>
         </div>

@@ -130,9 +130,13 @@ export const handleStripeWebhook = async (req, res) => {
               if (productResult.rows.length > 0 && productResult.rows[0].store_id) {
                 const storeId = productResult.rows[0].store_id;
 
-                // Get grocery owner details
+                // Look up the owner via grocery_stores — products.store_id is grocery_stores.id,
+                // not grocery_store_owners.id
                 const ownerResult = await pool.query(
-                  'SELECT id, name, email FROM grocery_store_owners WHERE id = $1',
+                  `SELECT gso.id, gso.name, gso.email
+                   FROM grocery_store_owners gso
+                   JOIN grocery_stores gs ON gs.owner_id = gso.id
+                   WHERE gs.id = $1`,
                   [storeId]
                 );
 

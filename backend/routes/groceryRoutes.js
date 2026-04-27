@@ -653,9 +653,12 @@ router.post('/orders/:id/refund', requireAuth, async (req, res) => {
 
     for (const storeId of storeIds) {
       try {
-        // Get grocery owner details
+        // products.store_id is grocery_stores.id — look up the owner through that table
         const ownerResult = await pool.query(
-          'SELECT id, name, email FROM grocery_store_owners WHERE id = $1',
+          `SELECT gso.id, gso.name, gso.email
+           FROM grocery_store_owners gso
+           JOIN grocery_stores gs ON gs.owner_id = gso.id
+           WHERE gs.id = $1`,
           [storeId]
         );
 
