@@ -60,7 +60,7 @@ function GroceryOwnerProducts() {
 
   const handleToggleAvailability = async (productId, currentStatus) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/products/${productId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/grocery-owners/products/${productId}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -98,7 +98,7 @@ function GroceryOwnerProducts() {
 
   const executeDeleteProduct = async (productId) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/products/${productId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/grocery-owners/products/${productId}`, {
         method: 'DELETE',
         credentials: 'include',
       });

@@ -225,10 +225,12 @@ function GroceryOwnerStoreSettings() {
       });
 
       if (response.ok) {
-        toast.success('Stripe account created! Redirecting to onboarding...');
-        // Refresh status first
+        const data = await response.json();
+        const message = data.alreadyExists
+          ? 'Resuming Stripe onboarding...'
+          : 'Stripe account created! Redirecting to onboarding...';
+        toast.success(message);
         await fetchStripeStatus();
-        // Now create onboarding link
         await handleStartOnboarding();
       } else {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
