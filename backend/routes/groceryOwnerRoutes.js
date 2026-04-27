@@ -1011,9 +1011,10 @@ router.post('/stripe/create-account', requireGroceryOwnerAuth, async (req, res) 
     );
 
     if (ownerResult.rows[0]?.stripe_account_id) {
-      return res.status(400).json({
-        error: 'Stripe account already exists',
-        accountId: ownerResult.rows[0].stripe_account_id
+      return res.json({
+        accountId: ownerResult.rows[0].stripe_account_id,
+        message: 'Stripe account already exists',
+        alreadyExists: true
       });
     }
 
