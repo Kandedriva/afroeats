@@ -28,6 +28,12 @@ function GroceryOwnerStoreSettings() {
   });
   const [stripeLoading, setStripeLoading] = useState(false);
 
+  // Email change state
+  const [ownerEmail, setOwnerEmail] = useState('');
+  const [emailForm, setEmailForm] = useState({ email: '', current_password: '' });
+  const [emailSaving, setEmailSaving] = useState(false);
+  const [showEmailForm, setShowEmailForm] = useState(false);
+
   useEffect(() => {
     const initializePage = async () => {
       try {
@@ -49,7 +55,8 @@ function GroceryOwnerStoreSettings() {
         // Fetch data
         await Promise.all([
           fetchStoreData(),
-          fetchStripeStatus()
+          fetchStripeStatus(),
+          fetchOwnerProfile(),
         ]);
 
         // If we had a success redirect, refresh status after a delay
@@ -100,6 +107,58 @@ function GroceryOwnerStoreSettings() {
       toast.error('Failed to load store information');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchOwnerProfile = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/grocery-owners/me`, {
+        credentials: 'include',
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setOwnerEmail(data.email || '');
+        setEmailForm((prev) => ({ ...prev, email: data.email || '' }));
+      }
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Fetch owner profile error:', error);
+    }
+  };
+
+  const handleEmailSubmit = async (e) => {
+    e.preventDefault();
+    if (!emailForm.email || !emailForm.current_password) {
+      toast.error('Please fill in both fields');
+      return;
+    }
+    setEmailSaving(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/grocery-owners/me`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          email: emailForm.email,
+          current_password: emailForm.current_password,
+        }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setOwnerEmail(data.email);
+        setEmailForm({ email: data.email, current_password: '' });
+        setShowEmailForm(false);
+        toast.success('Email updated successfully');
+      } else {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        toast.error(errorData.error || 'Failed to update email');
+      }
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Email update error:', error);
+      toast.error('Failed to update email. Please try again.');
+    } finally {
+      setEmailSaving(false);
     }
   };
 
@@ -456,6 +515,78 @@ function GroceryOwnerStoreSettings() {
                 </div>
               </div>
             )}
+
+            {/* Account / Email Section */}
+            <div className="border-t pt-6 mt-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Account Settings</h3>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Email Address</p>
+                  <p className="text-sm text-gray-900 mt-1">{ownerEmail || '—'}</p>
+                </div>
+                {!showEmailForm && (
+                  <button
+                    type="button"
+                    onClick={() => setShowEmailForm(true)}
+                    className="text-sm text-green-600 hover:text-green-700 font-medium"
+                  >
+                    Change Email
+                  </button>
+                )}
+              </div>
+
+              {showEmailForm && (
+                <form onSubmit={handleEmailSubmit} className="mt-4 space-y-3 bg-gray-50 rounded-lg p-4">
+                  <div>
+                    <label htmlFor="new_email" className="block text-sm font-medium text-gray-700 mb-1">
+                      New Email Address
+                    </label>
+                    <input
+                      type="email"
+                      id="new_email"
+                      value={emailForm.email}
+                      onChange={(e) => setEmailForm((prev) => ({ ...prev, email: e.target.value }))}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      placeholder="Enter new email address"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="current_password" className="block text-sm font-medium text-gray-700 mb-1">
+                      Current Password <span className="text-gray-500 font-normal">(to confirm)</span>
+                    </label>
+                    <input
+                      type="password"
+                      id="current_password"
+                      value={emailForm.current_password}
+                      onChange={(e) => setEmailForm((prev) => ({ ...prev, current_password: e.target.value }))}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      placeholder="Enter your current password"
+                      required
+                    />
+                  </div>
+                  <div className="flex gap-3 pt-1">
+                    <button
+                      type="submit"
+                      disabled={emailSaving}
+                      className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                    >
+                      {emailSaving ? 'Saving...' : 'Save Email'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowEmailForm(false);
+                        setEmailForm({ email: ownerEmail, current_password: '' });
+                      }}
+                      className="border border-gray-300 hover:bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
 
             {/* Stripe Connect Section */}
             <div className="border-t pt-6 mt-6">
