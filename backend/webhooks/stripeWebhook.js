@@ -51,12 +51,16 @@ export const handleStripeWebhook = async (req, res) => {
 
             // Clear the user's grocery cart after successful payment
             const userId = session.metadata.userId;
-            if (userId) {
-              await pool.query(
-                'DELETE FROM grocery_carts WHERE user_id = $1',
-                [parseInt(userId)]
-              );
-              console.log(`✅ Cleared grocery cart for user ${userId}`);
+            if (userId && userId !== 'guest') {
+              try {
+                await pool.query(
+                  'DELETE FROM grocery_carts WHERE user_id = $1',
+                  [parseInt(userId)]
+                );
+                console.log(`✅ Cleared grocery cart for user ${userId}`);
+              } catch (cartError) {
+                console.error('⚠️ Failed to clear grocery cart (non-critical):', cartError.message);
+              }
             }
 
             // Fetch order data once; used for both customer email and owner notification
