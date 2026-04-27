@@ -252,6 +252,65 @@ router.get('/me', requireGroceryOwnerAuth, async (req, res) => {
 });
 
 // ===========================
+// UPDATE GROCERY OWNER EMAIL
+// ===========================
+
+router.patch('/me', requireGroceryOwnerAuth, async (req, res) => {
+  try {
+    const { email, current_password } = req.body;
+
+    if (!email || !current_password) {
+      return res.status(400).json({ error: 'Email and current password are required' });
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: 'Invalid email address' });
+    }
+
+    // Verify current password
+    const ownerResult = await pool.query(
+      'SELECT id, email, password FROM grocery_store_owners WHERE id = $1',
+      [req.groceryOwner.id]
+    );
+
+    if (ownerResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Account not found' });
+    }
+
+    const owner = ownerResult.rows[0];
+    const passwordMatch = await bcrypt.compare(current_password, owner.password);
+    if (!passwordMatch) {
+      return res.status(401).json({ error: 'Current password is incorrect' });
+    }
+
+    // Check new email isn't already taken by another account
+    if (email.toLowerCase() !== owner.email.toLowerCase()) {
+      const emailTaken = await pool.query(
+        'SELECT id FROM grocery_store_owners WHERE email = $1 AND id != $2',
+        [email.toLowerCase(), req.groceryOwner.id]
+      );
+      if (emailTaken.rows.length > 0) {
+        return res.status(409).json({ error: 'This email address is already in use' });
+      }
+    }
+
+    await pool.query(
+      'UPDATE grocery_store_owners SET email = $1 WHERE id = $2',
+      [email.toLowerCase(), req.groceryOwner.id]
+    );
+
+    // Update session email
+    req.session.groceryOwnerEmail = email.toLowerCase();
+
+    res.json({ message: 'Email updated successfully', email: email.toLowerCase() });
+  } catch (error) {
+    console.error('Update email error:', error);
+    res.status(500).json({ error: 'Failed to update email' });
+  }
+});
+
+// ===========================
 // GET GROCERY STORE
 // ===========================
 
