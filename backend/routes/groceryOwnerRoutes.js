@@ -62,8 +62,7 @@ router.post('/register', uploadRestaurantLogo, async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     const hashedSecretWord = await bcrypt.hash(secret_word, 10);
 
-    // Handle logo upload (using middleware result)
-    const logoUrl = handleR2UploadResult(req);
+    const logoUrl = handleR2UploadResult(req).imageUrl || null;
 
     await client.query('BEGIN');
 
@@ -357,8 +356,7 @@ router.patch('/store', requireGroceryOwnerAuth, uploadRestaurantLogo, async (req
 
     const currentStore = storeResult.rows[0];
 
-    // Handle logo upload (using middleware result)
-    const logoUrl = handleR2UploadResult(req) || currentStore.image_url;
+    const logoUrl = handleR2UploadResult(req).imageUrl || currentStore.image_url;
 
     // Convert active to boolean
     const isActive = active === 'true' || active === true;
