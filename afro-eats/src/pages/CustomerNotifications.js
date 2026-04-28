@@ -104,19 +104,19 @@ function CustomerNotifications() {
     type === 'grocery_order_status';
 
   const getFilteredNotifications = () => {
-    if (filterType === 'all') return notifications;
-    if (filterType === 'refund') return notifications.filter(n => n.type.startsWith('refund_'));
-    if (filterType === 'order_update') return notifications.filter(n => isOrderNotification(n.type));
+    if (filterType === 'all') { return notifications; }
+    if (filterType === 'refund') { return notifications.filter(n => n.type.startsWith('refund_')); }
+    if (filterType === 'order_update') { return notifications.filter(n => isOrderNotification(n.type)); }
     return notifications;
   };
 
   const getNotificationIcon = (type, data = {}) => {
-    if (type.startsWith('refund_approve')) return '✅';
-    if (type.startsWith('refund_deny'))    return '❌';
-    if (type === 'order_confirmed')        return '🎉';
-    if (type === 'order_ready')            return '🍽️';
-    if (type === 'order_completed')        return '✅';
-    if (type === 'order_update')           return '📋';
+    if (type.startsWith('refund_approve')) { return '✅'; }
+    if (type.startsWith('refund_deny')) { return '❌'; }
+    if (type === 'order_confirmed') { return '🎉'; }
+    if (type === 'order_ready') { return '🍽️'; }
+    if (type === 'order_completed') { return '✅'; }
+    if (type === 'order_update') { return '📋'; }
     if (type === 'grocery_order_status') {
       const statusIcons = { preparing: '🥬', out_for_delivery: '🚚', delivered: '✅', cancelled: '❌' };
       return statusIcons[data.status] || '🛒';
