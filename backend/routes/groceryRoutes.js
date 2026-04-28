@@ -34,7 +34,12 @@ router.get('/stores', async (req, res) => {
            LIMIT 4`,
           [store.id]
         );
-        return { ...store, products: productsResult.rows };
+        const slug = store.name
+          .toLowerCase()
+          .trim()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-|-$/g, '');
+        return { ...store, slug, products: productsResult.rows };
       })
     );
 
