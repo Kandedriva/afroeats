@@ -1,6 +1,7 @@
-import { useContext } from 'react';
+import { useContext, useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { GroceryOwnerAuthContext } from '../context/GroceryOwnerAuthContext';
+import { API_BASE_URL } from '../config/api';
 import { toast } from 'react-toastify';
 import NotificationBell from './NotificationBell';
 
@@ -8,6 +9,27 @@ function GroceryOwnerNavbar() {
   const { groceryOwner, logout } = useContext(GroceryOwnerAuthContext);
   const navigate = useNavigate();
   const location = useLocation();
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    if (!groceryOwner) { return undefined; }
+    const fetchUnread = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/grocery-owners/notifications`, {
+          credentials: 'include',
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setUnreadCount(data.unreadCount || 0);
+        }
+      } catch (_) {
+        // silent fail
+      }
+    };
+    fetchUnread();
+    const interval = setInterval(fetchUnread, 30000);
+    return () => clearInterval(interval);
+  }, [groceryOwner]);
 
   const handleLogout = async () => {
     try {
@@ -71,13 +93,18 @@ function GroceryOwnerNavbar() {
             </Link>
             <Link
               to="/grocery-owner/notifications"
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              className={`relative px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                 isActive('/grocery-owner/notifications')
                   ? 'bg-green-800 text-white'
                   : 'text-green-100 hover:bg-green-700'
               }`}
             >
               🔔 Notifications
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-red-500 rounded-full">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
             </Link>
             <Link
               to="/grocery-owner/store"
@@ -144,13 +171,18 @@ function GroceryOwnerNavbar() {
           </Link>
           <Link
             to="/grocery-owner/notifications"
-            className={`block px-3 py-2 rounded-md text-base font-medium ${
+            className={`flex items-center justify-between px-3 py-2 rounded-md text-base font-medium ${
               isActive('/grocery-owner/notifications')
                 ? 'bg-green-800 text-white'
                 : 'text-green-100 hover:bg-green-700'
             }`}
           >
-            🔔 Notifications
+            <span>🔔 Notifications</span>
+            {unreadCount > 0 && (
+              <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-red-500 rounded-full">
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </span>
+            )}
           </Link>
           <Link
             to="/grocery-owner/store"
