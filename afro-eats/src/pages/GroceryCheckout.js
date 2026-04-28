@@ -24,10 +24,10 @@ const GroceryCheckout = () => {
     name: user?.name || "",
     email: user?.email || "",
     phone: user?.phone || "",
-    address: "",
-    city: "",
-    state: "",
-    zipCode: "",
+    address: user?.address || "",
+    city: user?.city || "",
+    state: user?.state || "",
+    zipCode: user?.zipCode || "",
     notes: "",
   });
 
@@ -47,7 +47,7 @@ const GroceryCheckout = () => {
     }
   }, [groceryCart, navigate]);
 
-  // Pre-fill user data
+  // Pre-fill user data (runs when user object becomes available)
   useEffect(() => {
     if (user) {
       setFormData((prev) => ({
@@ -55,6 +55,10 @@ const GroceryCheckout = () => {
         name: user.name || "",
         email: user.email || "",
         phone: user.phone || "",
+        address: user.address || "",
+        city: user.city || "",
+        state: user.state || "",
+        zipCode: user.zipCode || "",
       }));
     }
   }, [user]);

@@ -366,7 +366,7 @@ router.patch('/store', requireGroceryOwnerAuth, uploadRestaurantLogo, async (req
     // Update store information
     const updateResult = await pool.query(
       `UPDATE grocery_stores
-       SET name = $1, address = $2, phone_number = $3, image_url = $4, active = $5, updated_at = NOW()
+       SET name = $1, address = $2, phone_number = $3, image_url = $4, active = $5
        WHERE owner_id = $6
        RETURNING *`,
       [name, address, phone_number, logoUrl, isActive, req.groceryOwner.id]

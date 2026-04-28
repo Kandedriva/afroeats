@@ -88,62 +88,16 @@ export const GroceryCartProvider = ({ children }) => {
   }, []);
 
   /**
-   * Sync guest cart to database when user logs in
-   */
-  const syncGuestCartToDatabase = useCallback(async (guestCart) => {
-    if (guestCart.length === 0) {
-      return;
-    }
-
-    try {
-      // Add each item from guest cart to database
-      for (const item of guestCart) {
-        await fetch(`${API_BASE_URL}/api/grocery-cart`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({
-            productId: item.id,
-            quantity: item.quantity
-          }),
-        });
-      }
-
-      // Clear localStorage after sync
-      localStorage.removeItem(GUEST_CART_KEY);
-
-      // Fetch the updated cart from database
-      await fetchCart();
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error('Error syncing guest cart:', err);
-    }
-  }, [fetchCart]);
-
-  /**
-   * Load cart based on authentication status
+   * Load cart based on authentication status.
+   * The two carts are fully independent — logging in never touches the guest localStorage cart.
    */
   useEffect(() => {
     if (user) {
-      // User logged in - check if there's a guest cart to sync
-      const guestCartData = localStorage.getItem(GUEST_CART_KEY);
-      if (guestCartData) {
-        try {
-          const guestCart = JSON.parse(guestCartData);
-          syncGuestCartToDatabase(guestCart);
-        } catch (err) {
-          // eslint-disable-next-line no-console
-          console.error('Error parsing guest cart:', err);
-          fetchCart();
-        }
-      } else {
-        fetchCart();
-      }
+      fetchCart();
     } else {
-      // Guest user - load from localStorage
       loadGuestCart();
     }
-  }, [user, fetchCart, loadGuestCart, syncGuestCartToDatabase]);
+  }, [user, fetchCart, loadGuestCart]);
 
   /**
    * Add product to cart (works for both guest and authenticated users)
