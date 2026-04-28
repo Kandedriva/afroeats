@@ -10,6 +10,7 @@ function GroceryOwnerNavbar() {
   const navigate = useNavigate();
   const location = useLocation();
   const [unreadCount, setUnreadCount] = useState(0);
+  const [newOrdersCount, setNewOrdersCount] = useState(0);
 
   useEffect(() => {
     if (!groceryOwner) { return undefined; }
@@ -28,6 +29,26 @@ function GroceryOwnerNavbar() {
     };
     fetchUnread();
     const interval = setInterval(fetchUnread, 30000);
+    return () => clearInterval(interval);
+  }, [groceryOwner]);
+
+  useEffect(() => {
+    if (!groceryOwner) { return undefined; }
+    const fetchNewOrders = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/grocery-owners/orders/new-count`, {
+          credentials: 'include',
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setNewOrdersCount(data.newOrdersCount || 0);
+        }
+      } catch (_) {
+        // silent fail
+      }
+    };
+    fetchNewOrders();
+    const interval = setInterval(fetchNewOrders, 30000);
     return () => clearInterval(interval);
   }, [groceryOwner]);
 
@@ -73,13 +94,18 @@ function GroceryOwnerNavbar() {
             </Link>
             <Link
               to="/grocery-owner/orders"
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              className={`relative px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                 isActive('/grocery-owner/orders')
                   ? 'bg-green-800 text-white'
                   : 'text-green-100 hover:bg-green-700'
               }`}
             >
               📦 Orders
+              {newOrdersCount > 0 && (
+                <span className="absolute -top-1 -right-1 inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-red-500 rounded-full">
+                  {newOrdersCount > 99 ? '99+' : newOrdersCount}
+                </span>
+              )}
             </Link>
             <Link
               to="/grocery-owner/products"
@@ -151,13 +177,18 @@ function GroceryOwnerNavbar() {
           </Link>
           <Link
             to="/grocery-owner/orders"
-            className={`block px-3 py-2 rounded-md text-base font-medium ${
+            className={`flex items-center justify-between px-3 py-2 rounded-md text-base font-medium ${
               isActive('/grocery-owner/orders')
                 ? 'bg-green-800 text-white'
                 : 'text-green-100 hover:bg-green-700'
             }`}
           >
-            📦 Orders
+            <span>📦 Orders</span>
+            {newOrdersCount > 0 && (
+              <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-red-500 rounded-full">
+                {newOrdersCount > 99 ? '99+' : newOrdersCount}
+              </span>
+            )}
           </Link>
           <Link
             to="/grocery-owner/products"
