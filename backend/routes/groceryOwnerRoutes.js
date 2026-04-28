@@ -708,6 +708,41 @@ router.get('/orders', requireGroceryOwnerAuth, async (req, res) => {
   }
 });
 
+/**
+ * GET /api/grocery-owners/orders/new-count
+ * Returns the count of new (paid, not yet actioned) orders for the badge.
+ */
+router.get('/orders/new-count', requireGroceryOwnerAuth, async (req, res) => {
+  try {
+    const groceryOwnerId = req.groceryOwner.id;
+
+    const storeResult = await pool.query(
+      'SELECT id FROM grocery_stores WHERE owner_id = $1',
+      [groceryOwnerId]
+    );
+
+    if (storeResult.rows.length === 0) {
+      return res.json({ newOrdersCount: 0 });
+    }
+
+    const storeId = storeResult.rows[0].id;
+
+    const countResult = await pool.query(
+      `SELECT COUNT(DISTINCT go.id)::int AS count
+       FROM grocery_orders go
+       JOIN grocery_order_items goi ON goi.grocery_order_id = go.id
+       JOIN products p ON p.id = goi.product_id
+       WHERE p.store_id = $1 AND go.status = 'paid'`,
+      [storeId]
+    );
+
+    res.json({ newOrdersCount: countResult.rows[0].count });
+  } catch (error) {
+    console.error('Get new orders count error:', error);
+    res.status(500).json({ error: 'Failed to get orders count' });
+  }
+});
+
 // Notification copy per status transition
 const GROCERY_STATUS_NOTIFICATIONS = {
   preparing:        { title: 'Order Being Prepared 🥬', message: (id) => `Your grocery order #${id} is now being prepared.` },
