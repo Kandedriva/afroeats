@@ -299,7 +299,7 @@ router.get('/verify-session', async (req, res) => {
 
     // Get order by Stripe session ID
     const result = await pool.query(
-      'SELECT id FROM grocery_orders WHERE stripe_session_id = $1',
+      'SELECT id, status FROM grocery_orders WHERE stripe_session_id = $1',
       [session_id]
     );
 
@@ -307,11 +307,18 @@ router.get('/verify-session', async (req, res) => {
       return res.status(404).json({ error: 'Order not found' });
     }
 
-    const orderId = result.rows[0].id;
+    const { id: orderId, status } = result.rows[0];
+
+    // Mark as paid if still pending — covers dev (no Stripe CLI) and webhook delays in prod.
+    // In production the webhook usually runs first, making this a safe no-op.
+    if (status === 'pending') {
+      await pool.query(
+        `UPDATE grocery_orders SET status = 'paid', paid_at = NOW() WHERE id = $1`,
+        [orderId]
+      );
+    }
 
     // Respond immediately, then create notification in background.
-    // This is the fallback for dev (no Stripe CLI) and production webhook delays.
-    // Safe to call even if the webhook already ran — skips if notification exists.
     res.json({ orderId });
 
     setImmediate(() => ensureGroceryNotification(orderId, session_id));
