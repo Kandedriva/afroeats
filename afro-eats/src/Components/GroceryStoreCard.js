@@ -6,7 +6,7 @@ function GroceryStoreCard({ store }) {
   const imageUrl = getImageUrl(store.image_url, 'No Store Image');
 
   return (
-    <Link to={`/store/${store.id}`}>
+    <Link to={`/store/${store.slug || store.id}`}>
       <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-shadow duration-300 cursor-pointer h-full flex flex-col">
         <img
           className="w-full h-40 object-cover"
@@ -49,6 +49,7 @@ GroceryStoreCard.propTypes = {
     id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
     name: PropTypes.string.isRequired,
     address: PropTypes.string.isRequired,
+    slug: PropTypes.string,
     image_url: PropTypes.string,
     products: PropTypes.array,
   }).isRequired,

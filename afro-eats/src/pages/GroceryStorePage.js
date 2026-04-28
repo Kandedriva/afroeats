@@ -6,7 +6,7 @@ import { getImageUrl, handleImageError } from '../utils/imageUtils';
 import ProductCard from '../Components/ProductCard';
 
 export default function GroceryStorePage() {
-  const { storeId } = useParams();
+  const { storeSlug } = useParams();
   const [store, setStore] = useState(null);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -16,20 +16,19 @@ export default function GroceryStorePage() {
     const load = async () => {
       try {
         setLoading(true);
-        const [storesRes, productsRes] = await Promise.all([
-          fetch(`${API_BASE_URL}/api/grocery/stores`),
-          fetch(`${API_BASE_URL}/api/products?store_id=${storeId}&is_available=true`),
-        ]);
+        const storesRes = await fetch(`${API_BASE_URL}/api/grocery/stores`);
+        if (!storesRes.ok) { throw new Error('Failed to load stores'); }
 
-        if (storesRes.ok) {
-          const stores = await storesRes.json();
-          const found = stores.find((s) => String(s.id) === String(storeId));
-          setStore(found || null);
-        }
+        const stores = await storesRes.json();
+        const found = stores.find((s) => s.slug === storeSlug);
+        if (!found) { setLoading(false); return; }
 
-        if (productsRes.ok) {
-          setProducts(await productsRes.json());
-        }
+        setStore(found);
+
+        const productsRes = await fetch(
+          `${API_BASE_URL}/api/products?store_id=${found.id}&is_available=true`
+        );
+        if (productsRes.ok) { setProducts(await productsRes.json()); }
       } catch (err) {
         toast.error('Failed to load store');
       } finally {
@@ -37,7 +36,7 @@ export default function GroceryStorePage() {
       }
     };
     load();
-  }, [storeId]);
+  }, [storeSlug]);
 
   const filtered = products.filter((p) =>
     p.name.toLowerCase().includes(search.toLowerCase())

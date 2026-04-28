@@ -111,7 +111,7 @@ function AppContent() {
         <Route path="/grocery-cart" element={<GroceryCart />} />
         <Route path="/grocery-checkout" element={<GroceryCheckout />} />
         <Route path="/restaurants/:id" element={<RestaurantDetails />} />
-        <Route path="/store/:storeId" element={<GroceryStorePage />} />
+        <Route path="/store/:storeSlug" element={<GroceryStorePage />} />
         <Route path="/register" element={<Register />} />
         <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/login" element={<Login />} />
