@@ -108,23 +108,27 @@ function CustomerOrders() {
 
   const getStatusColor = (status) => {
     switch (status) {
-      case 'pending': return 'bg-yellow-100 text-yellow-800';
-      case 'paid': return 'bg-green-100 text-green-800';
-      case 'completed': return 'bg-blue-100 text-blue-800';
-      case 'cancelled': return 'bg-red-100 text-red-800';
-      case 'delivered': return 'bg-purple-100 text-purple-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'pending':          return 'bg-yellow-100 text-yellow-800';
+      case 'paid':             return 'bg-green-100 text-green-800';
+      case 'preparing':        return 'bg-blue-100 text-blue-800';
+      case 'out_for_delivery': return 'bg-orange-100 text-orange-800';
+      case 'completed':        return 'bg-blue-100 text-blue-800';
+      case 'cancelled':        return 'bg-red-100 text-red-800';
+      case 'delivered':        return 'bg-purple-100 text-purple-800';
+      default:                 return 'bg-gray-100 text-gray-800';
     }
   };
 
   const getStatusText = (status) => {
     switch (status) {
-      case 'pending': return 'Pending Payment';
-      case 'paid': return 'Payment Received';
-      case 'completed': return 'Completed';
-      case 'cancelled': return 'Cancelled';
-      case 'delivered': return 'Delivered';
-      default: return status || 'Unknown';
+      case 'pending':          return 'Pending Payment';
+      case 'paid':             return 'Payment Received';
+      case 'preparing':        return 'Being Prepared';
+      case 'out_for_delivery': return 'Out for Delivery';
+      case 'completed':        return 'Completed';
+      case 'cancelled':        return 'Cancelled';
+      case 'delivered':        return 'Delivered';
+      default:                 return status || 'Unknown';
     }
   };
 
@@ -369,14 +373,20 @@ function CustomerOrders() {
               </details>
             )}
 
-            {orders.map((order) => (
-              <div key={order.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            {orders.map((order) => {
+              const isGrocery = order.orderType === 'grocery';
+              return (
+              <div key={`${order.orderType}-${order.id}`} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 {/* Order Header */}
                 <div className="bg-gradient-to-r from-gray-50 to-white px-3 sm:px-4 py-3 border-b border-gray-200">
                   <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2">
                     <div className="flex-1 min-w-0">
-                      <h3 className="text-sm sm:text-base font-bold text-gray-900">
+                      <h3 className="text-sm sm:text-base font-bold text-gray-900 flex items-center gap-2">
+                        {isGrocery ? '🛒' : '🍽️'}
                         Order #{order.id}
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${isGrocery ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
+                          {isGrocery ? 'Grocery' : 'Restaurant'}
+                        </span>
                       </h3>
                       <p className="text-xs text-gray-500 mt-0.5">
                         {new Date(order.created_at).toLocaleDateString('en-US', {
@@ -411,15 +421,22 @@ function CustomerOrders() {
 
                 {/* Order Items */}
                 <div className="px-3 sm:px-4 py-3">
-                  <h4 className="text-xs sm:text-sm font-bold text-gray-900 mb-2">Order Items</h4>
+                  <h4 className="text-xs sm:text-sm font-bold text-gray-900 mb-2">
+                    {isGrocery ? 'Grocery Items' : 'Order Items'}
+                  </h4>
                   <div className="space-y-2">
-                    {order.items.map((item) => (
-                      <div key={item.id} className="flex justify-between items-start gap-2 py-2 border-b border-gray-100 last:border-b-0">
+                    {order.items.map((item, idx) => (
+                      <div key={`${item.id}-${idx}`} className="flex justify-between items-start gap-2 py-2 border-b border-gray-100 last:border-b-0">
                         <div className="flex-1 min-w-0">
                           <p className="text-xs sm:text-sm font-semibold text-gray-900 truncate">{item.name}</p>
-                          <p className="text-xs text-gray-500 truncate">
-                            {item.restaurant_name || 'Restaurant'}
-                          </p>
+                          {!isGrocery && (
+                            <p className="text-xs text-gray-500 truncate">
+                              {item.restaurant_name || 'Restaurant'}
+                            </p>
+                          )}
+                          {isGrocery && item.unit && (
+                            <p className="text-xs text-gray-500">{item.unit}</p>
+                          )}
                         </div>
                         <div className="text-right flex-shrink-0">
                           <p className="text-xs sm:text-sm font-bold text-gray-900">
@@ -434,43 +451,19 @@ function CustomerOrders() {
                   </div>
                 </div>
 
-                {/* Special Instructions */}
-                {order.order_details && (
+                {/* Notes / Special Instructions */}
+                {(order.order_details || order.notes) && (
                   <div className="px-3 sm:px-4 py-2.5 bg-blue-50 border-t border-blue-100">
-                    <p className="text-xs font-bold text-blue-800 mb-1">📝 Special Instructions:</p>
-                    <p className="text-xs text-blue-700">{order.order_details}</p>
+                    <p className="text-xs font-bold text-blue-800 mb-1">📝 {isGrocery ? 'Notes' : 'Special Instructions'}:</p>
+                    <p className="text-xs text-blue-700">{order.order_details || order.notes}</p>
                   </div>
                 )}
 
                 {/* Order Actions */}
                 <div className="bg-gradient-to-r from-gray-50 to-white px-3 sm:px-4 py-3 border-t border-gray-200">
-                  {/* Status Badge */}
-                  <div className="mb-3">
-                    {order.status === 'paid' && (
-                      <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                        🍳 Being Prepared
-                      </span>
-                    )}
-                    {order.status === 'pending' && (
-                      <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                        ⏳ Awaiting Payment
-                      </span>
-                    )}
-                    {order.status === 'completed' && (
-                      <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                        ✅ Ready for Pickup
-                      </span>
-                    )}
-                    {order.status === 'cancelled' && (
-                      <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                        ❌ Cancelled
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Action Buttons */}
                   <div className="flex flex-wrap gap-2">
-                    {canCancelOrder(order.status) && (
+                    {/* Restaurant orders: cancel + view details */}
+                    {!isGrocery && canCancelOrder(order.status) && (
                       <button
                         onClick={() => showCancelModal(order.id)}
                         className="flex-1 min-w-[120px] bg-red-600 text-white px-3 py-2 rounded-lg text-xs font-medium hover:bg-red-700 transition-all shadow-sm"
@@ -478,15 +471,15 @@ function CustomerOrders() {
                         Cancel Order
                       </button>
                     )}
-
-                    <button
-                      onClick={() => navigate(`/order-details/${order.id}`)}
-                      className="flex-1 min-w-[120px] bg-blue-600 text-white px-3 py-2 rounded-lg text-xs font-medium hover:bg-blue-700 transition-all shadow-sm"
-                    >
-                      View Details
-                    </button>
-
-                    {(order.status === 'paid' || order.status === 'completed') && (
+                    {!isGrocery && (
+                      <button
+                        onClick={() => navigate(`/order-details/${order.id}`)}
+                        className="flex-1 min-w-[120px] bg-blue-600 text-white px-3 py-2 rounded-lg text-xs font-medium hover:bg-blue-700 transition-all shadow-sm"
+                      >
+                        View Details
+                      </button>
+                    )}
+                    {!isGrocery && (order.status === 'paid' || order.status === 'completed') && (
                       <button
                         onClick={() => navigate("/")}
                         className="flex-1 min-w-[120px] bg-green-600 text-white px-3 py-2 rounded-lg text-xs font-medium hover:bg-green-700 transition-all shadow-sm"
@@ -494,8 +487,7 @@ function CustomerOrders() {
                         Order Again
                       </button>
                     )}
-
-                    {canRemoveOrder(order.status) && (
+                    {!isGrocery && canRemoveOrder(order.status) && (
                       <button
                         onClick={() => confirmRemoveOrder(order.id)}
                         className="flex-1 min-w-[120px] bg-gray-600 text-white px-3 py-2 rounded-lg text-xs font-medium hover:bg-gray-700 transition-all shadow-sm"
@@ -504,10 +496,21 @@ function CustomerOrders() {
                         🗑️ Remove
                       </button>
                     )}
+
+                    {/* Grocery orders: shop again */}
+                    {isGrocery && (
+                      <button
+                        onClick={() => navigate('/marketplace')}
+                        className="flex-1 min-w-[120px] bg-green-600 text-white px-3 py-2 rounded-lg text-xs font-medium hover:bg-green-700 transition-all shadow-sm"
+                      >
+                        Shop Again
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
 

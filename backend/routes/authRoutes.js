@@ -720,7 +720,74 @@ router.get("/orders", requireAuth, async (req, res) => {
       return acc;
     }, {});
 
-    const orders = Object.values(groupedOrders);
+    const restaurantOrders = Object.values(groupedOrders).map(o => ({ ...o, orderType: 'restaurant' }));
+
+    // Fetch grocery orders for this user
+    const groceryResult = await pool.query(`
+      SELECT
+        go.id,
+        go.total,
+        go.subtotal,
+        go.platform_fee,
+        go.delivery_fee,
+        go.status,
+        go.created_at,
+        go.paid_at,
+        go.delivery_address,
+        go.delivery_city,
+        go.delivery_state,
+        go.delivery_zip,
+        go.notes,
+        goi.product_id,
+        p.name  AS product_name,
+        goi.quantity,
+        goi.unit_price,
+        goi.total_price,
+        p.unit
+      FROM grocery_orders go
+      LEFT JOIN grocery_order_items goi ON go.id = goi.grocery_order_id
+      LEFT JOIN products p ON goi.product_id = p.id
+      WHERE go.user_id = $1
+      ORDER BY go.created_at DESC
+    `, [userId]);
+
+    // Group grocery order rows by order id
+    const groupedGrocery = groceryResult.rows.reduce((acc, row) => {
+      if (!acc[row.id]) {
+        acc[row.id] = {
+          id: row.id,
+          orderType: 'grocery',
+          total: row.total,
+          subtotal: row.subtotal,
+          platform_fee: row.platform_fee,
+          delivery_fee: row.delivery_fee,
+          status: row.status || 'paid',
+          created_at: row.created_at,
+          paid_at: row.paid_at,
+          delivery_address: [row.delivery_address, row.delivery_city, row.delivery_state, row.delivery_zip]
+            .filter(Boolean).join(', '),
+          notes: row.notes,
+          items: [],
+        };
+      }
+      if (row.product_id) {
+        acc[row.id].items.push({
+          id: row.product_id,
+          name: row.product_name,
+          price: row.unit_price,
+          quantity: row.quantity,
+          unit: row.unit,
+          total_price: row.total_price,
+        });
+      }
+      return acc;
+    }, {});
+
+    const groceryOrders = Object.values(groupedGrocery);
+
+    // Merge and sort newest first
+    const orders = [...restaurantOrders, ...groceryOrders]
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
     res.json({ orders });
   } catch (err) {
