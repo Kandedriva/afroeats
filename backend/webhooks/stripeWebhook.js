@@ -121,101 +121,90 @@ export const handleStripeWebhook = async (req, res) => {
             }
 
             // ✅ Send notification to grocery store owner
+            // ownerId is stored in session metadata at order-creation time — no DB chain needed
             try {
-              console.log(`🔔 [Notif] Starting owner notification for order ${orderId}`);
+              const ownerIdFromMeta = session.metadata?.ownerId
+                ? parseInt(session.metadata.ownerId)
+                : null;
 
-              // Step 1: Find store_id via order items — filter out NULLs explicitly
-              const productResult = await pool.query(
-                `SELECT DISTINCT p.store_id
-                 FROM grocery_order_items goi
-                 JOIN products p ON goi.product_id = p.id
-                 WHERE goi.grocery_order_id = $1 AND p.store_id IS NOT NULL
-                 LIMIT 1`,
-                [orderId]
-              );
+              console.log(`🔔 [Notif] order=${orderId} ownerId from metadata=${ownerIdFromMeta}`);
 
-              console.log(`🔔 [Notif] productResult rows: ${productResult.rows.length}`, productResult.rows);
-
-              if (productResult.rows.length === 0 || !productResult.rows[0].store_id) {
-                // Log the raw items for debugging — do NOT return (would exit handler)
-                const debugItems = await pool.query(
-                  `SELECT goi.product_id, p.name, p.store_id
-                   FROM grocery_order_items goi
-                   LEFT JOIN products p ON goi.product_id = p.id
-                   WHERE goi.grocery_order_id = $1`,
-                  [orderId]
-                );
-                console.error(`❌ [Notif] No store_id found for order ${orderId}. Items:`, JSON.stringify(debugItems.rows));
+              if (!ownerIdFromMeta) {
+                console.error(`❌ [Notif] No ownerId in session metadata for order ${orderId}. Old order or missing storeId on product.`);
               } else {
-                const storeId = productResult.rows[0].store_id;
-                console.log(`🔔 [Notif] storeId = ${storeId}`);
-
-                // Step 2: Find the owner for this store
+                // Single direct lookup — same pattern as restaurant owners
                 const ownerResult = await pool.query(
-                  `SELECT gso.id, gso.name, gso.email
-                   FROM grocery_store_owners gso
-                   JOIN grocery_stores gs ON gs.owner_id = gso.id
-                   WHERE gs.id = $1`,
-                  [storeId]
+                  `SELECT id, name, email FROM grocery_store_owners WHERE id = $1`,
+                  [ownerIdFromMeta]
                 );
-
-                console.log(`🔔 [Notif] ownerResult rows: ${ownerResult.rows.length}`, ownerResult.rows);
 
                 if (ownerResult.rows.length === 0) {
-                  console.error(`❌ [Notif] No owner found for store ${storeId}`);
+                  console.error(`❌ [Notif] Grocery owner ${ownerIdFromMeta} not found in DB`);
                 } else {
                   const owner = ownerResult.rows[0];
                   const orderData = orderResult?.rows[0];
+                  const customerName = orderData?.user_name || orderData?.delivery_name || 'Customer';
+                  const total = orderData?.total || 0;
 
-                  if (!orderData) {
-                    console.error(`❌ [Notif] orderData missing for order ${orderId}`);
-                  } else {
-                    const customerName = orderData.user_name || orderData.delivery_name || 'Customer';
-                    console.log(`🔔 [Notif] Inserting notification: owner=${owner.id}, order=${orderId}`);
+                  console.log(`🔔 [Notif] Creating notification for owner ${owner.id} (${owner.name}), order ${orderId}`);
 
-                    // Step 3: INSERT the in-app notification
-                    await pool.query(
-                      `INSERT INTO grocery_owner_notifications (
-                        grocery_owner_id, grocery_order_id, type, title, message, data
-                      ) VALUES ($1, $2, $3, $4, $5, $6)`,
-                      [
-                        owner.id,
+                  // Ensure table exists inline — same pattern as restaurant notifications
+                  await pool.query(`
+                    CREATE TABLE IF NOT EXISTS grocery_owner_notifications (
+                      id SERIAL PRIMARY KEY,
+                      grocery_owner_id INTEGER REFERENCES grocery_store_owners(id) ON DELETE CASCADE,
+                      grocery_order_id INTEGER REFERENCES grocery_orders(id) ON DELETE CASCADE,
+                      type VARCHAR(50) NOT NULL,
+                      title VARCHAR(255) NOT NULL,
+                      message TEXT NOT NULL,
+                      data JSONB,
+                      read BOOLEAN DEFAULT FALSE,
+                      created_at TIMESTAMP DEFAULT NOW()
+                    )
+                  `);
+
+                  // INSERT the in-app notification
+                  await pool.query(
+                    `INSERT INTO grocery_owner_notifications (
+                      grocery_owner_id, grocery_order_id, type, title, message, data
+                    ) VALUES ($1, $2, $3, $4, $5, $6)`,
+                    [
+                      owner.id,
+                      orderId,
+                      'new_order',
+                      `New Order #${orderId}`,
+                      `You have a new grocery order from ${customerName} for $${parseFloat(total).toFixed(2)}`,
+                      JSON.stringify({
                         orderId,
-                        'new_order',
-                        `New Order #${orderId}`,
-                        `You have a new grocery order from ${customerName} for $${parseFloat(orderData.total).toFixed(2)}`,
-                        JSON.stringify({
-                          orderId,
-                          customerName,
-                          total: parseFloat(orderData.total).toFixed(2)
-                        })
-                      ]
-                    );
-
-                    console.log(`✅ [Notif] In-app notification created for owner ${owner.id}, order ${orderId}`);
-
-                    // Step 4: Email — isolated so it can't block the INSERT
-                    try {
-                      await sendGroceryOrderNotificationEmail(owner.email, owner.name, {
-                        orderId,
-                        items: orderData.items,
-                        total: parseFloat(orderData.total),
                         customerName,
-                        customerPhone: orderData.delivery_phone,
-                        deliveryAddress: orderData.delivery_address,
-                        deliveryCity: orderData.delivery_city,
-                        deliveryState: orderData.delivery_state,
-                        deliveryZip: orderData.delivery_zip
-                      });
-                      console.log(`✅ [Notif] Email sent to ${owner.email} for order ${orderId}`);
-                    } catch (emailErr) {
-                      console.error(`⚠️ [Notif] Email failed (notification already saved):`, emailErr.message);
-                    }
+                        total: parseFloat(total).toFixed(2)
+                      })
+                    ]
+                  );
+
+                  console.log(`✅ [Notif] Notification saved for owner ${owner.id}, order ${orderId}`);
+
+                  // Email — isolated so it never blocks the INSERT
+                  try {
+                    await sendGroceryOrderNotificationEmail(owner.email, owner.name, {
+                      orderId,
+                      items: orderData?.items || [],
+                      total: parseFloat(total),
+                      customerName,
+                      customerPhone: orderData?.delivery_phone,
+                      deliveryAddress: orderData?.delivery_address,
+                      deliveryCity: orderData?.delivery_city,
+                      deliveryState: orderData?.delivery_state,
+                      deliveryZip: orderData?.delivery_zip
+                    });
+                    console.log(`✅ [Notif] Email sent to ${owner.email} for order ${orderId}`);
+                  } catch (emailErr) {
+                    console.error(`⚠️ [Notif] Email failed (notification already saved):`, emailErr.message);
                   }
                 }
               }
             } catch (ownerNotificationError) {
-              console.error('❌ [Notif] Unexpected error:', ownerNotificationError.message);
+              console.error('❌ [Notif] Error:', ownerNotificationError.message);
               console.error('❌ [Notif] Stack:', ownerNotificationError.stack);
             }
 
