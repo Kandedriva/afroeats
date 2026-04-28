@@ -60,7 +60,7 @@ const OwnerGroceryOrders = () => {
 
   const handleUpdateStatus = (orderId, currentStatus) => {
     const transition = STATUS_NEXT[currentStatus];
-    if (!transition) return;
+    if (!transition) { return; }
     setConfirmDialog({
       isOpen: true,
       title: `${transition.label}?`,
