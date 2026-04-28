@@ -121,16 +121,49 @@ export const handleStripeWebhook = async (req, res) => {
             }
 
             // ✅ Send notification to grocery store owner
-            // ownerId is stored in session metadata at order-creation time — no DB chain needed
             try {
-              const ownerIdFromMeta = session.metadata?.ownerId
+              // Primary: ownerId stored in session metadata at order-creation time
+              let ownerIdFromMeta = session.metadata?.ownerId
                 ? parseInt(session.metadata.ownerId)
                 : null;
 
               console.log(`🔔 [Notif] order=${orderId} ownerId from metadata=${ownerIdFromMeta}`);
 
+              // Fallback A: query via order items → products → grocery_stores → owners
               if (!ownerIdFromMeta) {
-                console.error(`❌ [Notif] No ownerId in session metadata for order ${orderId}. Old order or missing storeId on product.`);
+                console.warn(`⚠️ [Notif] No ownerId in metadata for order ${orderId}, trying DB fallback`);
+                const fbResult = await pool.query(
+                  `SELECT gso.id
+                   FROM grocery_store_owners gso
+                   JOIN grocery_stores gs ON gs.owner_id = gso.id
+                   JOIN products p ON p.store_id = gs.id
+                   JOIN grocery_order_items goi ON goi.product_id = p.id
+                   WHERE goi.grocery_order_id = $1
+                   LIMIT 1`,
+                  [orderId]
+                );
+                if (fbResult.rows.length > 0) {
+                  ownerIdFromMeta = fbResult.rows[0].id;
+                  console.log(`🔔 [Notif] Fallback A resolved ownerId=${ownerIdFromMeta}`);
+                }
+              }
+
+              // Fallback B: single-owner system — just take the one grocery owner
+              if (!ownerIdFromMeta) {
+                console.warn(`⚠️ [Notif] Fallback A failed, trying last-resort single-owner lookup`);
+                const lastResort = await pool.query(
+                  `SELECT gso.id FROM grocery_store_owners gso
+                   JOIN grocery_stores gs ON gs.owner_id = gso.id
+                   LIMIT 1`
+                );
+                if (lastResort.rows.length > 0) {
+                  ownerIdFromMeta = lastResort.rows[0].id;
+                  console.log(`🔔 [Notif] Fallback B resolved ownerId=${ownerIdFromMeta}`);
+                }
+              }
+
+              if (!ownerIdFromMeta) {
+                console.error(`❌ [Notif] All fallbacks exhausted — no grocery owner found for order ${orderId}`);
               } else {
                 // Single direct lookup — same pattern as restaurant owners
                 const ownerResult = await pool.query(

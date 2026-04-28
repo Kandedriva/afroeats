@@ -257,6 +257,58 @@ router.post('/create-grocery-carts', async (req, res) => {
 });
 
 /**
+ * POST /api/migration/fix-product-store-ids
+ * Assigns store_id to any products that have NULL store_id.
+ * Uses the first grocery_stores row — safe for single-owner deployments.
+ */
+router.post('/fix-product-store-ids', async (req, res) => {
+  try {
+    // Count products needing fix
+    const needsFixResult = await pool.query(
+      `SELECT COUNT(*) as count FROM products WHERE store_id IS NULL`
+    );
+    const needsFix = parseInt(needsFixResult.rows[0].count);
+
+    if (needsFix === 0) {
+      return res.json({ success: true, message: 'All products already have store_id', updated: 0 });
+    }
+
+    // Get the first grocery store
+    const storeResult = await pool.query(
+      `SELECT gs.id as store_id, gs.name, gso.id as owner_id, gso.name as owner_name
+       FROM grocery_stores gs
+       JOIN grocery_store_owners gso ON gs.owner_id = gso.id
+       LIMIT 1`
+    );
+
+    if (storeResult.rows.length === 0) {
+      return res.status(400).json({ success: false, error: 'No grocery store found — register a grocery owner first' });
+    }
+
+    const store = storeResult.rows[0];
+
+    // Update all NULL store_id products
+    const updateResult = await pool.query(
+      `UPDATE products SET store_id = $1 WHERE store_id IS NULL RETURNING id, name`,
+      [store.store_id]
+    );
+
+    logger.info(`Fixed ${updateResult.rowCount} products with NULL store_id`, { storeId: store.store_id });
+
+    res.json({
+      success: true,
+      message: `Fixed ${updateResult.rowCount} products`,
+      assignedTo: { storeId: store.store_id, storeName: store.name, ownerName: store.owner_name },
+      updated: updateResult.rowCount,
+      products: updateResult.rows.slice(0, 20)
+    });
+  } catch (error) {
+    logger.error('fix-product-store-ids failed:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
  * GET /api/migration/diagnose-notifications?orderId=123
  * Runs every step of the owner notification chain for a given grocery order.
  * Use this to diagnose why notifications aren't being written.
