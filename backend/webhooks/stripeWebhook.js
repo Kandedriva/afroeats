@@ -7,6 +7,7 @@ import {
   sendRestaurantOrderNotificationEmail,
   sendGroceryOrderNotificationEmail
 } from '../services/emailService.js';
+import { ensureGroceryNotification } from '../services/groceryNotificationService.js';
 
 export const handleStripeWebhook = async (req, res) => {
   const sig = req.headers['stripe-signature'];
@@ -121,125 +122,8 @@ export const handleStripeWebhook = async (req, res) => {
             }
 
             // ✅ Send notification to grocery store owner
-            try {
-              // Primary: ownerId stored in session metadata at order-creation time
-              let ownerIdFromMeta = session.metadata?.ownerId
-                ? parseInt(session.metadata.ownerId)
-                : null;
-
-              console.log(`🔔 [Notif] order=${orderId} ownerId from metadata=${ownerIdFromMeta}`);
-
-              // Fallback A: query via order items → products → grocery_stores → owners
-              if (!ownerIdFromMeta) {
-                console.warn(`⚠️ [Notif] No ownerId in metadata for order ${orderId}, trying DB fallback`);
-                const fbResult = await pool.query(
-                  `SELECT gso.id
-                   FROM grocery_store_owners gso
-                   JOIN grocery_stores gs ON gs.owner_id = gso.id
-                   JOIN products p ON p.store_id = gs.id
-                   JOIN grocery_order_items goi ON goi.product_id = p.id
-                   WHERE goi.grocery_order_id = $1
-                   LIMIT 1`,
-                  [orderId]
-                );
-                if (fbResult.rows.length > 0) {
-                  ownerIdFromMeta = fbResult.rows[0].id;
-                  console.log(`🔔 [Notif] Fallback A resolved ownerId=${ownerIdFromMeta}`);
-                }
-              }
-
-              // Fallback B: single-owner system — just take the one grocery owner
-              if (!ownerIdFromMeta) {
-                console.warn(`⚠️ [Notif] Fallback A failed, trying last-resort single-owner lookup`);
-                const lastResort = await pool.query(
-                  `SELECT gso.id FROM grocery_store_owners gso
-                   JOIN grocery_stores gs ON gs.owner_id = gso.id
-                   LIMIT 1`
-                );
-                if (lastResort.rows.length > 0) {
-                  ownerIdFromMeta = lastResort.rows[0].id;
-                  console.log(`🔔 [Notif] Fallback B resolved ownerId=${ownerIdFromMeta}`);
-                }
-              }
-
-              if (!ownerIdFromMeta) {
-                console.error(`❌ [Notif] All fallbacks exhausted — no grocery owner found for order ${orderId}`);
-              } else {
-                // Single direct lookup — same pattern as restaurant owners
-                const ownerResult = await pool.query(
-                  `SELECT id, name, email FROM grocery_store_owners WHERE id = $1`,
-                  [ownerIdFromMeta]
-                );
-
-                if (ownerResult.rows.length === 0) {
-                  console.error(`❌ [Notif] Grocery owner ${ownerIdFromMeta} not found in DB`);
-                } else {
-                  const owner = ownerResult.rows[0];
-                  const orderData = orderResult?.rows[0];
-                  const customerName = orderData?.user_name || orderData?.delivery_name || 'Customer';
-                  const total = orderData?.total || 0;
-
-                  console.log(`🔔 [Notif] Creating notification for owner ${owner.id} (${owner.name}), order ${orderId}`);
-
-                  // Ensure table exists inline — same pattern as restaurant notifications
-                  await pool.query(`
-                    CREATE TABLE IF NOT EXISTS grocery_owner_notifications (
-                      id SERIAL PRIMARY KEY,
-                      grocery_owner_id INTEGER REFERENCES grocery_store_owners(id) ON DELETE CASCADE,
-                      grocery_order_id INTEGER REFERENCES grocery_orders(id) ON DELETE CASCADE,
-                      type VARCHAR(50) NOT NULL,
-                      title VARCHAR(255) NOT NULL,
-                      message TEXT NOT NULL,
-                      data JSONB,
-                      read BOOLEAN DEFAULT FALSE,
-                      created_at TIMESTAMP DEFAULT NOW()
-                    )
-                  `);
-
-                  // INSERT the in-app notification
-                  await pool.query(
-                    `INSERT INTO grocery_owner_notifications (
-                      grocery_owner_id, grocery_order_id, type, title, message, data
-                    ) VALUES ($1, $2, $3, $4, $5, $6)`,
-                    [
-                      owner.id,
-                      orderId,
-                      'new_order',
-                      `New Order #${orderId}`,
-                      `You have a new grocery order from ${customerName} for $${parseFloat(total).toFixed(2)}`,
-                      JSON.stringify({
-                        orderId,
-                        customerName,
-                        total: parseFloat(total).toFixed(2)
-                      })
-                    ]
-                  );
-
-                  console.log(`✅ [Notif] Notification saved for owner ${owner.id}, order ${orderId}`);
-
-                  // Email — isolated so it never blocks the INSERT
-                  try {
-                    await sendGroceryOrderNotificationEmail(owner.email, owner.name, {
-                      orderId,
-                      items: orderData?.items || [],
-                      total: parseFloat(total),
-                      customerName,
-                      customerPhone: orderData?.delivery_phone,
-                      deliveryAddress: orderData?.delivery_address,
-                      deliveryCity: orderData?.delivery_city,
-                      deliveryState: orderData?.delivery_state,
-                      deliveryZip: orderData?.delivery_zip
-                    });
-                    console.log(`✅ [Notif] Email sent to ${owner.email} for order ${orderId}`);
-                  } catch (emailErr) {
-                    console.error(`⚠️ [Notif] Email failed (notification already saved):`, emailErr.message);
-                  }
-                }
-              }
-            } catch (ownerNotificationError) {
-              console.error('❌ [Notif] Error:', ownerNotificationError.message);
-              console.error('❌ [Notif] Stack:', ownerNotificationError.stack);
-            }
+            // ensureGroceryNotification handles all fallbacks and deduplication
+            await ensureGroceryNotification(orderId, session.id);
 
             // ✅ Handle Stripe Connect payout to grocery owner
             try {
