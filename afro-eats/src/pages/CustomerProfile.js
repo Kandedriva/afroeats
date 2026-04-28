@@ -10,7 +10,10 @@ function CustomerProfile() {
     name: "",
     email: "",
     phone: "",
-    address: ""
+    address: "",
+    city: "",
+    state: "",
+    zipCode: "",
   });
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
@@ -30,14 +33,17 @@ function CustomerProfile() {
           const res = await fetch(`${API_BASE_URL}/api/auth/me`, {
             credentials: "include",
           });
-          
+
           if (res.ok) {
             const userData = await res.json();
             setProfileData({
               name: userData.name || "",
               email: userData.email || "",
               phone: userData.phone || "",
-              address: userData.address || ""
+              address: userData.address || "",
+              city: userData.city || "",
+              state: userData.state || "",
+              zipCode: userData.zipCode || "",
             });
           }
         } catch (err) {
@@ -245,24 +251,69 @@ function CustomerProfile() {
             </p>
           </div>
 
-          {/* Address Field */}
+          {/* Address Fields */}
           <div>
             <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-2">
-              Address
+              Street Address
             </label>
-            <textarea
+            <input
               id="address"
+              type="text"
               name="address"
               value={profileData.address}
               onChange={handleInputChange}
-              rows="3"
-              className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
-              placeholder="Enter your address (street, city, state, zip code)"
-              maxLength={300}
+              className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              placeholder="123 Main Street"
+              maxLength={255}
             />
-            <div className="flex justify-between text-xs text-gray-500 mt-1">
-              <span>Used as default delivery address for orders</span>
-              <span>{profileData.address.length}/300</span>
+            <p className="text-xs text-gray-500 mt-1">Used as default delivery address for orders</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label htmlFor="city" className="block text-sm font-medium text-gray-700 mb-2">
+                City
+              </label>
+              <input
+                id="city"
+                type="text"
+                name="city"
+                value={profileData.city}
+                onChange={handleInputChange}
+                className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                placeholder="New York"
+                maxLength={100}
+              />
+            </div>
+            <div>
+              <label htmlFor="state" className="block text-sm font-medium text-gray-700 mb-2">
+                State
+              </label>
+              <input
+                id="state"
+                type="text"
+                name="state"
+                value={profileData.state}
+                onChange={handleInputChange}
+                className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                placeholder="NY"
+                maxLength={100}
+              />
+            </div>
+            <div>
+              <label htmlFor="zipCode" className="block text-sm font-medium text-gray-700 mb-2">
+                ZIP Code
+              </label>
+              <input
+                id="zipCode"
+                type="text"
+                name="zipCode"
+                value={profileData.zipCode}
+                onChange={handleInputChange}
+                className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                placeholder="10001"
+                maxLength={20}
+              />
             </div>
           </div>
 

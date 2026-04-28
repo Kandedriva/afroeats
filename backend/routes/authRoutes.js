@@ -343,9 +343,18 @@ router.get("/me", async (req, res) => {
       return res.status(401).json({ error: "Not logged in" });
     }
 
+    // Ensure extended profile columns exist (safe to run every time, no-op if present)
+    try {
+      await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(20)");
+      await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS address TEXT");
+      await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS city VARCHAR(100)");
+      await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS state VARCHAR(100)");
+      await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS zip_code VARCHAR(20)");
+    } catch (_) {}
+
     // Validate that the user still exists in the database
     const userResult = await pool.query(
-      "SELECT id, name, email FROM users WHERE id = $1",
+      "SELECT id, name, email, phone, address, city, state, zip_code FROM users WHERE id = $1",
       [req.session.userId]
     );
 
@@ -358,7 +367,7 @@ router.get("/me", async (req, res) => {
     }
 
     const user = userResult.rows[0];
-    
+
     // Touch session to extend its life
     if (req.session.touch) {
       req.session.touch();
@@ -368,6 +377,11 @@ router.get("/me", async (req, res) => {
       id: user.id,
       name: user.name,
       email: user.email,
+      phone: user.phone || "",
+      address: user.address || "",
+      city: user.city || "",
+      state: user.state || "",
+      zipCode: user.zip_code || "",
       loginTime: req.session.loginTime,
     });
   } catch (err) {
@@ -380,20 +394,22 @@ router.get("/me", async (req, res) => {
 router.get("/profile", async (req, res) => {
   if (req.session.userId) {
     try {
-      // Ensure address and phone columns exist
+      // Ensure all profile columns exist
       try {
         await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS address TEXT");
         await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(20)");
+        await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS city VARCHAR(100)");
+        await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS state VARCHAR(100)");
+        await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS zip_code VARCHAR(20)");
       } catch (err) {
         // Column creation check handled silently
       }
 
-      // Get full user profile from database
       const userResult = await pool.query(
-        "SELECT id, name, email, address, phone FROM users WHERE id = $1", 
+        "SELECT id, name, email, address, phone, city, state, zip_code FROM users WHERE id = $1",
         [req.session.userId]
       );
-      
+
       if (userResult.rows.length > 0) {
         res.json({ user: userResult.rows[0] });
       } else {
@@ -1280,7 +1296,7 @@ router.delete('/notifications/delete-read', requireAuth, async (req, res) => {
 router.put('/update-profile', requireAuth, async (req, res) => {
   try {
     const userId = req.session.userId;
-    const { name, email, phone, address } = req.body;
+    const { name, email, phone, address, city, state, zipCode } = req.body;
 
     if (!userId) {
       return res.status(401).json({ error: "Must be logged in to update profile" });
@@ -1311,20 +1327,32 @@ router.put('/update-profile', requireAuth, async (req, res) => {
       return res.status(400).json({ error: "Email address is already in use" });
     }
 
-    // Ensure address and phone columns exist
+    // Ensure all profile columns exist
     try {
       await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS address TEXT");
       await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(20)");
+      await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS city VARCHAR(100)");
+      await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS state VARCHAR(100)");
+      await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS zip_code VARCHAR(20)");
     } catch (err) {
     }
 
     // Update user profile
     const updateResult = await pool.query(
-      `UPDATE users 
-       SET name = $1, email = $2, phone = $3, address = $4 
-       WHERE id = $5 
-       RETURNING id, name, email, phone, address`,
-      [name.trim(), email.trim().toLowerCase(), phone?.trim() || null, address?.trim() || null, userId]
+      `UPDATE users
+       SET name = $1, email = $2, phone = $3, address = $4, city = $5, state = $6, zip_code = $7
+       WHERE id = $8
+       RETURNING id, name, email, phone, address, city, state, zip_code`,
+      [
+        name.trim(),
+        email.trim().toLowerCase(),
+        phone?.trim() || null,
+        address?.trim() || null,
+        city?.trim() || null,
+        state?.trim() || null,
+        zipCode?.trim() || null,
+        userId
+      ]
     );
 
     if (updateResult.rows.length === 0) {
@@ -1336,11 +1364,13 @@ router.put('/update-profile', requireAuth, async (req, res) => {
     // Update session with new user name if changed
     req.session.userName = updatedUser.name.split(" ")[0];
 
-
     res.json({
       success: true,
       message: "Profile updated successfully",
-      user: updatedUser
+      user: {
+        ...updatedUser,
+        zipCode: updatedUser.zip_code,
+      }
     });
 
   } catch (err) {

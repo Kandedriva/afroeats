@@ -7,7 +7,7 @@ const AWS_SECRET_ACCESS_KEY = process.env.AWS_SECRET_ACCESS_KEY;
 const FROM_EMAIL = process.env.AWS_SES_FROM_EMAIL || 'noreply@orderdabaly.com';
 const FROM_NAME = process.env.AWS_SES_FROM_NAME || 'Order Dabaly';
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
-const SES_CONFIGURATION_SET = process.env.SES_CONFIGURATION_SET || 'orderdabaly-email-events';
+const SES_CONFIGURATION_SET = process.env.SES_CONFIGURATION_SET || null;
 
 let sesClient = null;
 
@@ -57,7 +57,7 @@ const sendEmail = async (to, subject, html, text = '') => {
           },
         },
       },
-      ConfigurationSetName: SES_CONFIGURATION_SET,
+      ...(SES_CONFIGURATION_SET ? { ConfigurationSetName: SES_CONFIGURATION_SET } : {}),
     };
 
     const command = new SendEmailCommand(params);
