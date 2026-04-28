@@ -96,54 +96,37 @@ function CustomerNotifications() {
     }
   };
 
+  const isOrderNotification = (type) =>
+    type === 'order_update' ||
+    type === 'order_completed' ||
+    type === 'order_confirmed' ||
+    type === 'order_ready' ||
+    type === 'grocery_order_status';
+
   const getFilteredNotifications = () => {
-    if (filterType === 'all') {
-      return notifications;
-    }
-    if (filterType === 'refund') {
-      return notifications.filter(n => n.type.startsWith('refund_'));
-    }
-    if (filterType === 'order_update') {
-      return notifications.filter(n =>
-        n.type === 'order_update' ||
-        n.type === 'order_completed' ||
-        n.type === 'order_confirmed' ||
-        n.type === 'order_ready'
-      );
-    }
+    if (filterType === 'all') return notifications;
+    if (filterType === 'refund') return notifications.filter(n => n.type.startsWith('refund_'));
+    if (filterType === 'order_update') return notifications.filter(n => isOrderNotification(n.type));
     return notifications;
   };
 
-  const getNotificationIcon = (type) => {
-    if (type.startsWith('refund_approve')) {
-      return '✅';
-    }
-    if (type.startsWith('refund_deny')) {
-      return '❌';
-    }
-    if (type === 'order_confirmed') {
-      return '🎉';
-    }
-    if (type === 'order_ready') {
-      return '🍽️';
-    }
-    if (type === 'order_completed') {
-      return '✅';
-    }
-    if (type === 'order_update') {
-      return '📋';
+  const getNotificationIcon = (type, data = {}) => {
+    if (type.startsWith('refund_approve')) return '✅';
+    if (type.startsWith('refund_deny'))    return '❌';
+    if (type === 'order_confirmed')        return '🎉';
+    if (type === 'order_ready')            return '🍽️';
+    if (type === 'order_completed')        return '✅';
+    if (type === 'order_update')           return '📋';
+    if (type === 'grocery_order_status') {
+      const statusIcons = { preparing: '🥬', out_for_delivery: '🚚', delivered: '✅', cancelled: '❌' };
+      return statusIcons[data.status] || '🛒';
     }
     return '📢';
   };
 
   const filteredNotifications = getFilteredNotifications();
   const refundNotifications = notifications.filter(n => n.type.startsWith('refund_'));
-  const orderNotifications = notifications.filter(n =>
-    n.type === 'order_update' ||
-    n.type === 'order_completed' ||
-    n.type === 'order_confirmed' ||
-    n.type === 'order_ready'
-  );
+  const orderNotifications = notifications.filter(n => isOrderNotification(n.type));
 
   if (authLoading || loading) {
     return (
@@ -288,6 +271,7 @@ function CustomerNotifications() {
             {filteredNotifications.map((notification) => {
               const data = notification.data || {};
               const isRefundNotification = notification.type.startsWith('refund_');
+              const isGroceryNotification = notification.type === 'grocery_order_status';
 
               return (
                 <div
@@ -315,7 +299,7 @@ function CustomerNotifications() {
                       <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-xl ${
                         !notification.read ? 'bg-blue-100' : 'bg-gray-100'
                       }`}>
-                        {getNotificationIcon(notification.type)}
+                        {getNotificationIcon(notification.type, data)}
                       </div>
 
                       {/* Content */}
@@ -382,12 +366,12 @@ function CustomerNotifications() {
                     )}
 
                     {/* Order Details */}
-                    {data.orderId && (
+                    {(data.orderId || data.groceryOrderId) && (
                       <div className="bg-gray-50 rounded-lg p-2.5 mt-2">
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex-1 min-w-0">
                             <p className="text-xs font-semibold text-gray-700">
-                              Order #{data.orderId}
+                              {isGroceryNotification ? '🛒' : '🍽️'} Order #{data.groceryOrderId || data.orderId}
                             </p>
                             {data.orderTotal && (
                               <p className="text-xs text-gray-500">
@@ -396,7 +380,9 @@ function CustomerNotifications() {
                             )}
                           </div>
                           <Link
-                            to={`/order-details/${data.orderId}`}
+                            to={isGroceryNotification
+                              ? `/my-orders`
+                              : `/order-details/${data.orderId}`}
                             className="flex-shrink-0 bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 transition-all text-xs font-medium"
                           >
                             View →

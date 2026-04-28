@@ -45,35 +45,52 @@ const OwnerGroceryOrders = () => {
     }
   };
 
-  const handleCompleteOrder = (orderId) => {
+  const STATUS_NEXT = {
+    paid:             { next: 'preparing',        label: 'Mark as Preparing',       icon: '🥬', color: 'blue' },
+    preparing:        { next: 'out_for_delivery',  label: 'Mark as Out for Delivery', icon: '🚚', color: 'orange' },
+    out_for_delivery: { next: 'delivered',         label: 'Mark as Delivered',        icon: '✓',  color: 'green' },
+  };
+
+  const STATUS_LABELS = {
+    preparing:        'Preparing',
+    out_for_delivery: 'Out for Delivery',
+    delivered:        'Delivered',
+    cancelled:        'Cancelled',
+  };
+
+  const handleUpdateStatus = (orderId, currentStatus) => {
+    const transition = STATUS_NEXT[currentStatus];
+    if (!transition) return;
     setConfirmDialog({
       isOpen: true,
-      title: 'Mark as Delivered?',
-      message: 'Are you sure you want to mark this order as delivered? The customer will be notified.',
-      confirmColor: 'green',
-      icon: '✓',
-      onConfirm: () => executeCompleteOrder(orderId),
+      title: `${transition.label}?`,
+      message: `This will update the order status to "${STATUS_LABELS[transition.next] || transition.next}". The customer will be notified.`,
+      confirmColor: transition.color,
+      icon: transition.icon,
+      onConfirm: () => executeUpdateStatus(orderId, transition.next),
     });
   };
 
-  const executeCompleteOrder = async (orderId) => {
+  const executeUpdateStatus = async (orderId, newStatus) => {
     setIsProcessing(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/grocery-owners/orders/${orderId}/complete`, {
+      const res = await fetch(`${API_BASE_URL}/api/grocery-owners/orders/${orderId}/status`, {
         method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
+        body: JSON.stringify({ status: newStatus }),
       });
 
       if (res.ok) {
-        toast.success('Order marked as delivered');
+        toast.success(`Order updated: ${STATUS_LABELS[newStatus] || newStatus}`);
         setSelectedOrder(null);
         loadOrders();
       } else {
         const data = await res.json();
-        toast.error(data.error || 'Failed to complete order');
+        toast.error(data.error || 'Failed to update order status');
       }
     } catch (error) {
-      toast.error('An error occurred while completing order');
+      toast.error('An error occurred while updating order status');
     } finally {
       setIsProcessing(false);
     }
@@ -348,16 +365,16 @@ const OwnerGroceryOrders = () => {
                         >
                           🖨️
                         </button>
-                        {order.status !== 'delivered' ? (
+                        {STATUS_NEXT[order.status] ? (
                           <button
-                            onClick={() => handleCompleteOrder(order.id)}
+                            onClick={() => handleUpdateStatus(order.id, order.status)}
                             disabled={isProcessing}
-                            className="text-green-600 hover:text-green-900 text-sm disabled:opacity-50"
-                            title="Mark as Delivered"
+                            className="text-blue-600 hover:text-blue-900 text-sm disabled:opacity-50"
+                            title={STATUS_NEXT[order.status].label}
                           >
-                            ✓ Complete
+                            {STATUS_NEXT[order.status].icon} {STATUS_NEXT[order.status].label}
                           </button>
-                        ) : (
+                        ) : order.status === 'delivered' ? (
                           <button
                             onClick={() => handleDeleteOrder(order.id)}
                             disabled={isProcessing}
@@ -366,7 +383,7 @@ const OwnerGroceryOrders = () => {
                           >
                             🗑️ Delete
                           </button>
-                        )}
+                        ) : null}
                       </div>
                     </td>
                   </tr>
@@ -494,15 +511,15 @@ const OwnerGroceryOrders = () => {
                   >
                     🖨️ Print Order
                   </button>
-                  {selectedOrder.status !== 'delivered' ? (
+                  {STATUS_NEXT[selectedOrder.status] ? (
                     <button
-                      onClick={() => handleCompleteOrder(selectedOrder.id)}
+                      onClick={() => handleUpdateStatus(selectedOrder.id, selectedOrder.status)}
                       disabled={isProcessing}
-                      className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
                     >
-                      ✓ Mark as Delivered
+                      {STATUS_NEXT[selectedOrder.status].icon} {STATUS_NEXT[selectedOrder.status].label}
                     </button>
-                  ) : (
+                  ) : selectedOrder.status === 'delivered' ? (
                     <button
                       onClick={() => handleDeleteOrder(selectedOrder.id)}
                       disabled={isProcessing}
@@ -510,7 +527,7 @@ const OwnerGroceryOrders = () => {
                     >
                       🗑️ Delete Order
                     </button>
-                  )}
+                  ) : null}
                 </div>
               </div>
             </div>

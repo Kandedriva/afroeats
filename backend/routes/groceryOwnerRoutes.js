@@ -708,47 +708,121 @@ router.get('/orders', requireGroceryOwnerAuth, async (req, res) => {
   }
 });
 
+// Notification copy per status transition
+const GROCERY_STATUS_NOTIFICATIONS = {
+  preparing:        { title: 'Order Being Prepared 🥬', message: (id) => `Your grocery order #${id} is now being prepared.` },
+  out_for_delivery: { title: 'Out for Delivery 🚚',    message: (id) => `Your grocery order #${id} is on its way!` },
+  delivered:        { title: 'Order Delivered ✅',      message: (id) => `Your grocery order #${id} has been delivered. Enjoy!` },
+  cancelled:        { title: 'Order Cancelled ❌',      message: (id) => `Your grocery order #${id} has been cancelled.` },
+};
+
+async function notifyGroceryCustomer(orderId, newStatus) {
+  const notif = GROCERY_STATUS_NOTIFICATIONS[newStatus];
+  if (!notif) return;
+  try {
+    const orderRow = await pool.query(
+      'SELECT user_id FROM grocery_orders WHERE id = $1',
+      [orderId]
+    );
+    const userId = orderRow.rows[0]?.user_id;
+    if (!userId) return; // guest — no in-app notification
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS customer_notifications (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        order_id INTEGER REFERENCES orders(id) ON DELETE CASCADE,
+        type VARCHAR(50) NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        message TEXT NOT NULL,
+        data JSONB DEFAULT '{}',
+        read BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+    await pool.query(
+      `INSERT INTO customer_notifications (user_id, order_id, type, title, message, data)
+       VALUES ($1, NULL, $2, $3, $4, $5)`,
+      [
+        userId,
+        'grocery_order_status',
+        notif.title,
+        notif.message(orderId),
+        JSON.stringify({ groceryOrderId: orderId, status: newStatus }),
+      ]
+    );
+    console.log(`✅ [GroceryNotif] user ${userId} notified: order ${orderId} → ${newStatus}`);
+  } catch (err) {
+    console.error(`[GroceryNotif] Failed for order ${orderId}:`, err.message);
+  }
+}
+
+/**
+ * PATCH /api/grocery-owners/orders/:id/status
+ * Advance an order through its lifecycle and notify the customer.
+ * Accepted statuses: preparing | out_for_delivery | delivered | cancelled
+ */
+router.patch('/orders/:id/status', requireGroceryOwnerAuth, async (req, res) => {
+  try {
+    const orderId = parseInt(req.params.id);
+    const { status } = req.body;
+
+    const allowed = ['preparing', 'out_for_delivery', 'delivered', 'cancelled'];
+    if (!allowed.includes(status)) {
+      return res.status(400).json({ error: `Invalid status. Must be one of: ${allowed.join(', ')}` });
+    }
+
+    const orderCheck = await pool.query(
+      'SELECT id, status FROM grocery_orders WHERE id = $1',
+      [orderId]
+    );
+    if (orderCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    if (orderCheck.rows[0].status === 'delivered') {
+      return res.status(400).json({ error: 'Order already delivered' });
+    }
+
+    await pool.query(
+      'UPDATE grocery_orders SET status = $1, updated_at = NOW() WHERE id = $2',
+      [status, orderId]
+    );
+
+    setImmediate(() => notifyGroceryCustomer(orderId, status));
+
+    res.json({ message: `Order status updated to ${status}` });
+  } catch (error) {
+    console.error('Update grocery order status error:', error);
+    res.status(500).json({ error: 'Failed to update order status' });
+  }
+});
+
 /**
  * PATCH /api/grocery-owners/orders/:id/complete
- * Mark a grocery order as completed/delivered
+ * Legacy endpoint — kept for backward compatibility, delegates to delivered.
  */
 router.patch('/orders/:id/complete', requireGroceryOwnerAuth, async (req, res) => {
   try {
     const orderId = parseInt(req.params.id);
-    const groceryOwnerId = req.groceryOwner.id;
 
-    // First get the grocery store for this owner
-    const storeResult = await pool.query(
-      'SELECT id FROM grocery_stores WHERE owner_id = $1',
-      [groceryOwnerId]
-    );
-
-    if (storeResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Grocery store not found' });
-    }
-
-    // Check if order exists
     const orderCheck = await pool.query(
-      'SELECT * FROM grocery_orders WHERE id = $1',
+      'SELECT id, status FROM grocery_orders WHERE id = $1',
       [orderId]
     );
-
     if (orderCheck.rows.length === 0) {
       return res.status(404).json({ error: 'Order not found' });
     }
-
-    const order = orderCheck.rows[0];
-
-    // Don't allow completing already delivered orders
-    if (order.status === 'delivered') {
+    if (orderCheck.rows[0].status === 'delivered') {
       return res.status(400).json({ error: 'Order already delivered' });
     }
 
-    // Update order status to delivered
     await pool.query(
       'UPDATE grocery_orders SET status = $1, updated_at = NOW() WHERE id = $2',
       ['delivered', orderId]
     );
+
+    setImmediate(() => notifyGroceryCustomer(orderId, 'delivered'));
 
     res.json({ message: 'Order marked as delivered' });
   } catch (error) {
