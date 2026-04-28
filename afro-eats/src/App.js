@@ -64,6 +64,7 @@ import DriverEarnings from "./pages/DriverEarnings";
 import DriverProfile from "./pages/DriverProfile";
 import CustomerRefunds from "./pages/CustomerRefunds";
 import MarketplaceHome from "./pages/MarketplaceHome";
+import GroceryStorePage from "./pages/GroceryStorePage";
 import ProductDetails from "./pages/ProductDetails";
 import GroceryCart from "./pages/GroceryCart";
 import GroceryCheckout from "./pages/GroceryCheckout";
@@ -110,6 +111,7 @@ function AppContent() {
         <Route path="/grocery-cart" element={<GroceryCart />} />
         <Route path="/grocery-checkout" element={<GroceryCheckout />} />
         <Route path="/restaurants/:id" element={<RestaurantDetails />} />
+        <Route path="/store/:storeId" element={<GroceryStorePage />} />
         <Route path="/register" element={<Register />} />
         <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/login" element={<Login />} />

@@ -12,6 +12,40 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
 
 /**
+ * GET /api/grocery/stores
+ * Public — returns all active grocery stores with a product preview (up to 4 products each).
+ */
+router.get('/stores', async (req, res) => {
+  try {
+    const storesResult = await pool.query(
+      `SELECT id, name, address, phone_number, image_url
+       FROM grocery_stores
+       WHERE active = true
+       ORDER BY name ASC`
+    );
+
+    const stores = await Promise.all(
+      storesResult.rows.map(async (store) => {
+        const productsResult = await pool.query(
+          `SELECT id, name, price, unit, image_url, category
+           FROM products
+           WHERE store_id = $1 AND is_available = true AND (is_deleted = false OR is_deleted IS NULL)
+           ORDER BY id ASC
+           LIMIT 4`,
+          [store.id]
+        );
+        return { ...store, products: productsResult.rows };
+      })
+    );
+
+    res.json(stores);
+  } catch (err) {
+    console.error('Get grocery stores error:', err);
+    res.status(500).json({ error: 'Failed to load grocery stores' });
+  }
+});
+
+/**
  * Calculate delivery fee for grocery order
  * POST /api/grocery/calculate-delivery
  */
