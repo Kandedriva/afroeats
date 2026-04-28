@@ -4,6 +4,7 @@ import pool from '../db.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
 import { calculateDistanceAndFee, getFallbackDeliveryFee } from '../services/googleMapsService.js';
 import { sendOrderDeliveredEmail, sendGroceryRefundRequestEmail } from '../services/emailService.js';
+import { ensureGroceryNotification } from '../services/groceryNotificationService.js';
 
 const router = express.Router();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
@@ -306,7 +307,14 @@ router.get('/verify-session', async (req, res) => {
       return res.status(404).json({ error: 'Order not found' });
     }
 
-    res.json({ orderId: result.rows[0].id });
+    const orderId = result.rows[0].id;
+
+    // Respond immediately, then create notification in background.
+    // This is the fallback for dev (no Stripe CLI) and production webhook delays.
+    // Safe to call even if the webhook already ran — skips if notification exists.
+    res.json({ orderId });
+
+    setImmediate(() => ensureGroceryNotification(orderId, session_id));
   } catch (err) {
     console.error('Verify session error:', err);
     res.status(500).json({ error: 'Failed to verify session' });
