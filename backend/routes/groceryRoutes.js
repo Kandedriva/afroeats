@@ -135,20 +135,37 @@ router.post('/create-order', async (req, res) => {
       );
     }
 
-    // Resolve store and owner for this order (used in webhook notification)
+    // Resolve store and owner for notification routing
+    // Priority 1: store_id already on the cart items (set when products were created by owner)
+    // Priority 2: DB lookup by product IDs
+    // Priority 3: single-owner fallback
     let storeId = null;
     let ownerId = null;
     try {
-      const productIds = items.map(i => i.id);
-      const storeResult = await client.query(
-        `SELECT DISTINCT p.store_id
-         FROM products p
-         WHERE p.id = ANY($1) AND p.store_id IS NOT NULL
-         LIMIT 1`,
-        [productIds]
-      );
-      if (storeResult.rows.length > 0) {
-        storeId = storeResult.rows[0].store_id;
+      // Cart items carry store_id when products have it set
+      const storeIdFromItems = items.find(i => i.store_id != null)?.store_id;
+      if (storeIdFromItems) {
+        storeId = storeIdFromItems;
+        console.log(`[Order ${orderId}] storeId from cart items: ${storeId}`);
+      } else {
+        // Fallback: query DB
+        const productIds = items.map(i => i.id);
+        const storeResult = await client.query(
+          `SELECT DISTINCT p.store_id
+           FROM products p
+           WHERE p.id = ANY($1) AND p.store_id IS NOT NULL
+           LIMIT 1`,
+          [productIds]
+        );
+        if (storeResult.rows.length > 0) {
+          storeId = storeResult.rows[0].store_id;
+          console.log(`[Order ${orderId}] storeId from DB lookup: ${storeId}`);
+        } else {
+          console.warn(`[Order ${orderId}] No store_id found — products may have NULL store_id`);
+        }
+      }
+
+      if (storeId) {
         const ownerLookup = await client.query(
           `SELECT gso.id FROM grocery_store_owners gso
            JOIN grocery_stores gs ON gs.owner_id = gso.id
@@ -157,10 +174,26 @@ router.post('/create-order', async (req, res) => {
         );
         if (ownerLookup.rows.length > 0) {
           ownerId = ownerLookup.rows[0].id;
+          console.log(`[Order ${orderId}] ownerId resolved: ${ownerId}`);
+        } else {
+          console.warn(`[Order ${orderId}] No owner found for store ${storeId}`);
+        }
+      }
+
+      // Last resort: if still no ownerId, use the only/first grocery owner
+      if (!ownerId) {
+        const fallback = await client.query(
+          `SELECT gso.id FROM grocery_store_owners gso
+           JOIN grocery_stores gs ON gs.owner_id = gso.id
+           LIMIT 1`
+        );
+        if (fallback.rows.length > 0) {
+          ownerId = fallback.rows[0].id;
+          console.warn(`[Order ${orderId}] Using fallback ownerId: ${ownerId}`);
         }
       }
     } catch (lookupErr) {
-      console.error('Could not resolve storeId/ownerId for order:', lookupErr.message);
+      console.error(`[Order ${orderId}] Could not resolve storeId/ownerId:`, lookupErr.message);
     }
 
     // Create Stripe checkout session
