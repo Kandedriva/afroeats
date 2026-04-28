@@ -135,6 +135,34 @@ router.post('/create-order', async (req, res) => {
       );
     }
 
+    // Resolve store and owner for this order (used in webhook notification)
+    let storeId = null;
+    let ownerId = null;
+    try {
+      const productIds = items.map(i => i.id);
+      const storeResult = await client.query(
+        `SELECT DISTINCT p.store_id
+         FROM products p
+         WHERE p.id = ANY($1) AND p.store_id IS NOT NULL
+         LIMIT 1`,
+        [productIds]
+      );
+      if (storeResult.rows.length > 0) {
+        storeId = storeResult.rows[0].store_id;
+        const ownerLookup = await client.query(
+          `SELECT gso.id FROM grocery_store_owners gso
+           JOIN grocery_stores gs ON gs.owner_id = gso.id
+           WHERE gs.id = $1`,
+          [storeId]
+        );
+        if (ownerLookup.rows.length > 0) {
+          ownerId = ownerLookup.rows[0].id;
+        }
+      }
+    } catch (lookupErr) {
+      console.error('Could not resolve storeId/ownerId for order:', lookupErr.message);
+    }
+
     // Create Stripe checkout session
     const lineItems = items.map(item => ({
       price_data: {
@@ -193,7 +221,9 @@ router.post('/create-order', async (req, res) => {
         userId: userId ? userId.toString() : 'guest',
         orderType: 'grocery',
         isGuest: isGuest.toString(),
-        guestEmail: isGuest ? guestEmail : null,
+        guestEmail: isGuest ? guestEmail : '',
+        storeId: storeId ? storeId.toString() : '',
+        ownerId: ownerId ? ownerId.toString() : '',
       },
     });
 
