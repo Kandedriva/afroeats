@@ -20,12 +20,8 @@ import stripeRoutes from "./routes/stripeRoutes.js";
 import webhookRoutes from "./routes/webhook.js";
 import adminRoutes from "./routes/adminRoutes.js";
 import imageProxyRoutes from "./routes/imageProxy.js";
-import debugRoutes from "./routes/debugRoutes.js";
 import supportRoutes from "./routes/supportRoutes.js";
-import migrationRoutes from "./routes/migrationRoutes.js";
-import debugImageRoutes from "./routes/debugImageRoutes.js";
 import NotificationService from './services/NotificationService.js';
-import webhookDebugRoutes from './routes/webhookDebug.js';
 import chatRoutes from "./routes/chatRoutes.js";
 import socketService from "./services/socketService.js";
 import driverAuthRoutes from "./routes/driverAuthRoutes.js";
@@ -423,11 +419,7 @@ app.use("/api/stripe", stripeRoutes);
 app.use("/api", webhookRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api", imageProxyRoutes);
-app.use("/api/debug", debugRoutes);
-app.use("/api/debug", debugImageRoutes);
 app.use("/api/support", supportRoutes);
-app.use("/api/migration", migrationRoutes);
-app.use("/api/webhook-debug", webhookDebugRoutes);
 app.use("/api/chat", chatRoutes);
 
 // Driver routes

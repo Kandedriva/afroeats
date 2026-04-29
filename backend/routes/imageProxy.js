@@ -260,29 +260,4 @@ router.get('/local-images/*', async (req, res) => {
   }
 });
 
-// Test endpoint to check R2 connectivity
-router.get('/r2-test', async (req, res) => {
-  try {
-    if (!r2Storage.isConfigured()) {
-      return res.status(503).json({ 
-        error: 'R2 storage not configured',
-        configured: false
-      });
-    }
-    
-    res.json({
-      message: 'R2 storage is configured and ready',
-      configured: true,
-      bucket: process.env.R2_BUCKET,
-      endpoint: process.env.R2_ENDPOINT
-    });
-  } catch (error) {
-    logger.error('R2 test error:', error);
-    res.status(500).json({ 
-      error: 'R2 test failed',
-      details: error.message 
-    });
-  }
-});
-
 export default router;

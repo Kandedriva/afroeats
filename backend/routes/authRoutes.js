@@ -1,5 +1,6 @@
 import express from "express";
 import bcryptjs from "bcryptjs";
+import crypto from "crypto";
 import pool from "../db.js";
 import {
   checkAccountLockout,
@@ -10,6 +11,14 @@ import { requireAuth } from "../middleware/authMiddleware.js";
 import { sendUserWelcomeEmail, sendEmailVerificationCode } from "../services/emailService.js";
 
 const router = express.Router();
+
+// Timing-safe string comparison — prevents timing attacks on secret codes
+function safeCompare(a, b) {
+  const bufA = Buffer.from(String(a));
+  const bufB = Buffer.from(String(b));
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
+}
 
 // 🔐 REGISTER
 router.post("/register", async (req, res) => {
@@ -119,8 +128,8 @@ router.post("/verify-email", async (req, res) => {
       });
     }
 
-    // Verify code
-    if (user.verification_code !== code) {
+    // Verify code — timing-safe to prevent enumeration attacks
+    if (!safeCompare(user.verification_code, code)) {
       // Increment failed attempts
       await pool.query(
         "UPDATE users SET verification_attempts = verification_attempts + 1 WHERE id = $1",
@@ -559,8 +568,8 @@ router.post("/reset-password", async (req, res) => {
       });
     }
 
-    // Verify code
-    if (user.verification_code !== code) {
+    // Verify code — timing-safe to prevent enumeration attacks
+    if (!safeCompare(user.verification_code, code)) {
       // Increment failed attempts
       await pool.query(
         "UPDATE users SET verification_attempts = verification_attempts + 1 WHERE id = $1",
