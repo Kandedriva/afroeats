@@ -9,6 +9,18 @@ import { ensureGroceryNotification } from '../services/groceryNotificationServic
 const router = express.Router();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
+const requireGroceryOwnerAuth = (req, res, next) => {
+  if (!req.session || !req.session.groceryOwnerId) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  req.groceryOwner = {
+    id: req.session.groceryOwnerId,
+    name: req.session.groceryOwnerName,
+    email: req.session.groceryOwnerEmail,
+  };
+  next();
+};
+
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
 
 /**
@@ -382,13 +394,22 @@ router.get('/orders/:id', async (req, res) => {
       return res.status(400).json({ error: 'Invalid order ID' });
     }
 
-    // Get order with items
-    // For authenticated users, verify user_id matches
-    // For guest users, just return the order (they have the order ID from Stripe redirect)
-    const whereClause = isGuest
-      ? 'WHERE go.id = $1'
-      : 'WHERE go.id = $1 AND go.user_id = $2';
-    const params = isGuest ? [orderId] : [orderId, userId];
+    let whereClause;
+    let params;
+
+    if (!isGuest) {
+      // Authenticated user: verify they own this order
+      whereClause = 'WHERE go.id = $1 AND go.user_id = $2';
+      params = [orderId, userId];
+    } else {
+      // Guest: require the Stripe session ID as proof of ownership
+      const stripeSessionId = req.query.session_id;
+      if (!stripeSessionId) {
+        return res.status(401).json({ error: 'Authentication required' });
+      }
+      whereClause = 'WHERE go.id = $1 AND go.stripe_session_id = $2';
+      params = [orderId, stripeSessionId];
+    }
 
     const result = await pool.query(
       `SELECT
@@ -575,10 +596,11 @@ router.get('/order/:orderId', requireAuth, async (req, res) => {
  * Update grocery order status (for admin/driver use)
  * PATCH /api/grocery/orders/:id/status
  */
-router.patch('/orders/:id/status', async (req, res) => {
+router.patch('/orders/:id/status', requireGroceryOwnerAuth, async (req, res) => {
   try {
     const orderId = parseInt(req.params.id);
     const { status } = req.body;
+    const groceryOwnerId = req.groceryOwner.id;
 
     if (isNaN(orderId)) {
       return res.status(400).json({ error: 'Invalid order ID' });
@@ -590,6 +612,17 @@ router.patch('/orders/:id/status', async (req, res) => {
         error: 'Invalid status',
         validStatuses
       });
+    }
+
+    // Verify this order belongs to the authenticated grocery owner's store
+    const ownershipCheck = await pool.query(
+      `SELECT go.id FROM grocery_orders go
+       JOIN grocery_stores gs ON go.store_id = gs.id
+       WHERE go.id = $1 AND gs.owner_id = $2`,
+      [orderId, groceryOwnerId]
+    );
+    if (ownershipCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'Access denied' });
     }
 
     // Update the order status

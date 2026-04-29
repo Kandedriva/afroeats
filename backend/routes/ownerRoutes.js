@@ -570,36 +570,6 @@ router.delete("/dishes/:id", requireOwnerAuth, async (req, res) => {
   }
 });
 
-// GET /api/owners/check-session
-router.get("/check-session", (req, res) => {
-  if (req.session.ownerId) {
-    res.json({
-      owner: {
-        id: req.session.ownerId,
-        name: req.session.ownerName,
-      },
-    });
-  } else {
-    res.status(401).json({ error: "Not logged in" });
-  }
-});
-
-// Test session endpoint
-router.get("/session-test", (req, res) => {
-  // Set a test value in session
-  if (!req.session.testValue) {
-    req.session.testValue = 'session-working';
-    req.session.testTime = Date.now();
-  }
-  
-  res.json({
-    sessionId: req.sessionID,
-    testValue: req.session.testValue,
-    testTime: req.session.testTime,
-    hasCookie: !!req.headers.cookie,
-    cookieHeader: req.headers.cookie
-  });
-});
 
 // Check current owner session
 router.get("/me", async (req, res) => {
@@ -2047,29 +2017,5 @@ router.patch("/grocery-orders/:id/complete", async (req, res) => {
   }
 });
 
-// Test endpoint for debugging multipart form data
-router.post("/test-multipart", ...uploadDishImage, async (req, res) => {
-  console.log('=== MULTIPART TEST DEBUG ===');
-  console.log('req.body:', JSON.stringify(req.body, null, 2));
-  console.log('req.file:', req.file ? { 
-    fieldname: req.file.fieldname, 
-    originalname: req.file.originalname, 
-    size: req.file.size 
-  } : null);
-  console.log('Content-Type:', req.headers['content-type']);
-  console.log('Body keys:', req.body ? Object.keys(req.body) : 'no body');
-  console.log('=== END TEST DEBUG ===');
-  
-  res.json({
-    success: true,
-    body: req.body,
-    file: req.file ? {
-      fieldname: req.file.fieldname,
-      originalname: req.file.originalname,
-      size: req.file.size
-    } : null,
-    contentType: req.headers['content-type']
-  });
-});
 
 export default router;

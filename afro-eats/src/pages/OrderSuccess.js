@@ -97,8 +97,10 @@ function OrderSuccess() {
         // For grocery orders, the endpoint supports both authenticated and guest users
         // For restaurant orders, only authenticated users can access order details
         if (isGroceryOrder) {
-          // Grocery orders: fetch details for both authenticated and guest users
-          const endpoint = `${API_BASE_URL}/api/grocery/orders/${finalOrderId}`;
+          // Grocery orders: fetch details for both authenticated and guest users.
+          // Guests must pass the Stripe session_id as proof of ownership.
+          const sessionParam = !user && sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : '';
+          const endpoint = `${API_BASE_URL}/api/grocery/orders/${finalOrderId}${sessionParam}`;
           try {
             const orderRes = await fetch(endpoint, {
               credentials: "include",

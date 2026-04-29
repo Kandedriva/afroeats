@@ -6,23 +6,6 @@ import { requireOwnerAuth } from "../middleware/ownerAuth.js";
 
 const router = express.Router();
 
-// Add logging middleware to see if requests reach this router
-router.use((req, res, next) => {
-  console.log('🚀 STRIPE ROUTER - Request received:', req.method, req.path);
-  console.log('🚀 Full URL:', req.url);
-  next();
-});
-
-// Simple test endpoint to verify connectivity
-router.get('/test', (req, res) => {
-  res.json({
-    message: 'Stripe routes are working',
-    stripe_configured: !!stripe,
-    database_configured: !!pool,
-    timestamp: new Date().toISOString()
-  });
-});
-
 // POST /stripe/create-stripe-account (note: no /api prefix since it's handled by server.js mounting)
 router.post('/create-stripe-account', requireOwnerAuth, async (req, res) => {
   console.log('🔗 Stripe Connect request received');
