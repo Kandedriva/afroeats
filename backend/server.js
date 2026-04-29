@@ -320,7 +320,7 @@ const PgSession = ConnectPgSimple(session);
 
 // Session configuration with PostgreSQL store
 const sessionConfig = {
-  secret: process.env.SESSION_SECRET || "REDACTED_SESSION_SECRET",
+  secret: process.env.SESSION_SECRET || (() => { throw new Error('SESSION_SECRET env var is required'); })(),
   resave: false,
   saveUninitialized: false,
   name: 'orderdabaly.sid',
