@@ -674,7 +674,7 @@ router.get('/orders', requireGroceryOwnerAuth, async (req, res) => {
       ORDER BY go.created_at DESC
     `, [storeId]);
 
-    // For each order, get its items
+    // For each order, get only the items belonging to this store
     const ordersWithItems = await Promise.all(
       ordersResult.rows.map(async (order) => {
         const itemsResult = await pool.query(`
@@ -688,9 +688,9 @@ router.get('/orders', requireGroceryOwnerAuth, async (req, res) => {
             p.image_url AS product_image
           FROM grocery_order_items goi
           LEFT JOIN products p ON goi.product_id = p.id
-          WHERE goi.grocery_order_id = $1
+          WHERE goi.grocery_order_id = $1 AND p.store_id = $2
           ORDER BY goi.id
-        `, [order.id]);
+        `, [order.id, storeId]);
 
         return {
           ...order,
