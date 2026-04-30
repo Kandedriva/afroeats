@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { API_BASE_URL } from '../config/api';
 import { toast } from 'react-toastify';
+import { validatePassword, PASSWORD_HINT } from '../utils/authValidation';
 
 function RegisterGroceryOwner() {
   const navigate = useNavigate();
@@ -58,10 +59,9 @@ function RegisterGroceryOwner() {
 
     if (!formData.password) {
       newErrors.password = 'Password is required';
-    } else if (formData.password.length < 12) {
-      newErrors.password = 'Password must be at least 12 characters';
-    } else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])/.test(formData.password)) {
-      newErrors.password = 'Password must contain uppercase, lowercase, number, and special character';
+    } else {
+      const pwCheck = validatePassword(formData.password);
+      if (!pwCheck.valid) newErrors.password = pwCheck.error;
     }
 
     if (formData.password !== formData.confirmPassword) {
@@ -201,9 +201,12 @@ function RegisterGroceryOwner() {
                     className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 ${
                       errors.password ? 'border-red-500' : 'border-gray-300'
                     }`}
-                    placeholder="Min 12 characters with uppercase, lowercase, number, special char"
+                    placeholder="Password"
                   />
-                  {errors.password && <p className="text-red-500 text-sm mt-1">{errors.password}</p>}
+                  {errors.password
+                    ? <p className="text-red-500 text-sm mt-1">{errors.password}</p>
+                    : <p className="text-gray-500 text-xs mt-1">{PASSWORD_HINT}</p>
+                  }
                 </div>
 
                 <div>

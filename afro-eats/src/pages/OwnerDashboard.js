@@ -6,6 +6,7 @@ import ToggleSwitch from "../Components/ToggleSwitch";
 import { toast } from 'react-toastify';
 import { API_BASE_URL } from "../config/api";
 import { getImageUrl, handleImageError, isSafariOrWebKit } from "../utils/imageUtils";
+import { validatePassword } from "../utils/authValidation";
 import { setupImageRefreshInterval, enhanceExistingImages } from "../utils/imageRefresh";
 import NotificationBell from "../Components/NotificationBell";
 
@@ -1053,15 +1054,9 @@ function OwnerDashboard() {
       return;
     }
 
-    if (passwordForm.newPassword.length < 12) {
-      toast.warning("New password must be at least 12 characters long.");
-      return;
-    }
-
-    // Enhanced password strength validation
-    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])/;
-    if (!passwordRegex.test(passwordForm.newPassword)) {
-      toast.warning("Password must contain at least one uppercase letter, lowercase letter, number, and special character (@$!%*?&)");
+    const pwCheck = validatePassword(passwordForm.newPassword);
+    if (!pwCheck.valid) {
+      toast.warning(pwCheck.error);
       return;
     }
 
@@ -2216,7 +2211,7 @@ function OwnerDashboard() {
                     required
                   />
                   <p className="text-xs text-gray-500 mt-1">
-                    Must be at least 12 characters with uppercase, lowercase, number, and special character
+                    Min 8 characters, with uppercase, lowercase, and a number.
                   </p>
                 </div>
                 

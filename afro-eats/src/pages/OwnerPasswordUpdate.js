@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
+import { validatePassword } from "../utils/authValidation";
 
 const OwnerPasswordUpdate = () => {
   const [formData, setFormData] = useState({
@@ -34,9 +35,9 @@ const OwnerPasswordUpdate = () => {
       return;
     }
 
-    // Validate password length
-    if (formData.new_password.length < 6) {
-      setError("Password must be at least 6 characters long");
+    const pwCheck = validatePassword(formData.new_password);
+    if (!pwCheck.valid) {
+      setError(pwCheck.error);
       setLoading(false);
       return;
     }

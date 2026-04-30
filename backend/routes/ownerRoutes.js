@@ -14,6 +14,7 @@ import {
   deleteOldR2Image
 } from "../middleware/r2Upload.js";
 import { sendRestaurantOwnerWelcomeEmail } from "../services/emailService.js";
+import { validatePassword } from "../middleware/security.js";
 
 const router = express.Router();
 
@@ -38,6 +39,11 @@ router.post("/register", ...uploadRestaurantLogo, async (req, res) => {
     const existing = await pool.query("SELECT * FROM restaurant_owners WHERE email = $1", [email]);
     if (existing.rows.length > 0) {
       return res.status(400).json({ error: "Owner already exists" });
+    }
+
+    const pwCheck = validatePassword(password);
+    if (!pwCheck.valid) {
+      return res.status(400).json({ error: pwCheck.error });
     }
 
     const hashedPassword = await bcryptjs.hash(password, 10);
@@ -810,16 +816,9 @@ router.post("/update-password", async (req, res) => {
       return res.status(400).json({ error: "Email, secret word, and new password are required" });
     }
 
-    if (new_password.length < 12) {
-      return res.status(400).json({ error: "New password must be at least 12 characters long" });
-    }
-
-    // Enhanced password strength validation
-    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])/;
-    if (!passwordRegex.test(new_password)) {
-      return res.status(400).json({ 
-        error: "Password must contain at least one uppercase letter, lowercase letter, number, and special character (@$!%*?&)" 
-      });
+    const pwCheck = validatePassword(new_password);
+    if (!pwCheck.valid) {
+      return res.status(400).json({ error: pwCheck.error });
     }
 
     // Find owner by email
@@ -1718,16 +1717,9 @@ router.put("/profile/password", requireOwnerAuth, async (req, res) => {
       return res.status(400).json({ error: "Current password and new password are required" });
     }
 
-    if (newPassword.length < 12) {
-      return res.status(400).json({ error: "New password must be at least 12 characters long" });
-    }
-
-    // Enhanced password strength validation
-    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])/;
-    if (!passwordRegex.test(newPassword)) {
-      return res.status(400).json({ 
-        error: "Password must contain at least one uppercase letter, lowercase letter, number, and special character (@$!%*?&)" 
-      });
+    const pwCheck = validatePassword(newPassword);
+    if (!pwCheck.valid) {
+      return res.status(400).json({ error: pwCheck.error });
     }
 
     // Get current owner data

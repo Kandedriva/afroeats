@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import { toast } from "react-toastify";
+import { validatePassword } from "../utils/authValidation";
 
 function UserPasswordUpdate() {
   const [step, setStep] = useState(1); // 1 = request code, 2 = reset password
@@ -91,8 +92,9 @@ function UserPasswordUpdate() {
       return;
     }
 
-    if (newPassword.length < 6) {
-      toast.error("Password must be at least 6 characters long");
+    const pwCheck = validatePassword(newPassword);
+    if (!pwCheck.valid) {
+      toast.error(pwCheck.error);
       return;
     }
 

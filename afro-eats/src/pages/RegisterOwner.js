@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useOwnerAuth } from "../context/OwnerAuthContext";
 import { API_BASE_URL } from "../config/api";
+import { validatePassword, PASSWORD_HINT } from "../utils/authValidation";
 
 const RegisterOwner = () => {
   const [formData, setFormData] = useState({
@@ -48,6 +49,12 @@ const RegisterOwner = () => {
     
     if (!acceptedTerms) {
       setError("Please accept the Terms and Conditions and Privacy Policy to continue.");
+      return;
+    }
+
+    const pwCheck = validatePassword(formData.password);
+    if (!pwCheck.valid) {
+      setError(pwCheck.error);
       return;
     }
 
@@ -131,6 +138,7 @@ const RegisterOwner = () => {
           className="block w-full mb-3 border p-2 rounded"
           required
         />
+        <p className="text-xs text-gray-500 -mt-2 mb-3">{PASSWORD_HINT}</p>
 
         <input
           type="text"

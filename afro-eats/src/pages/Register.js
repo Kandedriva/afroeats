@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { toast } from 'react-toastify';
 import { API_BASE_URL } from "../config/api";
+import { validatePassword, PASSWORD_HINT } from "../utils/authValidation";
 
 export default function Register() {
   const navigate = useNavigate();
@@ -41,7 +42,13 @@ export default function Register() {
       toast.error("Please accept the Terms and Conditions and Privacy Policy to continue.");
       return;
     }
-  
+
+    const pwCheck = validatePassword(form.password);
+    if (!pwCheck.valid) {
+      toast.error(pwCheck.error);
+      return;
+    }
+
     try {
       const res = await fetch(`${API_BASE_URL}/api/auth/register`, {
         method: "POST",
@@ -111,6 +118,7 @@ export default function Register() {
           className="w-full px-4 py-2 border rounded"
           required
         />
+        <p className="text-xs text-gray-500 -mt-2">{PASSWORD_HINT}</p>
         <input
           type="text"
           name="address"
