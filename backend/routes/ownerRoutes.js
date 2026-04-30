@@ -13,8 +13,22 @@ import {
   handleR2UploadResult,
   deleteOldR2Image
 } from "../middleware/r2Upload.js";
-import { sendRestaurantOwnerWelcomeEmail } from "../services/emailService.js";
+import {
+  sendRestaurantOwnerWelcomeEmail,
+  sendEmailVerificationCode,
+  sendEmailChangeVerification,
+  sendEmailChangeNotification,
+  sendPasswordChangeNotification,
+} from "../services/emailService.js";
 import { validatePassword } from "../middleware/security.js";
+import crypto from "crypto";
+
+function ownerSafeCompare(a, b) {
+  const bufA = Buffer.from(String(a));
+  const bufB = Buffer.from(String(b));
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
+}
 
 const router = express.Router();
 
@@ -36,6 +50,14 @@ router.post("/register", ...uploadRestaurantLogo, async (req, res) => {
   }
 
   try {
+    // Ensure email verification columns exist (existing rows default to verified)
+    await pool.query(`ALTER TABLE restaurant_owners ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT TRUE`);
+    await pool.query(`ALTER TABLE restaurant_owners ADD COLUMN IF NOT EXISTS verification_code VARCHAR(10)`);
+    await pool.query(`ALTER TABLE restaurant_owners ADD COLUMN IF NOT EXISTS verification_code_expires_at TIMESTAMP`);
+    await pool.query(`ALTER TABLE restaurant_owners ADD COLUMN IF NOT EXISTS pending_email VARCHAR(255)`);
+    await pool.query(`ALTER TABLE restaurant_owners ADD COLUMN IF NOT EXISTS email_change_code VARCHAR(10)`);
+    await pool.query(`ALTER TABLE restaurant_owners ADD COLUMN IF NOT EXISTS email_change_code_expires_at TIMESTAMP`);
+
     const existing = await pool.query("SELECT * FROM restaurant_owners WHERE email = $1", [email]);
     if (existing.rows.length > 0) {
       return res.status(400).json({ error: "Owner already exists" });
@@ -49,31 +71,29 @@ router.post("/register", ...uploadRestaurantLogo, async (req, res) => {
     const hashedPassword = await bcryptjs.hash(password, 10);
     const hashedSecretWord = await bcryptjs.hash(secret_word, 10);
 
+    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const codeExpiry = new Date(Date.now() + 10 * 60 * 1000);
+
     // Create owner (handle case where columns might not exist)
     let ownerResult;
     try {
-      // Try with both secret_word and is_subscribed columns
       ownerResult = await pool.query(
-        `INSERT INTO restaurant_owners (name, email, password, secret_word, is_subscribed)
-         VALUES ($1, $2, $3, $4, $5) RETURNING id, name, email`,
-        [name, email, hashedPassword, hashedSecretWord, false]
+        `INSERT INTO restaurant_owners (name, email, password, secret_word, is_subscribed, email_verified, verification_code, verification_code_expires_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, name, email`,
+        [name, email, hashedPassword, hashedSecretWord, false, false, verificationCode, codeExpiry]
       );
     } catch (err) {
-      // Trying registration without some columns
       try {
-        // Try with just secret_word (no is_subscribed)
         ownerResult = await pool.query(
-          `INSERT INTO restaurant_owners (name, email, password, secret_word)
-           VALUES ($1, $2, $3, $4) RETURNING id, name, email`,
-          [name, email, hashedPassword, hashedSecretWord]
+          `INSERT INTO restaurant_owners (name, email, password, secret_word, email_verified, verification_code, verification_code_expires_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, name, email`,
+          [name, email, hashedPassword, hashedSecretWord, false, verificationCode, codeExpiry]
         );
       } catch (err2) {
-        // If secret_word column doesn't exist either, fallback to basic registration
-        // Trying registration with basic columns only
         ownerResult = await pool.query(
-          `INSERT INTO restaurant_owners (name, email, password)
-           VALUES ($1, $2, $3) RETURNING id, name, email`,
-          [name, email, hashedPassword]
+          `INSERT INTO restaurant_owners (name, email, password, email_verified, verification_code, verification_code_expires_at)
+           VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, name, email`,
+          [name, email, hashedPassword, false, verificationCode, codeExpiry]
         );
       }
     }
@@ -102,41 +122,104 @@ router.post("/register", ...uploadRestaurantLogo, async (req, res) => {
       // Don't fail registration if geocoding fails - it can be done later
     }
 
-    // Regenerate session ID for security and set owner session
+    // Send verification code — do not start session until email is confirmed
+    sendEmailVerificationCode(email, name, verificationCode)
+      .catch(err => console.error('Failed to send owner verification email:', err));
+
+    res.status(201).json({
+      needsVerification: true,
+      email,
+      message: "Registration successful! Please check your email for a verification code.",
+    });
+  } catch (err) {
+    console.error('Owner registration error:', err);
+    res.status(500).json({ error: "Server error during registration" });
+  }
+});
+
+// ========= OWNER EMAIL VERIFICATION ==========
+router.post("/verify-email", async (req, res) => {
+  const { email, code } = req.body;
+  if (!email || !code) {
+    return res.status(400).json({ error: "Email and code are required" });
+  }
+  try {
+    const ownerRes = await pool.query(
+      "SELECT id, name, email, email_verified, verification_code, verification_code_expires_at FROM restaurant_owners WHERE email = $1",
+      [email]
+    );
+    if (ownerRes.rows.length === 0) {
+      return res.status(404).json({ error: "Account not found" });
+    }
+    const owner = ownerRes.rows[0];
+    if (owner.email_verified) {
+      return res.status(400).json({ error: "Email is already verified" });
+    }
+    if (!owner.verification_code || !owner.verification_code_expires_at) {
+      return res.status(400).json({ error: "No verification code found. Please request a new one." });
+    }
+    if (new Date() > new Date(owner.verification_code_expires_at)) {
+      return res.status(400).json({ error: "Verification code has expired. Please request a new one." });
+    }
+    if (!ownerSafeCompare(owner.verification_code, code)) {
+      return res.status(400).json({ error: "Invalid verification code" });
+    }
+
+    await pool.query(
+      "UPDATE restaurant_owners SET email_verified = true, verification_code = NULL, verification_code_expires_at = NULL WHERE id = $1",
+      [owner.id]
+    );
+
+    // Get restaurant for session data
+    const restaurantRes = await pool.query("SELECT id FROM restaurants WHERE owner_id = $1", [owner.id]);
+
+    // Log them in
     req.session.regenerate((err) => {
-      if (err) {
-        console.error('Session regeneration error during owner registration:', err);
-        return res.status(500).json({ error: "Session error during registration" });
-      }
-
-      // Set session
-      req.session.ownerId = ownerId;
-      req.session.ownerName = name;
-      req.session.ownerEmail = email;
+      if (err) return res.status(500).json({ error: "Session error" });
+      req.session.ownerId = owner.id;
+      req.session.ownerName = owner.name;
+      req.session.ownerEmail = owner.email;
       req.session.loginTime = new Date().toISOString();
-
-      // Force session save
       req.session.save((saveErr) => {
-        if (saveErr) {
-          console.error('Session save error during owner registration:', saveErr);
-          return res.status(500).json({ error: "Session save error during registration" });
-        }
-
-        console.log('✅ Owner registration session saved successfully. ID:', req.sessionID, 'Owner:', name);
-
-        // Send welcome email (non-blocking)
-        sendRestaurantOwnerWelcomeEmail(email, name, restaurant_name)
-          .catch(err => console.error('Failed to send restaurant owner welcome email:', err));
-
-        res.status(201).json({
-          owner: ownerResult.rows[0],
-          restaurant: restaurantResult.rows[0],
-        });
+        if (saveErr) return res.status(500).json({ error: "Session save error" });
+        sendRestaurantOwnerWelcomeEmail(owner.email, owner.name, '')
+          .catch(() => {});
+        res.json({ success: true, message: "Email verified successfully! Welcome!" });
       });
     });
   } catch (err) {
-    // Owner registration error
-    res.status(500).json({ error: "Server error during registration" });
+    console.error('Owner email verification error:', err);
+    res.status(500).json({ error: "Server error during verification" });
+  }
+});
+
+router.post("/resend-verification", async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: "Email is required" });
+  try {
+    const ownerRes = await pool.query(
+      "SELECT id, name, email_verified FROM restaurant_owners WHERE email = $1",
+      [email]
+    );
+    if (ownerRes.rows.length === 0) {
+      return res.status(404).json({ error: "Account not found" });
+    }
+    const owner = ownerRes.rows[0];
+    if (owner.email_verified) {
+      return res.status(400).json({ error: "Email is already verified" });
+    }
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiry = new Date(Date.now() + 10 * 60 * 1000);
+    await pool.query(
+      "UPDATE restaurant_owners SET verification_code = $1, verification_code_expires_at = $2 WHERE id = $3",
+      [code, expiry, owner.id]
+    );
+    sendEmailVerificationCode(email, owner.name, code)
+      .catch(err => console.error('Failed to resend owner verification:', err));
+    res.json({ success: true, message: "Verification code resent" });
+  } catch (err) {
+    console.error('Owner resend verification error:', err);
+    res.status(500).json({ error: "Server error" });
   }
 });
 
@@ -151,7 +234,7 @@ router.post("/login", checkAccountLockout, async (req, res) => {
     if (ownerRes.rows.length === 0) {
       await handleFailedLogin(req, res, () => {});
       const attemptInfo = req.loginAttempts ? ` (${req.loginAttempts.remaining} attempts remaining)` : '';
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: "Invalid email or password" + attemptInfo,
         attemptsRemaining: req.loginAttempts?.remaining
       });
@@ -167,6 +250,15 @@ router.post("/login", checkAccountLockout, async (req, res) => {
       return res.status(400).json({ 
         error: "Invalid email or password" + attemptInfo,
         attemptsRemaining: req.loginAttempts?.remaining
+      });
+    }
+
+    // Check email verification (NULL treated as verified for legacy accounts)
+    if (owner.email_verified === false) {
+      return res.status(403).json({
+        error: "Please verify your email before logging in.",
+        needsVerification: true,
+        email: owner.email,
       });
     }
 
@@ -1606,31 +1698,80 @@ router.put("/profile/email", requireOwnerAuth, async (req, res) => {
 
     // Check if email is actually changing
     if (currentOwner.rows[0].email === trimmedEmail) {
-      return res.json({ 
-        success: true, 
+      return res.json({
+        success: true,
         message: "Email is already up to date",
-        email: trimmedEmail 
+        email: trimmedEmail
       });
     }
 
-    // Update email
+    // Initiate email change: send code to new email, do not update yet
+    const changeCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const codeExpiry = new Date(Date.now() + 10 * 60 * 1000);
+
     await pool.query(
-      "UPDATE restaurant_owners SET email = $1 WHERE id = $2",
-      [trimmedEmail, ownerId]
+      "UPDATE restaurant_owners SET pending_email = $1, email_change_code = $2, email_change_code_expires_at = $3 WHERE id = $4",
+      [trimmedEmail, changeCode, codeExpiry, ownerId]
     );
 
-    // Update session email
-    req.session.ownerEmail = trimmedEmail;
+    sendEmailChangeVerification(trimmedEmail, req.owner.name, changeCode)
+      .catch(err => console.error('Failed to send email change verification:', err));
+    sendEmailChangeNotification(currentOwner.rows[0].email, req.owner.name, trimmedEmail)
+      .catch(err => console.error('Failed to send email change notification:', err));
 
-    res.json({ 
-      success: true, 
-      message: "Email updated successfully",
-      email: trimmedEmail 
+    res.json({
+      success: true,
+      pendingEmailChange: true,
+      message: "A confirmation code has been sent to your new email address. Enter it below to complete the change.",
     });
 
   } catch (err) {
     console.error('Email update error:', err);
     res.status(500).json({ error: "Failed to update email" });
+  }
+});
+
+// ========= CONFIRM EMAIL CHANGE ==========
+router.post("/confirm-email-change", requireOwnerAuth, async (req, res) => {
+  try {
+    const { code } = req.body;
+    const ownerId = req.owner.id;
+
+    if (!code) return res.status(400).json({ error: "Confirmation code is required" });
+
+    const ownerRes = await pool.query(
+      "SELECT pending_email, email_change_code, email_change_code_expires_at FROM restaurant_owners WHERE id = $1",
+      [ownerId]
+    );
+
+    if (ownerRes.rows.length === 0) return res.status(404).json({ error: "Owner not found" });
+
+    const owner = ownerRes.rows[0];
+
+    if (!owner.pending_email || !owner.email_change_code) {
+      return res.status(400).json({ error: "No pending email change found" });
+    }
+
+    if (new Date() > new Date(owner.email_change_code_expires_at)) {
+      return res.status(400).json({ error: "Confirmation code has expired. Please start the email change again." });
+    }
+
+    if (!ownerSafeCompare(owner.email_change_code, code)) {
+      return res.status(400).json({ error: "Invalid confirmation code" });
+    }
+
+    await pool.query(
+      "UPDATE restaurant_owners SET email = $1, pending_email = NULL, email_change_code = NULL, email_change_code_expires_at = NULL WHERE id = $2",
+      [owner.pending_email, ownerId]
+    );
+
+    req.session.ownerEmail = owner.pending_email;
+
+    res.json({ success: true, message: "Email updated successfully", email: owner.pending_email });
+
+  } catch (err) {
+    console.error('Confirm email change error:', err);
+    res.status(500).json({ error: "Failed to confirm email change" });
   }
 });
 
@@ -1724,7 +1865,7 @@ router.put("/profile/password", requireOwnerAuth, async (req, res) => {
 
     // Get current owner data
     const ownerResult = await pool.query(
-      "SELECT password FROM restaurant_owners WHERE id = $1",
+      "SELECT password, email, name FROM restaurant_owners WHERE id = $1",
       [ownerId]
     );
 
@@ -1754,6 +1895,10 @@ router.put("/profile/password", requireOwnerAuth, async (req, res) => {
       "UPDATE restaurant_owners SET password = $1 WHERE id = $2",
       [hashedNewPassword, ownerId]
     );
+
+    // Notify owner of password change (non-blocking)
+    sendPasswordChangeNotification(owner.email, owner.name)
+      .catch(err => console.error('Failed to send password change notification:', err));
 
     res.json({ 
       success: true, 

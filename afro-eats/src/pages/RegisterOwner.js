@@ -79,9 +79,13 @@ const RegisterOwner = () => {
         return;
       }
 
-      // Refresh auth context and redirect
-      await refreshAuth();
-      navigate("/owner/dashboard");
+      const resData = await res.json();
+      if (resData.needsVerification) {
+        navigate("/owner/verify-email", { state: { email: resData.email } });
+      } else {
+        await refreshAuth();
+        navigate("/owner/dashboard");
+      }
 
     } catch (err) {
       setError("Server error");

@@ -53,6 +53,10 @@ function GroceryOwnerLogin() {
         toast.success('Login successful! Welcome back!');
         navigate('/grocery-owner/dashboard');
       } else {
+        if (data.needsVerification) {
+          navigate('/grocery-owner/verify-email', { state: { email: data.email } });
+          return;
+        }
         setError(data.error || 'Invalid email or password');
         toast.error(data.error || 'Login failed');
       }

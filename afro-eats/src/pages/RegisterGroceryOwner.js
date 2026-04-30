@@ -61,7 +61,7 @@ function RegisterGroceryOwner() {
       newErrors.password = 'Password is required';
     } else {
       const pwCheck = validatePassword(formData.password);
-      if (!pwCheck.valid) newErrors.password = pwCheck.error;
+      if (!pwCheck.valid) { newErrors.password = pwCheck.error; }
     }
 
     if (formData.password !== formData.confirmPassword) {
@@ -121,8 +121,13 @@ function RegisterGroceryOwner() {
       const data = await response.json();
 
       if (response.ok) {
-        toast.success('Registration successful! Welcome to Order Dabaly!');
-        navigate('/grocery-owner/dashboard');
+        if (data.needsVerification) {
+          toast.success('Registration successful! Please check your email for a verification code.');
+          navigate('/grocery-owner/verify-email', { state: { email: data.email } });
+        } else {
+          toast.success('Registration successful! Welcome to Order Dabaly!');
+          navigate('/grocery-owner/dashboard');
+        }
       } else {
         toast.error(data.error || 'Registration failed. Please try again.');
         if (data.error) {

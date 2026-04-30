@@ -3,8 +3,22 @@ import bcrypt from 'bcryptjs';
 import Stripe from 'stripe';
 import pool from '../db.js';
 import { uploadRestaurantLogo, uploadProductImage, handleR2UploadResult } from '../middleware/r2Upload.js';
-import { sendGroceryOwnerWelcomeEmail } from '../services/emailService.js';
+import {
+  sendGroceryOwnerWelcomeEmail,
+  sendEmailVerificationCode,
+  sendEmailChangeVerification,
+  sendEmailChangeNotification,
+  sendPasswordChangeNotification,
+} from '../services/emailService.js';
 import { validatePassword } from '../middleware/security.js';
+import crypto from 'crypto';
+
+function grocerySafeCompare(a, b) {
+  const bufA = Buffer.from(String(a));
+  const bufB = Buffer.from(String(b));
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
+}
 
 const router = express.Router();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
@@ -54,6 +68,14 @@ router.post('/register', uploadRestaurantLogo, async (req, res) => {
       return res.status(400).json({ error: pwCheck.error });
     }
 
+    // Ensure email verification columns exist (existing rows default to verified)
+    await client.query(`ALTER TABLE grocery_store_owners ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT TRUE`);
+    await client.query(`ALTER TABLE grocery_store_owners ADD COLUMN IF NOT EXISTS verification_code VARCHAR(10)`);
+    await client.query(`ALTER TABLE grocery_store_owners ADD COLUMN IF NOT EXISTS verification_code_expires_at TIMESTAMP`);
+    await client.query(`ALTER TABLE grocery_store_owners ADD COLUMN IF NOT EXISTS pending_email VARCHAR(255)`);
+    await client.query(`ALTER TABLE grocery_store_owners ADD COLUMN IF NOT EXISTS email_change_code VARCHAR(10)`);
+    await client.query(`ALTER TABLE grocery_store_owners ADD COLUMN IF NOT EXISTS email_change_code_expires_at TIMESTAMP`);
+
     // Check if email already exists
     const emailCheck = await client.query(
       'SELECT id FROM grocery_store_owners WHERE email = $1',
@@ -70,14 +92,17 @@ router.post('/register', uploadRestaurantLogo, async (req, res) => {
 
     const logoUrl = handleR2UploadResult(req).imageUrl || null;
 
+    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const codeExpiry = new Date(Date.now() + 10 * 60 * 1000);
+
     await client.query('BEGIN');
 
     // Create grocery store owner
     const ownerResult = await client.query(
-      `INSERT INTO grocery_store_owners (name, email, password, secret_word, created_at)
-       VALUES ($1, $2, $3, $4, NOW())
+      `INSERT INTO grocery_store_owners (name, email, password, secret_word, email_verified, verification_code, verification_code_expires_at, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
        RETURNING id, name, email, created_at`,
-      [name, email, hashedPassword, hashedSecretWord]
+      [name, email, hashedPassword, hashedSecretWord, false, verificationCode, codeExpiry]
     );
 
     const ownerId = ownerResult.rows[0].id;
@@ -107,37 +132,14 @@ router.post('/register', uploadRestaurantLogo, async (req, res) => {
 
     await client.query('COMMIT');
 
-    // Create session
-    req.session.regenerate((err) => {
-      if (err) {
-        console.error('Session regeneration error during grocery owner registration:', err);
-        return res.status(500).json({ error: 'Session creation failed' });
-      }
+    // Send verification code — do not create session until email confirmed
+    sendEmailVerificationCode(email, name, verificationCode)
+      .catch(err => console.error('Failed to send grocery owner verification email:', err));
 
-      req.session.groceryOwnerId = ownerId;
-      req.session.groceryOwnerName = name;
-      req.session.groceryOwnerEmail = email;
-      req.session.loginTime = new Date().toISOString();
-
-      req.session.save((saveErr) => {
-        if (saveErr) {
-          console.error('Session save error:', saveErr);
-          return res.status(500).json({ error: 'Session save failed' });
-        }
-
-        // Send welcome email
-        sendGroceryOwnerWelcomeEmail(email, name, store_name)
-          .catch(err => console.error('Welcome email failed:', err));
-
-        res.status(201).json({
-          message: 'Registration successful',
-          groceryOwner: {
-            id: ownerId,
-            name,
-            email,
-          },
-        });
-      });
+    res.status(201).json({
+      needsVerification: true,
+      email,
+      message: 'Registration successful! Please check your email for a verification code.',
     });
 
   } catch (error) {
@@ -146,6 +148,85 @@ router.post('/register', uploadRestaurantLogo, async (req, res) => {
     res.status(500).json({ error: 'Registration failed. Please try again.' });
   } finally {
     client.release();
+  }
+});
+
+// ===========================
+// EMAIL VERIFICATION
+// ===========================
+
+router.post('/verify-email', async (req, res) => {
+  const { email, code } = req.body;
+  if (!email || !code) return res.status(400).json({ error: 'Email and code are required' });
+  try {
+    const ownerRes = await pool.query(
+      'SELECT id, name, email, email_verified, verification_code, verification_code_expires_at FROM grocery_store_owners WHERE email = $1',
+      [email]
+    );
+    if (ownerRes.rows.length === 0) return res.status(404).json({ error: 'Account not found' });
+    const owner = ownerRes.rows[0];
+    if (owner.email_verified) return res.status(400).json({ error: 'Email is already verified' });
+    if (!owner.verification_code || !owner.verification_code_expires_at) {
+      return res.status(400).json({ error: 'No verification code found. Please request a new one.' });
+    }
+    if (new Date() > new Date(owner.verification_code_expires_at)) {
+      return res.status(400).json({ error: 'Verification code has expired. Please request a new one.' });
+    }
+    if (!grocerySafeCompare(owner.verification_code, code)) {
+      return res.status(400).json({ error: 'Invalid verification code' });
+    }
+
+    await pool.query(
+      'UPDATE grocery_store_owners SET email_verified = true, verification_code = NULL, verification_code_expires_at = NULL WHERE id = $1',
+      [owner.id]
+    );
+
+    // Get store for welcome email
+    const storeRes = await pool.query('SELECT name FROM grocery_stores WHERE owner_id = $1', [owner.id]);
+    const storeName = storeRes.rows[0]?.name || '';
+
+    req.session.regenerate((err) => {
+      if (err) return res.status(500).json({ error: 'Session error' });
+      req.session.groceryOwnerId = owner.id;
+      req.session.groceryOwnerName = owner.name;
+      req.session.groceryOwnerEmail = owner.email;
+      req.session.loginTime = new Date().toISOString();
+      req.session.save((saveErr) => {
+        if (saveErr) return res.status(500).json({ error: 'Session save error' });
+        sendGroceryOwnerWelcomeEmail(owner.email, owner.name, storeName)
+          .catch(() => {});
+        res.json({ success: true, message: 'Email verified successfully! Welcome!' });
+      });
+    });
+  } catch (err) {
+    console.error('Grocery owner email verification error:', err);
+    res.status(500).json({ error: 'Server error during verification' });
+  }
+});
+
+router.post('/resend-verification', async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email is required' });
+  try {
+    const ownerRes = await pool.query(
+      'SELECT id, name, email_verified FROM grocery_store_owners WHERE email = $1',
+      [email]
+    );
+    if (ownerRes.rows.length === 0) return res.status(404).json({ error: 'Account not found' });
+    const owner = ownerRes.rows[0];
+    if (owner.email_verified) return res.status(400).json({ error: 'Email is already verified' });
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiry = new Date(Date.now() + 10 * 60 * 1000);
+    await pool.query(
+      'UPDATE grocery_store_owners SET verification_code = $1, verification_code_expires_at = $2 WHERE id = $3',
+      [code, expiry, owner.id]
+    );
+    sendEmailVerificationCode(email, owner.name, code)
+      .catch(err => console.error('Failed to resend grocery owner verification:', err));
+    res.json({ success: true, message: 'Verification code resent' });
+  } catch (err) {
+    console.error('Grocery owner resend verification error:', err);
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
@@ -172,6 +253,15 @@ router.post('/login', async (req, res) => {
     }
 
     const groceryOwner = result.rows[0];
+
+    // Check email verification (NULL treated as verified for legacy accounts)
+    if (groceryOwner.email_verified === false) {
+      return res.status(403).json({
+        error: 'Please verify your email before logging in.',
+        needsVerification: true,
+        email: groceryOwner.email,
+      });
+    }
 
     // Check if account is inactive
     if (groceryOwner.active === false) {
@@ -289,29 +379,76 @@ router.patch('/me', requireGroceryOwnerAuth, async (req, res) => {
       return res.status(401).json({ error: 'Current password is incorrect' });
     }
 
-    // Check new email isn't already taken by another account
-    if (email.toLowerCase() !== owner.email.toLowerCase()) {
-      const emailTaken = await pool.query(
-        'SELECT id FROM grocery_store_owners WHERE email = $1 AND id != $2',
-        [email.toLowerCase(), req.groceryOwner.id]
-      );
-      if (emailTaken.rows.length > 0) {
-        return res.status(409).json({ error: 'This email address is already in use' });
-      }
+    // If email hasn't changed, return success immediately
+    if (email.toLowerCase() === owner.email.toLowerCase()) {
+      return res.json({ message: 'Email is already up to date', email: owner.email });
     }
 
-    await pool.query(
-      'UPDATE grocery_store_owners SET email = $1 WHERE id = $2',
+    // Check new email isn't already taken by another account
+    const emailTaken = await pool.query(
+      'SELECT id FROM grocery_store_owners WHERE email = $1 AND id != $2',
       [email.toLowerCase(), req.groceryOwner.id]
     );
+    if (emailTaken.rows.length > 0) {
+      return res.status(409).json({ error: 'This email address is already in use' });
+    }
 
-    // Update session email
-    req.session.groceryOwnerEmail = email.toLowerCase();
+    // Initiate email change: send code to new email, do not update yet
+    const changeCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const codeExpiry = new Date(Date.now() + 10 * 60 * 1000);
 
-    res.json({ message: 'Email updated successfully', email: email.toLowerCase() });
+    await pool.query(
+      'UPDATE grocery_store_owners SET pending_email = $1, email_change_code = $2, email_change_code_expires_at = $3 WHERE id = $4',
+      [email.toLowerCase(), changeCode, codeExpiry, req.groceryOwner.id]
+    );
+
+    sendEmailChangeVerification(email.toLowerCase(), owner.name, changeCode)
+      .catch(err => console.error('Failed to send email change verification:', err));
+    sendEmailChangeNotification(owner.email, owner.name, email.toLowerCase())
+      .catch(err => console.error('Failed to send email change notification:', err));
+
+    res.json({
+      message: 'A confirmation code has been sent to your new email address.',
+      pendingEmailChange: true,
+    });
   } catch (error) {
     console.error('Update email error:', error);
     res.status(500).json({ error: 'Failed to update email' });
+  }
+});
+
+router.post('/confirm-email-change', requireGroceryOwnerAuth, async (req, res) => {
+  try {
+    const { code } = req.body;
+    if (!code) return res.status(400).json({ error: 'Confirmation code is required' });
+
+    const ownerRes = await pool.query(
+      'SELECT pending_email, email_change_code, email_change_code_expires_at, name FROM grocery_store_owners WHERE id = $1',
+      [req.groceryOwner.id]
+    );
+    if (ownerRes.rows.length === 0) return res.status(404).json({ error: 'Account not found' });
+
+    const owner = ownerRes.rows[0];
+    if (!owner.pending_email || !owner.email_change_code) {
+      return res.status(400).json({ error: 'No pending email change found' });
+    }
+    if (new Date() > new Date(owner.email_change_code_expires_at)) {
+      return res.status(400).json({ error: 'Confirmation code has expired. Please start the email change again.' });
+    }
+    if (!grocerySafeCompare(owner.email_change_code, code)) {
+      return res.status(400).json({ error: 'Invalid confirmation code' });
+    }
+
+    await pool.query(
+      'UPDATE grocery_store_owners SET email = $1, pending_email = NULL, email_change_code = NULL, email_change_code_expires_at = NULL WHERE id = $2',
+      [owner.pending_email, req.groceryOwner.id]
+    );
+    req.session.groceryOwnerEmail = owner.pending_email;
+
+    res.json({ success: true, message: 'Email updated successfully', email: owner.pending_email });
+  } catch (error) {
+    console.error('Confirm email change error:', error);
+    res.status(500).json({ error: 'Failed to confirm email change' });
   }
 });
 

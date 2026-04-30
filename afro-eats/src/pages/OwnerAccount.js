@@ -27,7 +27,13 @@ const OwnerAccount = () => {
   const [addressMessage, setAddressMessage] = useState('');
   const [passwordMessage, setPasswordMessage] = useState('');
   const [closeMessage, setCloseMessage] = useState('');
-  
+
+  // Email change confirmation state
+  const [pendingEmailChange, setPendingEmailChange] = useState(false);
+  const [emailChangeCode, setEmailChangeCode] = useState('');
+  const [emailConfirmLoading, setEmailConfirmLoading] = useState(false);
+  const [emailConfirmMessage, setEmailConfirmMessage] = useState('');
+
   // Loading states for individual forms
   const [emailLoading, setEmailLoading] = useState(false);
   const [nameLoading, setNameLoading] = useState(false);
@@ -78,10 +84,15 @@ const OwnerAccount = () => {
       });
 
       const data = await res.json();
-      
+
       if (res.ok) {
-        setEmailMessage('Email updated successfully!');
-        setTimeout(() => setEmailMessage(''), 3000);
+        if (data.pendingEmailChange) {
+          setPendingEmailChange(true);
+          setEmailMessage(data.message || 'Check your new email for a confirmation code.');
+        } else {
+          setEmailMessage('Email updated successfully!');
+          setTimeout(() => setEmailMessage(''), 3000);
+        }
       } else {
         setEmailMessage(`Error: ${data.error}`);
       }
@@ -89,6 +100,34 @@ const OwnerAccount = () => {
       setEmailMessage('Failed to update email. Please try again.');
     } finally {
       setEmailLoading(false);
+    }
+  };
+
+  const handleConfirmEmailChange = async (e) => {
+    e.preventDefault();
+    setEmailConfirmLoading(true);
+    setEmailConfirmMessage('');
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/owners/confirm-email-change`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ code: emailChangeCode }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setPendingEmailChange(false);
+        setEmailChangeCode('');
+        setEmailMessage('Email updated successfully!');
+        setEmail(data.email);
+        setTimeout(() => setEmailMessage(''), 3000);
+      } else {
+        setEmailConfirmMessage(`Error: ${data.error}`);
+      }
+    } catch {
+      setEmailConfirmMessage('Failed to confirm email change. Please try again.');
+    } finally {
+      setEmailConfirmLoading(false);
     }
   };
 
@@ -290,6 +329,33 @@ const OwnerAccount = () => {
                 </p>
               )}
             </form>
+
+            {pendingEmailChange && (
+              <form onSubmit={handleConfirmEmailChange} className="mt-4 space-y-3 border-t pt-4">
+                <p className="text-sm text-blue-700 font-medium">Enter the 6-digit code sent to your new email:</p>
+                <input
+                  type="text"
+                  value={emailChangeCode}
+                  onChange={(e) => setEmailChangeCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  className="w-full p-3 border border-blue-300 rounded-lg text-center text-xl font-mono tracking-widest focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="000000"
+                  maxLength={6}
+                  required
+                />
+                <button
+                  type="submit"
+                  disabled={emailConfirmLoading || emailChangeCode.length !== 6}
+                  className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+                >
+                  {emailConfirmLoading ? 'Confirming...' : 'Confirm Email Change'}
+                </button>
+                {emailConfirmMessage && (
+                  <p className={`text-sm ${emailConfirmMessage.includes('Error') ? 'text-red-600' : 'text-green-600'}`}>
+                    {emailConfirmMessage}
+                  </p>
+                )}
+              </form>
+            )}
           </div>
 
           {/* Restaurant Information */}

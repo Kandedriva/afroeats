@@ -924,6 +924,144 @@ export const sendGroceryRefundRequestEmail = async (ownerEmail, ownerName, refun
   return sendEmail(ownerEmail, subject, html);
 };
 
+/**
+ * Send verification code to a new email address (before completing the change)
+ */
+export const sendEmailChangeVerification = async (newEmail, userName, code) => {
+  const subject = `Confirm Your New Email Address - ${FROM_NAME}`;
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background-color: #2563eb; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+        .content { background-color: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px; }
+        .code-box { background-color: #fff; border: 2px dashed #2563eb; padding: 20px; text-align: center; margin: 20px 0; border-radius: 8px; }
+        .code { font-size: 36px; font-weight: bold; letter-spacing: 8px; color: #2563eb; font-family: monospace; }
+        .warning-box { background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; margin: 20px 0; border-radius: 4px; }
+        .footer { text-align: center; margin-top: 30px; color: #6b7280; font-size: 14px; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>📧 Confirm Your New Email</h1>
+        </div>
+        <div class="content">
+          <h2>Hi ${userName}!</h2>
+          <p>You requested to change your email address on ${FROM_NAME}. Enter the code below to confirm this change.</p>
+
+          <div class="code-box">
+            <p style="margin: 0 0 10px 0; color: #666; font-size: 14px;">Your Confirmation Code:</p>
+            <div class="code">${code}</div>
+          </div>
+
+          <div class="warning-box">
+            <p style="margin: 0;"><strong>⏰ Important:</strong></p>
+            <ul style="margin: 10px 0 0 0; padding-left: 20px;">
+              <li>This code expires in <strong>10 minutes</strong></li>
+              <li>If you did not request this change, ignore this email — your email address will not change</li>
+            </ul>
+          </div>
+
+          <p><strong>The ${FROM_NAME} Team</strong></p>
+        </div>
+        <div class="footer">
+          <p>&copy; ${new Date().getFullYear()} ${FROM_NAME}. All rights reserved.</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+  return sendEmail(newEmail, subject, html);
+};
+
+/**
+ * Notify the old email address that an email change was initiated
+ */
+export const sendEmailChangeNotification = async (oldEmail, userName, newEmail) => {
+  const subject = `Email Change Requested - ${FROM_NAME}`;
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background-color: #f59e0b; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+        .content { background-color: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px; }
+        .alert { background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; margin: 20px 0; }
+        .footer { text-align: center; margin-top: 30px; color: #6b7280; font-size: 14px; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>⚠️ Email Change Requested</h1>
+        </div>
+        <div class="content">
+          <h2>Hi ${userName}!</h2>
+          <div class="alert">
+            <p style="margin: 0;">A request was made to change your email address to <strong>${newEmail}</strong>.</p>
+          </div>
+          <p>A confirmation code has been sent to your new address. The change will only take effect once that code is verified.</p>
+          <p><strong>If you did not request this change</strong>, please contact our support team immediately as your account may be compromised.</p>
+          <p><strong>The ${FROM_NAME} Team</strong></p>
+        </div>
+        <div class="footer">
+          <p>&copy; ${new Date().getFullYear()} ${FROM_NAME}. All rights reserved.</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+  return sendEmail(oldEmail, subject, html);
+};
+
+/**
+ * Notify a user that their password was changed while logged in
+ */
+export const sendPasswordChangeNotification = async (userEmail, userName) => {
+  const subject = `Your Password Was Changed - ${FROM_NAME}`;
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background-color: #dc2626; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+        .content { background-color: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px; }
+        .alert { background-color: #fee2e2; border-left: 4px solid #dc2626; padding: 15px; margin: 20px 0; }
+        .footer { text-align: center; margin-top: 30px; color: #6b7280; font-size: 14px; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>🔒 Password Changed</h1>
+        </div>
+        <div class="content">
+          <h2>Hi ${userName}!</h2>
+          <div class="alert">
+            <p style="margin: 0;">Your ${FROM_NAME} account password was successfully changed.</p>
+          </div>
+          <p>If you made this change, no further action is needed.</p>
+          <p><strong>If you did not change your password</strong>, please contact our support team immediately — someone may have unauthorized access to your account.</p>
+          <p><strong>The ${FROM_NAME} Team</strong></p>
+        </div>
+        <div class="footer">
+          <p>&copy; ${new Date().getFullYear()} ${FROM_NAME}. All rights reserved.</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+  return sendEmail(userEmail, subject, html);
+};
+
 export default {
   sendUserWelcomeEmail,
   sendDriverWelcomeEmail,
@@ -936,4 +1074,7 @@ export default {
   sendEmailVerificationCode,
   sendGroceryOrderNotificationEmail,
   sendGroceryRefundRequestEmail,
+  sendEmailChangeVerification,
+  sendEmailChangeNotification,
+  sendPasswordChangeNotification,
 };

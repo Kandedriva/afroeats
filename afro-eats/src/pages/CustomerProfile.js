@@ -18,6 +18,9 @@ function CustomerProfile() {
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [errors, setErrors] = useState({});
+  const [pendingEmailChange, setPendingEmailChange] = useState(false);
+  const [emailChangeCode, setEmailChangeCode] = useState('');
+  const [emailConfirmLoading, setEmailConfirmLoading] = useState(false);
   const [showSupportForm, setShowSupportForm] = useState(false);
   const [supportForm, setSupportForm] = useState({
     subject: "",
@@ -111,8 +114,12 @@ function CustomerProfile() {
       const data = await res.json();
 
       if (res.ok) {
-        toast.success("Profile updated successfully!");
-        // Update user context with new data
+        if (data.pendingEmailChange) {
+          toast.info("Profile updated! Check your new email for a confirmation code.");
+          setPendingEmailChange(true);
+        } else {
+          toast.success("Profile updated successfully!");
+        }
         if (data.user) {
           setUser(data.user);
         }
@@ -123,6 +130,32 @@ function CustomerProfile() {
       toast.error("An error occurred while updating your profile");
     } finally {
       setUpdating(false);
+    }
+  };
+
+  const handleConfirmEmailChange = async (e) => {
+    e.preventDefault();
+    setEmailConfirmLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/auth/confirm-email-change`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ code: emailChangeCode }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success('Email updated successfully!');
+        setPendingEmailChange(false);
+        setEmailChangeCode('');
+        setProfileData(prev => ({ ...prev, email: data.email }));
+      } else {
+        toast.error(data.error || 'Invalid confirmation code');
+      }
+    } catch {
+      toast.error('Failed to confirm email change. Please try again.');
+    } finally {
+      setEmailConfirmLoading(false);
     }
   };
 
@@ -335,6 +368,32 @@ function CustomerProfile() {
             </button>
           </div>
         </form>
+
+        {pendingEmailChange && (
+          <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-sm text-blue-800 font-medium mb-3">
+              A confirmation code was sent to your new email address. Enter it below to complete the change:
+            </p>
+            <form onSubmit={handleConfirmEmailChange} className="flex gap-3 items-center">
+              <input
+                type="text"
+                value={emailChangeCode}
+                onChange={(e) => setEmailChangeCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                className="flex-1 px-3 py-2 border border-blue-300 rounded-md text-center text-xl font-mono tracking-widest focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="000000"
+                maxLength={6}
+                required
+              />
+              <button
+                type="submit"
+                disabled={emailConfirmLoading || emailChangeCode.length !== 6}
+                className="bg-blue-600 text-white px-4 py-2 rounded-md font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {emailConfirmLoading ? 'Confirming...' : 'Confirm'}
+              </button>
+            </form>
+          </div>
+        )}
 
         {/* Additional Actions */}
         <div className="mt-8 pt-6 border-t border-gray-200">

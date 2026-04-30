@@ -8,7 +8,12 @@ import {
   handleSuccessfulLogin
 } from "../middleware/accountLockout.js";
 import { requireAuth } from "../middleware/authMiddleware.js";
-import { sendUserWelcomeEmail, sendEmailVerificationCode } from "../services/emailService.js";
+import {
+  sendUserWelcomeEmail,
+  sendEmailVerificationCode,
+  sendEmailChangeVerification,
+  sendEmailChangeNotification,
+} from "../services/emailService.js";
 import { validatePassword } from "../middleware/security.js";
 
 const router = express.Router();
@@ -1418,18 +1423,31 @@ router.put('/update-profile', requireAuth, async (req, res) => {
       await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS city VARCHAR(100)");
       await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS state VARCHAR(100)");
       await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS zip_code VARCHAR(20)");
+      await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_email VARCHAR(255)");
+      await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_change_code VARCHAR(10)");
+      await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_change_code_expires_at TIMESTAMP");
     } catch (err) {
     }
 
-    // Update user profile
+    const trimmedEmail = email.trim().toLowerCase();
+    const trimmedName = name.trim();
+
+    // Get current user email to detect change
+    const currentUserRes = await pool.query("SELECT email FROM users WHERE id = $1", [userId]);
+    if (currentUserRes.rows.length === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    const currentEmail = currentUserRes.rows[0].email;
+    const emailChanging = currentEmail !== trimmedEmail;
+
+    // Update non-email fields immediately
     const updateResult = await pool.query(
       `UPDATE users
-       SET name = $1, email = $2, phone = $3, address = $4, city = $5, state = $6, zip_code = $7
-       WHERE id = $8
+       SET name = $1, phone = $2, address = $3, city = $4, state = $5, zip_code = $6
+       WHERE id = $7
        RETURNING id, name, email, phone, address, city, state, zip_code`,
       [
-        name.trim(),
-        email.trim().toLowerCase(),
+        trimmedName,
         phone?.trim() || null,
         address?.trim() || null,
         city?.trim() || null,
@@ -1444,21 +1462,78 @@ router.put('/update-profile', requireAuth, async (req, res) => {
     }
 
     const updatedUser = updateResult.rows[0];
-
-    // Update session with new user name if changed
     req.session.userName = updatedUser.name.split(" ")[0];
+
+    if (emailChanging) {
+      // Initiate email change confirmation
+      const changeCode = Math.floor(100000 + Math.random() * 900000).toString();
+      const codeExpiry = new Date(Date.now() + 10 * 60 * 1000);
+      await pool.query(
+        "UPDATE users SET pending_email = $1, email_change_code = $2, email_change_code_expires_at = $3 WHERE id = $4",
+        [trimmedEmail, changeCode, codeExpiry, userId]
+      );
+      sendEmailChangeVerification(trimmedEmail, trimmedName, changeCode)
+        .catch(err => console.error('Failed to send email change verification:', err));
+      sendEmailChangeNotification(currentEmail, trimmedName, trimmedEmail)
+        .catch(err => console.error('Failed to send email change notification:', err));
+
+      return res.json({
+        success: true,
+        pendingEmailChange: true,
+        message: "Profile updated. A confirmation code has been sent to your new email address.",
+        user: { ...updatedUser, zipCode: updatedUser.zip_code },
+      });
+    }
 
     res.json({
       success: true,
       message: "Profile updated successfully",
-      user: {
-        ...updatedUser,
-        zipCode: updatedUser.zip_code,
-      }
+      user: { ...updatedUser, zipCode: updatedUser.zip_code },
     });
 
   } catch (err) {
     res.status(500).json({ error: "Server error while updating profile" });
+  }
+});
+
+// POST /api/auth/confirm-email-change - Verify code and apply pending email change
+router.post('/confirm-email-change', requireAuth, async (req, res) => {
+  try {
+    const userId = req.session.userId;
+    const { code } = req.body;
+
+    if (!code) return res.status(400).json({ error: "Confirmation code is required" });
+
+    const userRes = await pool.query(
+      "SELECT pending_email, email_change_code, email_change_code_expires_at, name FROM users WHERE id = $1",
+      [userId]
+    );
+    if (userRes.rows.length === 0) return res.status(404).json({ error: "User not found" });
+
+    const user = userRes.rows[0];
+    if (!user.pending_email || !user.email_change_code) {
+      return res.status(400).json({ error: "No pending email change found" });
+    }
+    if (new Date() > new Date(user.email_change_code_expires_at)) {
+      return res.status(400).json({ error: "Confirmation code has expired. Please start the email change again." });
+    }
+
+    const bufA = Buffer.from(String(user.email_change_code));
+    const bufB = Buffer.from(String(code));
+    const codeMatch = bufA.length === bufB.length && crypto.timingSafeEqual(bufA, bufB);
+    if (!codeMatch) {
+      return res.status(400).json({ error: "Invalid confirmation code" });
+    }
+
+    await pool.query(
+      "UPDATE users SET email = $1, pending_email = NULL, email_change_code = NULL, email_change_code_expires_at = NULL WHERE id = $2",
+      [user.pending_email, userId]
+    );
+
+    res.json({ success: true, message: "Email updated successfully", email: user.pending_email });
+
+  } catch (err) {
+    res.status(500).json({ error: "Server error while confirming email change" });
   }
 });
 
