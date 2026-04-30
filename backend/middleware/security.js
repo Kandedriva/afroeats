@@ -46,12 +46,12 @@ const isSafariRequest = (userAgent) => {
          /iPad|iPhone|iPod/.test(userAgent);
 };
 
-// CORS configuration with Safari/mobile browser compatibility
+// CORS configuration — explicit allowlist only, no wildcards
 export const corsOptions = {
   origin: function (origin, callback) {
-    // Get all possible frontend URLs from environment variables
-    const allowedOrigins = [
-      // Development origins
+    // Explicit allowlist — add new domains here or via ALLOWED_ORIGINS env var
+    const allowedOrigins = new Set([
+      // Development
       'http://localhost:3000',
       'http://localhost:3001',
       'http://localhost:3002',
@@ -59,63 +59,35 @@ export const corsOptions = {
       'http://127.0.0.1:3001',
       'http://127.0.0.1:3002',
 
-      // Production origins from environment variables
+      // Production
+      'https://orderdabaly.com',
+      'https://www.orderdabaly.com',
+      'https://app.orderdabaly.com',
+      'https://admin.orderdabaly.com',
+      'https://orderdabaly.netlify.app',
+      'https://main--orderdabaly.netlify.app',
+
+      // Environment-configured origins (comma-separated list supported)
+      ...( process.env.ALLOWED_ORIGINS
+            ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim()).filter(Boolean)
+            : [] ),
+
+      // Legacy env vars
       process.env.FRONTEND_URL,
       process.env.CLIENT_URL,
       process.env.ADMIN_URL,
-      process.env.REACT_APP_FRONTEND_URL,
+    ].filter(Boolean));
 
-      // Specific production URLs
-      'https://orderdabaly.com',
-      'https://www.orderdabaly.com',
-      'https://api.orderdabaly.com',
-      'https://orderdabaly.netlify.app',
-      'https://orderdabaly.vercel.app',
-
-      // Auto-deployed Netlify URLs (common pattern)
-      'https://main--orderdabaly.netlify.app',
-      'https://deploy-preview-*--orderdabaly.netlify.app',
-
-      // Backend service URLs (for admin dashboard and legacy support)
-      'https://a-food-zone.onrender.com',
-      'https://afro-restaurant-backend.onrender.com',
-
-      // Support for both API and frontend subdomains
-      'https://app.orderdabaly.com',
-      'https://admin.orderdabaly.com'
-    ].filter(Boolean); // Remove undefined values
-
-    console.log('🌐 CORS Request from origin:', origin || 'NO_ORIGIN');
-
-    // Allow requests with no origin (mobile apps, Postman, etc.)
-    if (!origin || origin === 'undefined') {
-      console.log('✅ CORS: Allowing request with no origin, returning:', origin || 'http://localhost:3000');
-      return callback(null, origin || 'http://localhost:3000');
+    // Allow server-to-server requests (no Origin header)
+    if (!origin) {
+      return callback(null, true);
     }
 
-    // Check if origin is in allowed list or matches Netlify deploy preview pattern
-    const isAllowed = allowedOrigins.includes(origin) ||
-                     (origin && (
-                       origin.includes('--orderdabaly.netlify.app') ||
-                       origin.includes('netlify.app') ||
-                       origin.includes('vercel.app')
-                     ));
-
-    if (isAllowed) {
-      console.log('✅ CORS: Origin allowed, returning origin:', origin);
-      return callback(null, origin); // Return the specific origin, not true
+    if (allowedOrigins.has(origin)) {
+      return callback(null, origin);
     }
 
-    console.log('❌ CORS: Origin rejected:', origin);
-
-    // In development, be more lenient
-    if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
-      console.log('🔧 Development mode: Allowing origin, returning:', origin);
-      return callback(null, origin); // Return the specific origin
-    }
-
-    // Reject in production
-    callback(new Error(`CORS policy violation: Origin ${origin} is not allowed`));
+    callback(new Error(`CORS policy: origin ${origin} is not allowed`));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'],

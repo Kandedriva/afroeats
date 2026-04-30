@@ -77,50 +77,8 @@ app.use(helmetConfig);
 app.use(requestLogger);
 app.use(requestLoggingMiddleware);
 
-// Manual CORS - DO NOT use cors() package, it's causing wildcard issues
-app.use((req, res, next) => {
-  const origin = req.get('Origin');
-  const allowedOrigins = [
-    'http://localhost:3000',
-    'http://localhost:3001',
-    'http://localhost:3002',
-    'http://127.0.0.1:3000',
-    'http://127.0.0.1:3001',
-    'http://127.0.0.1:3002',
-    'https://orderdabaly.com',
-    'https://www.orderdabaly.com',
-    'https://orderdabaly.netlify.app',
-  ];
-
-  // Determine origin to use - default to localhost:3000
-  const corsOrigin = (origin && allowedOrigins.includes(origin)) ? origin : 'http://localhost:3000';
-
-  // Intercept writeHead to force CORS headers before sending response
-  const originalWriteHead = res.writeHead;
-  res.writeHead = function(statusCode, headers) {
-    // Force our CORS headers by setting them directly
-    this.setHeader('Access-Control-Allow-Origin', corsOrigin);
-    this.setHeader('Access-Control-Allow-Credentials', 'true');
-    this.setHeader('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS');
-    this.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, Pragma');
-    this.setHeader('Access-Control-Expose-Headers', 'Set-Cookie');
-    this.setHeader('Vary', 'Origin');
-
-    // Call original writeHead
-    return originalWriteHead.apply(this, arguments);
-  };
-
-  // Handle preflight
-  if (req.method === 'OPTIONS') {
-    res.setHeader('Access-Control-Allow-Origin', corsOrigin);
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, Pragma');
-    return res.status(204).end();
-  }
-
-  next();
-});
+// CORS — explicit allowlist defined in middleware/security.js
+app.use(cors(corsOptions));
 
 // Body parsing middleware with comprehensive error handling
 app.use((req, res, next) => {
@@ -231,61 +189,21 @@ app.use('/api/admin/login', rateLimits.auth);
 app.use('/api/orders', rateLimits.orders);
 app.use('/api/', rateLimits.general);
 
-// Enhanced session handling middleware for cross-domain cookie support
+// Session handling middleware — device detection and cache control for mobile
 app.use((req, res, next) => {
   const userAgent = req.get('User-Agent') || '';
   const isMobile = /Mobile|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
-  const isChrome = /Chrome/.test(userAgent);
-  const origin = req.get('Origin');
-  
-  // Set enhanced headers for cross-domain cookie support
-  // IMPORTANT: Also set Access-Control-Allow-Origin to the specific origin to fix CORS wildcard issue
-  const allowedOrigins = [
-    'http://localhost:3000',
-    'http://localhost:3001',
-    'http://localhost:3002',
-    'http://127.0.0.1:3000',
-    'http://127.0.0.1:3001',
-    'http://127.0.0.1:3002',
-    'https://orderdabaly.com',
-    'https://www.orderdabaly.com',
-    'https://orderdabaly.netlify.app'
-  ];
 
-  const requestOrigin = origin || req.get('Origin');
-  const corsOrigin = (allowedOrigins.includes(requestOrigin) || !requestOrigin) ? requestOrigin : allowedOrigins[0];
-
-  res.set({
-    'Access-Control-Allow-Origin': corsOrigin || 'http://localhost:3000',
-    'Access-Control-Allow-Credentials': 'true',
-    'Access-Control-Expose-Headers': 'Set-Cookie',
-    'Vary': 'Origin, Cookie'
-  });
-  
-  // For production, add additional headers for cross-origin cookies
-  if (process.env.NODE_ENV === 'production') {
-    // Debug cookie issues
-    if (!req.headers.cookie && req.path.startsWith('/api/')) {
-      console.log('🍪 No cookies received:', {
-        path: req.path,
-        origin,
-        userAgent: userAgent.substring(0, 50),
-        sessionID: req.sessionID || 'none'
-      });
-    }
-  }
-  
   if (isMobile) {
-    // Set mobile-specific headers for better cookie handling
     res.set({
       'Cache-Control': 'no-cache, no-store, must-revalidate',
       'Pragma': 'no-cache',
       'Expires': '0'
     });
   }
-  
+
   req.isMobile = isMobile;
-  req.isChrome = isChrome;
+  req.isChrome = /Chrome/.test(userAgent);
   next();
 });
 
@@ -380,33 +298,6 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
-// FINAL CORS FIX - Disabled, using proper cors() middleware above
-// app.use((req, res, next) => {
-//   const origin = req.get('Origin');
-//   const allowedOrigins = [
-//     'http://localhost:3000',
-//     'http://localhost:3001',
-//     'http://localhost:3002',
-//     'http://127.0.0.1:3000',
-//     'http://127.0.0.1:3001',
-//     'http://127.0.0.1:3002'
-//   ];
-//
-//   const corsOrigin = allowedOrigins.includes(origin) ? origin : (origin || 'http://localhost:3000');
-//
-//   console.log('🔧 FINAL CORS FIX - Setting headers:', {
-//     origin,
-//     corsOrigin,
-//     url: req.url
-//   });
-//
-//   res.setHeader('Access-Control-Allow-Origin', corsOrigin);
-//   res.setHeader('Access-Control-Allow-Credentials', 'true');
-//   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD');
-//   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
-//
-//   next();
-// });
 
 // API Routes
 app.use("/api/auth", authRoutes);
@@ -663,18 +554,6 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-// CORS test endpoint
-app.get('/api/cors-test', (req, res) => {
-  res.json({
-    message: '✅ CORS is working correctly!',
-    origin: req.get('Origin') || 'No origin header',
-    timestamp: new Date().toISOString(),
-    headers: {
-      'Access-Control-Allow-Origin': req.get('Origin') || '*',
-      'Access-Control-Allow-Credentials': 'true'
-    }
-  });
-});
 
 // Session debug endpoint
 app.get('/api/session-debug', (req, res) => {
