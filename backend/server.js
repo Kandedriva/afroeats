@@ -40,8 +40,7 @@ import {
   corsOptions, 
   rateLimits, 
   requestLogger, 
-  sanitizeInput,
-  xssProtection 
+
 } from "./middleware/security.js";
 import { trackVisitorMiddleware, AnalyticsService } from "./services/analytics.js";
 import { scheduleRecurringJobs, jobs } from "./services/queue.js";
@@ -138,10 +137,6 @@ app.use((req, res, next) => {
   }
 });
 
-// Input sanitization and XSS protection
-app.use(sanitizeInput);
-app.use(xssProtection);
-
 // Global error handling middleware for any remaining errors
 app.use((err, req, res, next) => {
   // Handle multer errors
@@ -187,6 +182,8 @@ app.use('/api/auth/register', rateLimits.register);
 app.use('/api/auth/login', rateLimits.auth);
 app.use('/api/owners/login', rateLimits.auth);
 app.use('/api/admin/login', rateLimits.auth);
+app.use('/api/orders/guest-track', rateLimits.auth);
+app.use('/api/grocery/guest-track', rateLimits.auth);
 app.use('/api/orders', rateLimits.orders);
 app.use('/api/', rateLimits.general);
 
@@ -374,103 +371,103 @@ app.post('/api/test-session-create', (req, res) => {
   });
 });
 
-// Test notification endpoints
-// Test webhook processing endpoint
-app.get('/test-webhook-process', async (req, res) => {
-  try {
-    console.log('🧪 Manual webhook test triggered');
+if (process.env.NODE_ENV !== 'production') {
+  // Test webhook processing endpoint
+  app.get('/test-webhook-process', async (req, res) => {
+    try {
+      console.log('🧪 Manual webhook test triggered');
 
-    // Get the most recent temp_order_data
-    const tempDataResult = await pool.query(
-      'SELECT * FROM temp_order_data ORDER BY created_at DESC LIMIT 1'
-    );
+      // Get the most recent temp_order_data
+      const tempDataResult = await pool.query(
+        'SELECT * FROM temp_order_data ORDER BY created_at DESC LIMIT 1'
+      );
 
-    if (tempDataResult.rows.length === 0) {
-      return res.status(404).json({
-        error: 'No temp order data found',
-        message: 'Place an order first to create temp data'
+      if (tempDataResult.rows.length === 0) {
+        return res.status(404).json({
+          error: 'No temp order data found',
+          message: 'Place an order first to create temp data'
+        });
+      }
+
+      const tempData = tempDataResult.rows[0];
+      const sessionId = tempData.session_id;
+      const orderData = tempData.order_data;
+
+      console.log(`📦 Processing temp order for session: ${sessionId}`);
+      console.log('Order data:', JSON.stringify(orderData, null, 2));
+
+      // Check if order already exists
+      const existingOrder = await pool.query(
+        'SELECT id FROM orders WHERE stripe_session_id = $1',
+        [sessionId]
+      );
+
+      if (existingOrder.rows.length > 0) {
+        return res.json({
+          success: false,
+          message: 'Order already exists for this session',
+          orderId: existingOrder.rows[0].id,
+          sessionId: sessionId
+        });
+      }
+
+      res.json({
+        success: true,
+        message: 'Temp order data found',
+        sessionId: sessionId,
+        orderData: orderData,
+        note: 'This would be processed by the webhook. Use Stripe CLI or dashboard to test actual webhook.'
+      });
+    } catch (error) {
+      console.error('❌ Test webhook error:', error);
+      res.status(500).json({
+        error: error.message,
       });
     }
+  });
 
-    const tempData = tempDataResult.rows[0];
-    const sessionId = tempData.session_id;
-    const orderData = tempData.order_data;
+  // Test SMS endpoint
+  app.get('/test-sms', async (req, res) => {
+    try {
+      const testPhone = req.query.phone;
+      if (!testPhone) {
+        return res.status(400).json({
+          error: 'Missing phone number',
+          usage: 'GET /test-sms?phone=+15551234567'
+        });
+      }
 
-    console.log(`📦 Processing temp order for session: ${sessionId}`);
-    console.log('Order data:', JSON.stringify(orderData, null, 2));
-
-    // Check if order already exists
-    const existingOrder = await pool.query(
-      'SELECT id FROM orders WHERE stripe_session_id = $1',
-      [sessionId]
-    );
-
-    if (existingOrder.rows.length > 0) {
-      return res.json({
+      const result = await NotificationService.testSMSConfig(testPhone);
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({
         success: false,
-        message: 'Order already exists for this session',
-        orderId: existingOrder.rows[0].id,
-        sessionId: sessionId
+        error: error.message
       });
     }
+  });
 
-    res.json({
-      success: true,
-      message: 'Temp order data found',
-      sessionId: sessionId,
-      orderData: orderData,
-      note: 'This would be processed by the webhook. Use Stripe CLI or dashboard to test actual webhook.'
-    });
-  } catch (error) {
-    console.error('❌ Test webhook error:', error);
-    res.status(500).json({
-      error: error.message,
-      stack: error.stack
-    });
-  }
-});
+  // Test email endpoint
+  app.get('/test-email', async (req, res) => {
+    try {
+      const testEmail = req.query.email;
+      if (!testEmail) {
+        return res.status(400).json({
+          error: 'Missing email address',
+          usage: 'GET /test-email?email=test@example.com'
+        });
+      }
 
-// Test SMS endpoint
-app.get('/test-sms', async (req, res) => {
-  try {
-    const testPhone = req.query.phone;
-    if (!testPhone) {
-      return res.status(400).json({
-        error: 'Missing phone number',
-        usage: 'GET /test-sms?phone=+15551234567'
+      const result = await NotificationService.testEmailConfig(testEmail);
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: error.message
       });
     }
-
-    const result = await NotificationService.testSMSConfig(testPhone);
-    res.json(result);
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-});
-
-// Test email endpoint
-app.get('/test-email', async (req, res) => {
-  try {
-    const testEmail = req.query.email;
-    if (!testEmail) {
-      return res.status(400).json({
-        error: 'Missing email address',
-        usage: 'GET /test-email?email=test@example.com'
-      });
-    }
-
-    const result = await NotificationService.testEmailConfig(testEmail);
-    res.json(result);
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-});
+  });
+}
 
 // Remove test endpoints in production
 if (process.env.NODE_ENV !== 'production') {
