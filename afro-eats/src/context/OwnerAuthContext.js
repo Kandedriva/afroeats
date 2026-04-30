@@ -1,6 +1,7 @@
 import { createContext, useEffect, useState, useContext } from "react";
 import PropTypes from 'prop-types';
 import { API_BASE_URL } from "../config/api";
+import { clearRecoveryToken, attemptSessionRecovery } from "../utils/accountRecovery";
 
 export const OwnerAuthContext = createContext();
 
@@ -19,23 +20,17 @@ export function OwnerAuthProvider({ children }) {
         if (res.ok) {
           const data = await res.json();
           setOwner(data);
-        } else {
-          if (res.status === 401) {
-            // Only clear owner data if we don't already have owner data
-            // This prevents clearing the owner state right after login while session is being established
-            setOwner(prevOwner => {
-              if (prevOwner) {
-                return prevOwner;
-              }
-              return null;
-            });
+        } else if (res.status === 401) {
+          const recovered = await attemptSessionRecovery('owner');
+          if (recovered?.owner) {
+            setOwner(recovered.owner);
           } else {
-            // Network or server error - keep current state
+            setOwner(null);
           }
         }
-      } catch (err) {
-        // Network error - don't clear owner data immediately
-        // Let user try to continue if they were logged in
+        // Network/server errors: keep current state
+      } catch {
+        // Network error — don't clear state
       } finally {
         setLoading(false);
       }
@@ -54,7 +49,7 @@ export function OwnerAuthProvider({ children }) {
       // Logout request failed, but we'll still clear the owner state
     }
     
-    // Clear owner state regardless of response
+    clearRecoveryToken('owner');
     setOwner(null);
   };
 

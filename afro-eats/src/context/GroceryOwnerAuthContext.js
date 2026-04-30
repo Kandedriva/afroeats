@@ -1,6 +1,7 @@
 import { createContext, useState, useEffect, useContext } from 'react';
 import PropTypes from 'prop-types';
 import { API_BASE_URL } from '../config/api';
+import { clearRecoveryToken, attemptSessionRecovery } from '../utils/accountRecovery';
 
 export const GroceryOwnerAuthContext = createContext();
 
@@ -25,10 +26,17 @@ export function GroceryOwnerAuthProvider({ children }) {
       if (response.ok) {
         const data = await response.json();
         setGroceryOwner(data);
+      } else if (response.status === 401) {
+        const recovered = await attemptSessionRecovery('grocery');
+        if (recovered?.groceryOwner) {
+          setGroceryOwner(recovered.groceryOwner);
+        } else {
+          setGroceryOwner(null);
+        }
       } else {
         setGroceryOwner(null);
       }
-    } catch (error) {
+    } catch {
       setGroceryOwner(null);
     } finally {
       setLoading(false);
@@ -41,11 +49,11 @@ export function GroceryOwnerAuthProvider({ children }) {
         method: 'POST',
         credentials: 'include',
       });
-      setGroceryOwner(null);
-    } catch (error) {
-      // Even if logout fails on server, clear local state
-      setGroceryOwner(null);
+    } catch {
+      // ignore
     }
+    clearRecoveryToken('grocery');
+    setGroceryOwner(null);
   };
 
   const refreshAuth = async () => {

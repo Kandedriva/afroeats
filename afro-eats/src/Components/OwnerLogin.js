@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useOwnerAuth } from "../context/OwnerAuthContext";
 import { API_BASE_URL } from "../config/api";
+import { storeRecoveryToken } from "../utils/accountRecovery";
 
 function OwnerLogin() {
   const [email, setEmail] = useState("");
@@ -32,8 +33,8 @@ function OwnerLogin() {
         throw new Error(data.error || "Login failed");
       }
 
-      // Set owner data directly from login response
       if (data.owner) {
+        if (data.recoveryToken) { storeRecoveryToken('owner', data.recoveryToken); }
         setOwner(data.owner);
         setTimeout(() => {
           navigate("/owner/dashboard");

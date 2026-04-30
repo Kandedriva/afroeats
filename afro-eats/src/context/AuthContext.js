@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import PropTypes from 'prop-types';
 import { API_BASE_URL } from "../config/api";
+import { clearRecoveryToken, attemptSessionRecovery } from "../utils/accountRecovery";
 
 export const AuthContext = createContext();
 
@@ -21,23 +22,18 @@ export const AuthProvider = ({ children }) => {
         if (res.ok) {
           const data = await res.json();
           setUser(data);
-        } else {
-          if (res.status === 401) {
-            // Only clear user data if we don't already have user data
-            // This prevents clearing the user state right after login while session is being established
-            setUser(prevUser => {
-              if (prevUser) {
-                return prevUser;
-              }
-              return null;
-            });
+        } else if (res.status === 401) {
+          // Session missing — try recovery token before giving up
+          const recovered = await attemptSessionRecovery('user');
+          if (recovered?.user) {
+            setUser(recovered.user);
           } else {
-            // Network or server error - keep current state
+            setUser(null);
           }
         }
-      } catch (err) {
-        // Network error - don't clear user data immediately
-        // Let user try to continue if they were logged in
+        // Network/server errors: keep current state
+      } catch {
+        // Network error — don't clear state, let user retry
       } finally {
         setLoading(false);
       }
@@ -56,10 +52,8 @@ export const AuthProvider = ({ children }) => {
       // Logout request failed, but we'll still clear the user state
     }
     
-    // Clear user state regardless of response
+    clearRecoveryToken('user');
     setUser(null);
-    
-    // Navigate to login page
     navigate("/login");
   };
 

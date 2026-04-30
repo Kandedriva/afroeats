@@ -12,6 +12,7 @@ import {
 } from '../services/emailService.js';
 import { validatePassword } from '../middleware/security.js';
 import crypto from 'crypto';
+import { generateRecoveryToken } from '../utils/recoveryToken.js';
 
 function grocerySafeCompare(a, b) {
   const bufA = Buffer.from(String(a));
@@ -300,6 +301,7 @@ router.post('/login', async (req, res) => {
             name: groceryOwner.name,
             email: groceryOwner.email,
           },
+          recoveryToken: generateRecoveryToken('grocery', groceryOwner.id),
         });
       });
     });
