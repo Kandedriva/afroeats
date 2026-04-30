@@ -32,6 +32,7 @@ import productRoutes from "./routes/productRoutes.js";
 import groceryRoutes from "./routes/groceryRoutes.js";
 import groceryOwnerRoutes from "./routes/groceryOwnerRoutes.js";
 import groceryCartRoutes from "./routes/groceryCartRoutes.js";
+import { generateRecoveryToken, verifyRecoveryToken } from "./utils/recoveryToken.js";
 
 // Import security and analytics
 import { 
@@ -595,42 +596,112 @@ app.get('/api/session-debug', (req, res) => {
   });
 });
 
-// Session recovery endpoint for Chrome users with cookie issues
-app.post('/api/session-recover', (req, res) => {
-  const { userId, loginTime } = req.body;
-  
-  if (!userId || !loginTime) {
-    return res.status(400).json({ 
-      error: 'Missing userId or loginTime for session recovery' 
-    });
+// Session recovery: accepts a HMAC-signed recovery token, creates a fresh session
+app.post('/api/session-recover', async (req, res) => {
+  const { token } = req.body;
+
+  if (!token || typeof token !== 'string') {
+    return res.status(400).json({ error: 'Recovery token is required' });
   }
-  
-  // Verify the user exists and the loginTime is recent (within last hour)
-  const timeDiff = Date.now() - new Date(loginTime).getTime();
-  if (timeDiff > 60 * 60 * 1000) { // 1 hour
-    return res.status(400).json({ 
-      error: 'Login time too old for session recovery' 
-    });
+
+  const payload = verifyRecoveryToken(token);
+  if (!payload) {
+    return res.status(401).json({ error: 'Invalid or expired recovery token' });
   }
-  
-  // Create a new session with the user data
-  req.session.userId = userId;
-  req.session.loginTime = loginTime;
-  req.session.recoveredSession = true;
-  
-  req.session.save((err) => {
-    if (err) {
-      console.error('Session recovery save error:', err);
-      return res.status(500).json({ error: 'Failed to recover session' });
+
+  const { t: type, id } = payload;
+
+  try {
+    let accountRow = null;
+    let sessionData = {};
+    let responseData = {};
+
+    if (type === 'user') {
+      const result = await pool.query(
+        'SELECT id, name, email, email_verified FROM users WHERE id = $1',
+        [id]
+      );
+      accountRow = result.rows[0];
+      if (!accountRow || accountRow.email_verified === false) {
+        return res.status(401).json({ error: 'Account not found or not verified' });
+      }
+      sessionData = {
+        userId: accountRow.id,
+        userName: accountRow.name.split(' ')[0],
+        userEmail: accountRow.email,
+      };
+      responseData = {
+        user: { id: accountRow.id, name: accountRow.name, email: accountRow.email },
+      };
+    } else if (type === 'owner') {
+      const result = await pool.query(
+        'SELECT id, name, email, email_verified FROM restaurant_owners WHERE id = $1',
+        [id]
+      );
+      accountRow = result.rows[0];
+      if (!accountRow || accountRow.email_verified === false) {
+        return res.status(401).json({ error: 'Account not found or not verified' });
+      }
+      sessionData = {
+        ownerId: accountRow.id,
+        ownerName: accountRow.name,
+        ownerEmail: accountRow.email,
+      };
+      responseData = {
+        owner: { id: accountRow.id, name: accountRow.name, email: accountRow.email },
+      };
+    } else if (type === 'grocery') {
+      const result = await pool.query(
+        'SELECT id, name, email, email_verified, active FROM grocery_store_owners WHERE id = $1',
+        [id]
+      );
+      accountRow = result.rows[0];
+      if (!accountRow || accountRow.email_verified === false || accountRow.active === false) {
+        return res.status(401).json({ error: 'Account not found, not verified, or deactivated' });
+      }
+      sessionData = {
+        groceryOwnerId: accountRow.id,
+        groceryOwnerName: accountRow.name,
+        groceryOwnerEmail: accountRow.email,
+      };
+      responseData = {
+        groceryOwner: { id: accountRow.id, name: accountRow.name, email: accountRow.email },
+      };
+    } else {
+      return res.status(400).json({ error: 'Unknown account type in token' });
     }
-    
-    res.json({
-      success: true,
-      message: 'Session recovered successfully',
-      sessionId: req.sessionID,
-      userId: req.session.userId
+
+    req.session.regenerate((err) => {
+      if (err) {
+        console.error('Session recovery regenerate error:', err);
+        return res.status(500).json({ error: 'Session creation failed' });
+      }
+
+      Object.assign(req.session, sessionData, {
+        loginTime: new Date().toISOString(),
+        recoveredAt: new Date().toISOString(),
+      });
+
+      req.session.save((saveErr) => {
+        if (saveErr) {
+          console.error('Session recovery save error:', saveErr);
+          return res.status(500).json({ error: 'Session save failed' });
+        }
+
+        // Rotate the token so each recovery produces a fresh one
+        const newToken = generateRecoveryToken(type, accountRow.id);
+
+        res.json({
+          success: true,
+          recoveryToken: newToken,
+          ...responseData,
+        });
+      });
     });
-  });
+  } catch (err) {
+    console.error('Session recovery error:', err);
+    res.status(500).json({ error: 'Session recovery failed' });
+  }
 });
 
 // OPTIONS preflight is handled automatically by the CORS middleware above

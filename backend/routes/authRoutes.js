@@ -14,6 +14,7 @@ import {
   sendEmailChangeVerification,
   sendEmailChangeNotification,
 } from "../services/emailService.js";
+import { generateRecoveryToken } from "../utils/recoveryToken.js";
 import { validatePassword } from "../middleware/security.js";
 
 const router = express.Router();
@@ -332,16 +333,17 @@ router.post("/login", checkAccountLockout, async (req, res) => {
             'Access-Control-Allow-Credentials': 'true'
           });
           
-          res.json({ 
-            user: { 
-              id: user.id, 
-              name: user.name, 
-              email: user.email 
+          res.json({
+            user: {
+              id: user.id,
+              name: user.name,
+              email: user.email
             },
             sessionInfo: {
               sessionId: req.sessionID,
               loginTime: req.session.loginTime
-            }
+            },
+            recoveryToken: generateRecoveryToken('user', user.id),
           });
         });
       });

@@ -1,6 +1,7 @@
 import { useState, useContext } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { API_BASE_URL } from '../config/api';
+import { storeRecoveryToken } from '../utils/accountRecovery';
 import { toast } from 'react-toastify';
 import { GroceryOwnerAuthContext } from '../context/GroceryOwnerAuthContext';
 
@@ -49,6 +50,7 @@ function GroceryOwnerLogin() {
       const data = await response.json();
 
       if (response.ok) {
+        if (data.recoveryToken) { storeRecoveryToken('grocery', data.recoveryToken); }
         setGroceryOwner(data.groceryOwner);
         toast.success('Login successful! Welcome back!');
         navigate('/grocery-owner/dashboard');

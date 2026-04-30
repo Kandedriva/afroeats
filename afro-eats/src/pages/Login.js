@@ -3,6 +3,7 @@ import { useState, useContext } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
 import { API_BASE_URL } from "../config/api";
+import { storeRecoveryToken } from "../utils/accountRecovery";
 
 export default function Login() {
   const { setUser } = useContext(AuthContext);
@@ -48,9 +49,8 @@ export default function Login() {
       }
 
       const data = await response.json();
+      if (data.recoveryToken) { storeRecoveryToken('user', data.recoveryToken); }
       setUser(data.user);
-
-      // ✅ Redirect to restaurant list on success
       navigate("/");
     } catch (err) {
       setError(err.message);

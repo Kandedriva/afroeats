@@ -22,6 +22,7 @@ import {
 } from "../services/emailService.js";
 import { validatePassword } from "../middleware/security.js";
 import crypto from "crypto";
+import { generateRecoveryToken } from "../utils/recoveryToken.js";
 
 function ownerSafeCompare(a, b) {
   const bufA = Buffer.from(String(a));
@@ -287,13 +288,14 @@ router.post("/login", checkAccountLockout, async (req, res) => {
 
         console.log('✅ Owner session saved successfully. ID:', req.sessionID, 'Owner:', owner.name);
         
-        res.json({ 
-          message: "Login successful", 
-          owner: { 
-            id: owner.id, 
-            name: owner.name, 
-            email: owner.email 
-          } 
+        res.json({
+          message: "Login successful",
+          owner: {
+            id: owner.id,
+            name: owner.name,
+            email: owner.email
+          },
+          recoveryToken: generateRecoveryToken('owner', owner.id),
         });
       });
     });
