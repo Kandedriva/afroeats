@@ -22,22 +22,22 @@ function OwnerLogin() {
         body: JSON.stringify({ email, password }),
       });
 
+      const data = await res.json();
+
       if (!res.ok) {
-        const data = await res.json();
+        if (data.needsVerification) {
+          navigate("/owner/verify-email", { state: { email: data.email } });
+          return;
+        }
         throw new Error(data.error || "Login failed");
       }
 
-      const loginData = await res.json();
-      
       // Set owner data directly from login response
-      if (loginData.owner) {
-        // Update the owner state immediately
-        setOwner(loginData.owner);
-        
-        // Small delay to ensure session is properly established, then navigate
+      if (data.owner) {
+        setOwner(data.owner);
         setTimeout(() => {
           navigate("/owner/dashboard");
-        }, 500); // Longer delay to ensure backend session is ready
+        }, 500);
       } else {
         throw new Error("Login response missing owner data");
       }

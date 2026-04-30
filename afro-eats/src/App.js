@@ -77,6 +77,8 @@ import GroceryOwnerAddProduct from "./pages/GroceryOwnerAddProduct";
 import GroceryOwnerEditProduct from "./pages/GroceryOwnerEditProduct";
 import GroceryOwnerNotifications from "./pages/GroceryOwnerNotifications";
 import GroceryOwnerReports from "./pages/GroceryOwnerReports";
+import OwnerVerifyEmail from "./pages/OwnerVerifyEmail";
+import GroceryOwnerVerifyEmail from "./pages/GroceryOwnerVerifyEmail";
 
 
 function AppContent() {
@@ -185,7 +187,9 @@ function AppContent() {
         <Route path="/register-owner" element={<RegisterOwner />} />
         <Route path="/register-grocery-owner" element={<RegisterGroceryOwner />} />
         <Route path="/owner/login" element={<OwnerLogin />} />
+        <Route path="/owner/verify-email" element={<OwnerVerifyEmail />} />
         <Route path="/grocery-owner/login" element={<GroceryOwnerLogin />} />
+        <Route path="/grocery-owner/verify-email" element={<GroceryOwnerVerifyEmail />} />
         <Route path="/owner/password-update" element={<OwnerPasswordUpdate />} />
         <Route
           path="/order-success"

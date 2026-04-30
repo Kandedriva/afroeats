@@ -33,6 +33,9 @@ function GroceryOwnerStoreSettings() {
   const [emailForm, setEmailForm] = useState({ email: '', current_password: '' });
   const [emailSaving, setEmailSaving] = useState(false);
   const [showEmailForm, setShowEmailForm] = useState(false);
+  const [pendingEmailChange, setPendingEmailChange] = useState(false);
+  const [emailChangeCode, setEmailChangeCode] = useState('');
+  const [emailConfirmLoading, setEmailConfirmLoading] = useState(false);
 
   useEffect(() => {
     const initializePage = async () => {
@@ -145,20 +148,52 @@ function GroceryOwnerStoreSettings() {
       });
       if (response.ok) {
         const data = await response.json();
-        setOwnerEmail(data.email);
-        setEmailForm({ email: data.email, current_password: '' });
-        setShowEmailForm(false);
-        toast.success('Email updated successfully');
+        if (data.pendingEmailChange) {
+          setPendingEmailChange(true);
+          toast.info('Check your new email for a confirmation code.');
+        } else {
+          setOwnerEmail(data.email);
+          setEmailForm({ email: data.email, current_password: '' });
+          setShowEmailForm(false);
+          toast.success('Email updated successfully');
+        }
       } else {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
         toast.error(errorData.error || 'Failed to update email');
       }
     } catch (error) {
-      // eslint-disable-next-line no-console
       console.error('Email update error:', error);
       toast.error('Failed to update email. Please try again.');
     } finally {
       setEmailSaving(false);
+    }
+  };
+
+  const handleConfirmEmailChange = async (e) => {
+    e.preventDefault();
+    setEmailConfirmLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/grocery-owners/confirm-email-change`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ code: emailChangeCode }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setOwnerEmail(data.email);
+        setEmailForm({ email: data.email, current_password: '' });
+        setPendingEmailChange(false);
+        setEmailChangeCode('');
+        setShowEmailForm(false);
+        toast.success('Email updated successfully');
+      } else {
+        toast.error(data.error || 'Invalid confirmation code');
+      }
+    } catch {
+      toast.error('Failed to confirm email change. Please try again.');
+    } finally {
+      setEmailConfirmLoading(false);
     }
   };
 
@@ -584,6 +619,28 @@ function GroceryOwnerStoreSettings() {
                       Cancel
                     </button>
                   </div>
+                </form>
+              )}
+
+              {pendingEmailChange && (
+                <form onSubmit={handleConfirmEmailChange} className="mt-4 space-y-3 border-t pt-4">
+                  <p className="text-sm text-blue-700 font-medium">Enter the 6-digit code sent to your new email:</p>
+                  <input
+                    type="text"
+                    value={emailChangeCode}
+                    onChange={(e) => setEmailChangeCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    className="w-full px-4 py-2 border border-blue-300 rounded-lg text-center text-xl font-mono tracking-widest focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="000000"
+                    maxLength={6}
+                    required
+                  />
+                  <button
+                    type="submit"
+                    disabled={emailConfirmLoading || emailChangeCode.length !== 6}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  >
+                    {emailConfirmLoading ? 'Confirming...' : 'Confirm Email Change'}
+                  </button>
                 </form>
               )}
             </div>
