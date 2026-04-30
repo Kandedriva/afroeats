@@ -413,7 +413,7 @@ router.post("/checkout-session", requireAuth, async (req, res) => {
         await sendDemoOrderNotifications(orderId, items, customerInfo, false);
 
         // Get the frontend URL dynamically
-        const frontendUrl = req.headers.origin || req.headers.referer?.replace(/\/$/, '') || 'http://localhost:3000';
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
         
         return res.json({ 
           url: `${frontendUrl}/demo-order-checkout?order_id=${orderId}`,
@@ -595,7 +595,7 @@ router.post("/checkout-session", requireAuth, async (req, res) => {
     });
 
     // Get the frontend URL dynamically
-    const frontendUrl = req.headers.origin || req.headers.referer?.replace(/\/$/, '') || 'http://localhost:3000';
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     
     // Create Stripe checkout session (customer pays the full amount)
     // Store only essential info in metadata to avoid 500-character limit
@@ -1091,7 +1091,7 @@ router.post("/guest-checkout-session", async (req, res) => {
         await sendDemoOrderNotifications(orderId, items, guestInfo, true);
 
         // Get the frontend URL dynamically
-        const frontendUrl = req.headers.origin || req.headers.referer?.replace(/\/$/, '') || 'http://localhost:3000';
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
         
         return res.json({ 
           url: `${frontendUrl}/demo-order-checkout?order_id=${orderId}`,
@@ -1177,7 +1177,7 @@ router.post("/guest-checkout-session", async (req, res) => {
     }
 
     // Get the frontend URL dynamically
-    const frontendUrl = req.headers.origin || req.headers.referer?.replace(/\/$/, '') || 'http://localhost:3000';
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
 
     // Prepare order data for metadata
     const orderData = {
@@ -1317,7 +1317,7 @@ router.post("/guest-checkout-session", async (req, res) => {
         console.log(`Demo guest order created: ${orderId} for ${guestInfo.name} (${guestInfo.email})`);
 
         // Get the frontend URL dynamically
-        const frontendUrl = req.headers.origin || req.headers.referer?.replace(/\/$/, '') || 'http://localhost:3000';
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
         
         // Return demo mode response
         return res.json({

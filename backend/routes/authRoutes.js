@@ -51,7 +51,7 @@ router.post("/register", async (req, res) => {
     const hashedPassword = await bcryptjs.hash(password, saltRounds);
 
     // Generate 6-digit verification code
-    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const verificationCode = crypto.randomInt(100000, 1000000).toString();
     const codeExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes from now
 
     console.log('Registering user:', { name, email });
@@ -230,7 +230,7 @@ router.post("/resend-verification", async (req, res) => {
     }
 
     // Generate new 6-digit verification code
-    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const verificationCode = crypto.randomInt(100000, 1000000).toString();
     const codeExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes from now
 
     // Update verification code and reset attempts
@@ -514,7 +514,7 @@ router.post("/request-password-reset", async (req, res) => {
     const user = userResult.rows[0];
 
     // Generate 6-digit verification code
-    const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const resetCode = crypto.randomInt(100000, 1000000).toString();
     const codeExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
     // Store reset code in verification columns (reusing existing columns)
@@ -1468,7 +1468,7 @@ router.put('/update-profile', requireAuth, async (req, res) => {
 
     if (emailChanging) {
       // Initiate email change confirmation
-      const changeCode = Math.floor(100000 + Math.random() * 900000).toString();
+      const changeCode = crypto.randomInt(100000, 1000000).toString();
       const codeExpiry = new Date(Date.now() + 10 * 60 * 1000);
       await pool.query(
         "UPDATE users SET pending_email = $1, email_change_code = $2, email_change_code_expires_at = $3 WHERE id = $4",

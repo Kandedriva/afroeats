@@ -15,7 +15,7 @@ const router = express.Router();
 router.post('/create-account', requireDriverAuth, async (req, res) => {
   try {
     const driverId = req.driver.id;
-    const frontendUrl = req.headers.origin || process.env.FRONTEND_URL || 'http://localhost:3000';
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
 
     const refreshUrl = `${frontendUrl}/driver/profile?stripe=refresh`;
     const returnUrl = `${frontendUrl}/driver/profile?stripe=success`;
@@ -67,7 +67,7 @@ router.get('/account-status', requireDriverAuth, async (req, res) => {
 router.post('/refresh-onboarding', requireDriverAuth, async (req, res) => {
   try {
     const driverId = req.driver.id;
-    const frontendUrl = req.headers.origin || process.env.FRONTEND_URL || 'http://localhost:3000';
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
 
     const refreshUrl = `${frontendUrl}/driver/profile?stripe=refresh`;
     const returnUrl = `${frontendUrl}/driver/profile?stripe=success`;

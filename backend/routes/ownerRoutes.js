@@ -72,7 +72,7 @@ router.post("/register", ...uploadRestaurantLogo, async (req, res) => {
     const hashedPassword = await bcryptjs.hash(password, 10);
     const hashedSecretWord = await bcryptjs.hash(secret_word, 10);
 
-    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const verificationCode = crypto.randomInt(100000, 1000000).toString();
     const codeExpiry = new Date(Date.now() + 10 * 60 * 1000);
 
     // Create owner (handle case where columns might not exist)
@@ -209,7 +209,7 @@ router.post("/resend-verification", async (req, res) => {
     if (owner.email_verified) {
       return res.status(400).json({ error: "Email is already verified" });
     }
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const code = crypto.randomInt(100000, 1000000).toString();
     const expiry = new Date(Date.now() + 10 * 60 * 1000);
     await pool.query(
       "UPDATE restaurant_owners SET verification_code = $1, verification_code_expires_at = $2 WHERE id = $3",
@@ -1708,7 +1708,7 @@ router.put("/profile/email", requireOwnerAuth, async (req, res) => {
     }
 
     // Initiate email change: send code to new email, do not update yet
-    const changeCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const changeCode = crypto.randomInt(100000, 1000000).toString();
     const codeExpiry = new Date(Date.now() + 10 * 60 * 1000);
 
     await pool.query(

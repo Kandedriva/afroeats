@@ -12,8 +12,7 @@ router.post('/create-stripe-account', requireOwnerAuth, async (req, res) => {
   console.log('👤 Owner ID:', req.owner?.id || 'undefined');
   console.log('📧 Owner email:', req.owner?.email || 'undefined');
   console.log('🔒 Session ID:', req.session?.id || 'no session');
-  console.log('📍 Request headers origin:', req.headers.origin);
-  console.log('🌍 Environment:', process.env.NODE_ENV);
+console.log('🌍 Environment:', process.env.NODE_ENV);
   console.log('🔑 Stripe configured:', !!stripe);
   console.log('💾 Database pool exists:', !!pool);
   
@@ -122,9 +121,7 @@ router.post('/create-stripe-account', requireOwnerAuth, async (req, res) => {
       console.log('♻️ Using existing Stripe account:', owner.stripe_account_id);
     }
 
-    // Get the frontend URL dynamically
-    const frontendUrl = req.headers.origin || req.headers.referer?.replace(/\/$/, '') || 'http://localhost:3000';
-    console.log('🌐 Frontend URL detected:', frontendUrl);
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
 
     // Create account link for onboarding
     console.log('🔗 Creating Stripe account link...');

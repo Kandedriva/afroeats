@@ -93,7 +93,7 @@ router.post('/register', uploadRestaurantLogo, async (req, res) => {
 
     const logoUrl = handleR2UploadResult(req).imageUrl || null;
 
-    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const verificationCode = crypto.randomInt(100000, 1000000).toString();
     const codeExpiry = new Date(Date.now() + 10 * 60 * 1000);
 
     await client.query('BEGIN');
@@ -216,7 +216,7 @@ router.post('/resend-verification', async (req, res) => {
     if (ownerRes.rows.length === 0) return res.status(404).json({ error: 'Account not found' });
     const owner = ownerRes.rows[0];
     if (owner.email_verified) return res.status(400).json({ error: 'Email is already verified' });
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const code = crypto.randomInt(100000, 1000000).toString();
     const expiry = new Date(Date.now() + 10 * 60 * 1000);
     await pool.query(
       'UPDATE grocery_store_owners SET verification_code = $1, verification_code_expires_at = $2 WHERE id = $3',
@@ -396,7 +396,7 @@ router.patch('/me', requireGroceryOwnerAuth, async (req, res) => {
     }
 
     // Initiate email change: send code to new email, do not update yet
-    const changeCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const changeCode = crypto.randomInt(100000, 1000000).toString();
     const codeExpiry = new Date(Date.now() + 10 * 60 * 1000);
 
     await pool.query(
