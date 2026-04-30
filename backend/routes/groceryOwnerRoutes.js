@@ -4,6 +4,7 @@ import Stripe from 'stripe';
 import pool from '../db.js';
 import { uploadRestaurantLogo, uploadProductImage, handleR2UploadResult } from '../middleware/r2Upload.js';
 import { sendGroceryOwnerWelcomeEmail } from '../services/emailService.js';
+import { validatePassword } from '../middleware/security.js';
 
 const router = express.Router();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
@@ -46,6 +47,11 @@ router.post('/register', uploadRestaurantLogo, async (req, res) => {
     // Validate required fields
     if (!name || !email || !password || !secret_word || !store_name || !location || !phone_number) {
       return res.status(400).json({ error: 'All fields are required' });
+    }
+
+    const pwCheck = validatePassword(password);
+    if (!pwCheck.valid) {
+      return res.status(400).json({ error: pwCheck.error });
     }
 
     // Check if email already exists

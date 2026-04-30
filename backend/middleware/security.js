@@ -142,6 +142,24 @@ export const helmetConfig = helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" }
 });
 
+// Shared password rule: min 8 chars, uppercase, lowercase, digit.
+// Used by all registration and password-reset flows.
+export function validatePassword(password) {
+  if (!password || password.length < 8) {
+    return { valid: false, error: 'Password must be at least 8 characters' };
+  }
+  if (!/[A-Z]/.test(password)) {
+    return { valid: false, error: 'Password must contain at least one uppercase letter' };
+  }
+  if (!/[a-z]/.test(password)) {
+    return { valid: false, error: 'Password must contain at least one lowercase letter' };
+  }
+  if (!/\d/.test(password)) {
+    return { valid: false, error: 'Password must contain at least one number' };
+  }
+  return { valid: true, error: null };
+}
+
 // Input validation helpers
 export const validators = {
   // Email validation
@@ -149,17 +167,18 @@ export const validators = {
     .isEmail()
     .normalizeEmail()
     .withMessage('Please provide a valid email address'),
-  
-  // Password validation
+
+  // Password validation (express-validator chain — uses same rule as validatePassword)
   password: body('password')
-    .isLength({ min: 12 })
-    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])/)
-    .withMessage('Password must be at least 12 characters with uppercase, lowercase, number, and special character (@$!%*?&)'),
-  
-  // Admin password validation (less strict)
+    .isLength({ min: 8 })
+    .matches(/^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)/)
+    .withMessage('Password must be at least 8 characters with uppercase, lowercase, and a number'),
+
+  // Admin password validation — same standard rule
   adminPassword: body('password')
     .isLength({ min: 8 })
-    .withMessage('Password must be at least 8 characters'),
+    .matches(/^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)/)
+    .withMessage('Password must be at least 8 characters with uppercase, lowercase, and a number'),
   
   // Name validation
   name: body('name')

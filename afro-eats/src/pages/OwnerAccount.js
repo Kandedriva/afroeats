@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useOwnerAuth } from '../context/OwnerAuthContext';
 import { API_BASE_URL } from '../config/api';
 import { useNavigate } from 'react-router-dom';
+import { validatePassword } from '../utils/authValidation';
 
 const OwnerAccount = () => {
   const { owner, logout } = useOwnerAuth();
@@ -164,8 +165,9 @@ const OwnerAccount = () => {
       return;
     }
 
-    if (newPassword.length < 12) {
-      setPasswordMessage('New password must be at least 12 characters long');
+    const pwCheck = validatePassword(newPassword);
+    if (!pwCheck.valid) {
+      setPasswordMessage(pwCheck.error);
       setPasswordLoading(false);
       return;
     }

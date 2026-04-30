@@ -9,6 +9,7 @@ import {
 } from "../middleware/accountLockout.js";
 import { requireAuth } from "../middleware/authMiddleware.js";
 import { sendUserWelcomeEmail, sendEmailVerificationCode } from "../services/emailService.js";
+import { validatePassword } from "../middleware/security.js";
 
 const router = express.Router();
 
@@ -32,6 +33,12 @@ router.post("/register", async (req, res) => {
     if (userExists.rows.length > 0) {
       await client.query('ROLLBACK');
       return res.status(400).json({ error: "User already exists" });
+    }
+
+    const pwCheck = validatePassword(password);
+    if (!pwCheck.valid) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: pwCheck.error });
     }
 
     const saltRounds = 10;
@@ -536,8 +543,9 @@ router.post("/reset-password", async (req, res) => {
       return res.status(400).json({ error: "Email, verification code, and new password are required" });
     }
 
-    if (new_password.length < 6) {
-      return res.status(400).json({ error: "New password must be at least 6 characters long" });
+    const pwCheck = validatePassword(new_password);
+    if (!pwCheck.valid) {
+      return res.status(400).json({ error: pwCheck.error });
     }
 
     // Find user by email
