@@ -348,28 +348,30 @@ app.get('/', (req, res) => {
   });
 });
 
-// Test session creation endpoint (for debugging)
-app.post('/api/test-session-create', (req, res) => {
-  req.session.testUserId = 'test-user-' + Date.now();
-  req.session.testTime = new Date().toISOString();
-  
-  req.session.save((err) => {
-    if (err) {
-      console.error('Test session save error:', err);
-      return res.status(500).json({ error: 'Session save failed', details: err.message });
-    }
-    
-    res.json({
-      message: 'Test session created successfully',
-      sessionId: req.sessionID,
-      testUserId: req.session.testUserId,
-      testTime: req.session.testTime,
-      cookies: req.headers.cookie,
-      userAgent: req.get('User-Agent'),
-      timestamp: new Date().toISOString()
+if (process.env.NODE_ENV !== 'production') {
+  // Test session creation endpoint (for debugging)
+  app.post('/api/test-session-create', (req, res) => {
+    req.session.testUserId = 'test-user-' + Date.now();
+    req.session.testTime = new Date().toISOString();
+
+    req.session.save((err) => {
+      if (err) {
+        console.error('Test session save error:', err);
+        return res.status(500).json({ error: 'Session save failed', details: err.message });
+      }
+
+      res.json({
+        message: 'Test session created successfully',
+        sessionId: req.sessionID,
+        testUserId: req.session.testUserId,
+        testTime: req.session.testTime,
+        cookies: req.headers.cookie,
+        userAgent: req.get('User-Agent'),
+        timestamp: new Date().toISOString()
+      });
     });
   });
-});
+}
 
 if (process.env.NODE_ENV !== 'production') {
   // Test webhook processing endpoint
@@ -553,45 +555,47 @@ app.get('/api/health', async (req, res) => {
 });
 
 
-// Session debug endpoint
-app.get('/api/session-debug', (req, res) => {
-  const sessionTimeout = process.env.SESSION_TIMEOUT ? parseInt(process.env.SESSION_TIMEOUT) : 365 * 24 * 60 * 60 * 1000;
-  const sessionTimeoutDays = Math.floor(sessionTimeout / (24 * 60 * 60 * 1000));
-  const userAgent = req.get('User-Agent') || '';
-  const isChrome = /Chrome/.test(userAgent);
-  
-  res.json({
-    message: '🔍 Session Debug Info',
-    sessionId: req.sessionID,
-    session: {
-      userId: req.session.userId,
-      userName: req.session.userName,
-      userEmail: req.session.userEmail,
-      loginTime: req.session.loginTime,
-      isMobile: req.session.isMobile,
-      cookie: req.session.cookie
-    },
-    cookies: req.headers.cookie,
-    userAgent: req.get('User-Agent'),
-    origin: req.get('Origin'),
-    referer: req.get('Referer'),
-    env: process.env.NODE_ENV,
-    browserInfo: {
-      isChrome,
-      cookiesEnabled: !!req.headers.cookie,
-      thirdPartyCookieSupport: isChrome ? 'potentially-blocked' : 'likely-supported'
-    },
-    sessionConfig: {
-      maxAge: sessionTimeout,
-      maxAgeDays: sessionTimeoutDays,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-      domain: undefined,
-      rolling: true
-    },
-    timestamp: new Date().toISOString()
+if (process.env.NODE_ENV !== 'production') {
+  // Session debug endpoint
+  app.get('/api/session-debug', (req, res) => {
+    const sessionTimeout = process.env.SESSION_TIMEOUT ? parseInt(process.env.SESSION_TIMEOUT) : 365 * 24 * 60 * 60 * 1000;
+    const sessionTimeoutDays = Math.floor(sessionTimeout / (24 * 60 * 60 * 1000));
+    const userAgent = req.get('User-Agent') || '';
+    const isChrome = /Chrome/.test(userAgent);
+
+    res.json({
+      message: '🔍 Session Debug Info',
+      sessionId: req.sessionID,
+      session: {
+        userId: req.session.userId,
+        userName: req.session.userName,
+        userEmail: req.session.userEmail,
+        loginTime: req.session.loginTime,
+        isMobile: req.session.isMobile,
+        cookie: req.session.cookie
+      },
+      cookies: req.headers.cookie,
+      userAgent: req.get('User-Agent'),
+      origin: req.get('Origin'),
+      referer: req.get('Referer'),
+      env: process.env.NODE_ENV,
+      browserInfo: {
+        isChrome,
+        cookiesEnabled: !!req.headers.cookie,
+        thirdPartyCookieSupport: isChrome ? 'potentially-blocked' : 'likely-supported'
+      },
+      sessionConfig: {
+        maxAge: sessionTimeout,
+        maxAgeDays: sessionTimeoutDays,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+        domain: undefined,
+        rolling: true
+      },
+      timestamp: new Date().toISOString()
+    });
   });
-});
+}
 
 // Session recovery: accepts a HMAC-signed recovery token, creates a fresh session
 app.post('/api/session-recover', async (req, res) => {
