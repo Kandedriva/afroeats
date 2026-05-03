@@ -162,7 +162,6 @@ function GroceryOwnerStoreSettings() {
         toast.error(errorData.error || 'Failed to update email');
       }
     } catch (error) {
-      console.error('Email update error:', error);
       toast.error('Failed to update email. Please try again.');
     } finally {
       setEmailSaving(false);
