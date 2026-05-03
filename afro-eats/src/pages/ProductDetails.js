@@ -5,9 +5,10 @@ import { API_BASE_URL } from "../config/api";
 import { toast } from "react-toastify";
 import { useGroceryCart } from "../context/GroceryCartContext";
 import PropTypes from 'prop-types';
+import { slugify } from "../utils/slugify";
 
 const ProductDetails = () => {
-  const { productId } = useParams();
+  const { productSlug } = useParams();
   const navigate = useNavigate();
   const { addToGroceryCart } = useGroceryCart();
   const [product, setProduct] = useState(null);
@@ -18,7 +19,7 @@ const ProductDetails = () => {
   const loadProduct = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${API_BASE_URL}/api/products/${productId}`);
+      const res = await fetch(`${API_BASE_URL}/api/products/${productSlug}`);
 
       if (!res.ok) {
         if (res.status === 404) {
@@ -37,7 +38,7 @@ const ProductDetails = () => {
     } finally {
       setLoading(false);
     }
-  }, [productId, navigate]);
+  }, [productSlug, navigate]);
 
   const loadRelatedProducts = useCallback(async () => {
     try {
@@ -402,7 +403,7 @@ const RelatedProductCard = ({ product }) => {
 
   return (
     <Link
-      to={`/marketplace/product/${product.id}`}
+      to={`/marketplace/product/${slugify(product.name)}`}
       className="bg-white rounded-lg shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden group"
     >
       <div className="relative h-48 bg-gray-100 overflow-hidden">

@@ -4,6 +4,7 @@ import PropTypes from "prop-types";
 import { useGroceryCart } from "../context/GroceryCartContext";
 import { toast } from "react-toastify";
 import ConfirmDialog from "../Components/ConfirmDialog";
+import { slugify } from "../utils/slugify";
 
 const GroceryCart = () => {
   const navigate = useNavigate();
@@ -258,7 +259,7 @@ const CartItem = ({ item, onQuantityChange, onRemove }) => {
           <div className="flex justify-between items-start mb-2">
             <div>
               <Link
-                to={`/marketplace/product/${item.id}`}
+                to={`/marketplace/product/${slugify(item.name)}`}
                 className="text-xl font-semibold text-gray-800 hover:text-green-600 transition-colors"
               >
                 {item.name}

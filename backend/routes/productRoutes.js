@@ -69,13 +69,12 @@ router.get('/categories', async (req, res) => {
  */
 router.get('/:id', async (req, res) => {
   try {
-    const productId = parseInt(req.params.id);
+    const param = req.params.id;
+    const numericId = parseInt(param);
+    const product = isNaN(numericId)
+      ? await ProductService.getProductBySlug(param)
+      : await ProductService.getProductById(numericId);
 
-    if (isNaN(productId)) {
-      return res.status(400).json({ error: 'Invalid product ID' });
-    }
-
-    const product = await ProductService.getProductById(productId);
     res.json(product);
   } catch (error) {
     console.error('Get product error:', error);

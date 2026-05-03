@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import { toast } from "react-toastify";
+import { slugify } from "../utils/slugify";
 
 const HomePage = () => {
   const [featuredProducts, setFeaturedProducts] = useState([]);
@@ -348,7 +349,7 @@ const ProductCard = ({ product }) => {
 
   return (
     <Link
-      to={`/marketplace/product/${product.id}`}
+      to={`/marketplace/product/${slugify(product.name)}`}
       className="bg-white rounded-lg shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden group"
     >
       <div className="relative h-56 bg-gray-100 overflow-hidden">
