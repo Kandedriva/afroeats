@@ -5,8 +5,8 @@ import { logger } from '../services/logger.js';
 
 const router = express.Router();
 
-// Add CORS middleware specifically for Safari/mobile browsers
-router.use((req, res, next) => {
+// Add CORS middleware specifically for Safari/mobile browsers (image routes only)
+router.use(['/r2-images', '/local-images'], (req, res, next) => {
   res.set({
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
