@@ -119,6 +119,32 @@ class ProductService {
     }
   }
 
+  static async getProductBySlug(slug) {
+    try {
+      const result = await pool.query(
+        `SELECT
+          id, name, description, price, category, subcategory, unit,
+          stock_quantity, low_stock_threshold, is_available,
+          image_url, additional_images, origin, organic, gluten_free, vegan,
+          tags, search_terms, created_at, updated_at
+        FROM products
+        WHERE lower(regexp_replace(name, '[^a-zA-Z0-9]+', '-', 'g')) = $1
+          AND is_deleted = false
+        LIMIT 1`,
+        [slug.toLowerCase()]
+      );
+
+      if (result.rows.length === 0) {
+        throw new Error('Product not found');
+      }
+
+      return result.rows[0];
+    } catch (error) {
+      console.error('Get product by slug error:', error);
+      throw error;
+    }
+  }
+
   /**
    * Create new product (Admin only)
    * @param {Object} productData - Product details

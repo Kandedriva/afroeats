@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import PropTypes from 'prop-types';
 import { toast } from 'react-toastify';
 import { useGroceryCart } from '../context/GroceryCartContext';
+import { slugify } from '../utils/slugify';
 
 const ProductCard = ({ product }) => {
   const { addToGroceryCart } = useGroceryCart();
@@ -71,7 +72,7 @@ const ProductCard = ({ product }) => {
 
   return (
     <div className="bg-white rounded-lg shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden group relative">
-      <Link to={`/marketplace/product/${product.id}`} className="block">
+      <Link to={`/marketplace/product/${slugify(product.name)}`} className="block">
         <div className="relative h-56 bg-gray-100 overflow-hidden">
           {product.image_url ? (
             <img
@@ -144,7 +145,7 @@ const ProductCard = ({ product }) => {
           </button>
         )}
         <Link
-          to={`/marketplace/product/${product.id}`}
+          to={`/marketplace/product/${slugify(product.name)}`}
           className="px-4 py-2 border-2 border-green-600 text-green-600 rounded-lg hover:bg-green-50 transition-colors font-medium text-sm"
         >
           View
