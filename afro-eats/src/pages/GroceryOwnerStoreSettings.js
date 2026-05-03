@@ -11,10 +11,26 @@ function GroceryOwnerStoreSettings() {
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
-    address: '',
+    street: '',
+    city: '',
+    state: '',
+    zip: '',
     phone_number: '',
     active: true,
   });
+
+  // Parse a stored "Street, City, State ZIP" string back into fields
+  const parseAddress = (full) => {
+    if (!full) { return { street: '', city: '', state: '', zip: '' }; }
+    const parts = full.split(',').map((p) => p.trim());
+    const street = parts[0] || '';
+    const city = parts[1] || '';
+    const stateZipRaw = parts.slice(2).join(',').trim();
+    const stateZipParts = stateZipRaw.split(/\s+/);
+    const state = stateZipParts[0] || '';
+    const zip = stateZipParts[1] || '';
+    return { street, city, state, zip };
+  };
   const [logoFile, setLogoFile] = useState(null);
   const [logoPreview, setLogoPreview] = useState(null);
 
@@ -92,9 +108,13 @@ function GroceryOwnerStoreSettings() {
       if (response.ok) {
         const storeData = await response.json();
         setStore(storeData);
+        const { street, city, state, zip } = parseAddress(storeData.address);
         setFormData({
           name: storeData.name || '',
-          address: storeData.address || '',
+          street,
+          city,
+          state,
+          zip,
           phone_number: storeData.phone_number || '',
           active: storeData.active !== false,
         });
@@ -231,17 +251,23 @@ function GroceryOwnerStoreSettings() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!formData.name || !formData.address || !formData.phone_number) {
+    if (!formData.name || !formData.street || !formData.city || !formData.state || !formData.phone_number) {
       toast.error('Please fill in all required fields');
       return;
     }
+
+    const fullAddress = [
+      formData.street,
+      formData.city,
+      `${formData.state}${formData.zip ? ` ${formData.zip}` : ''}`,
+    ].join(', ');
 
     setSaving(true);
 
     try {
       const formDataToSend = new FormData();
       formDataToSend.append('name', formData.name);
-      formDataToSend.append('address', formData.address);
+      formDataToSend.append('address', fullAddress);
       formDataToSend.append('phone_number', formData.phone_number);
       formDataToSend.append('active', formData.active);
 
@@ -441,19 +467,67 @@ function GroceryOwnerStoreSettings() {
 
             {/* Address */}
             <div>
-              <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="street" className="block text-sm font-medium text-gray-700 mb-1">
                 Store Address <span className="text-red-500">*</span>
               </label>
-              <textarea
-                id="address"
-                name="address"
-                value={formData.address}
-                onChange={handleChange}
-                rows="3"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                placeholder="Enter your store address"
-                required
-              />
+              <div className="space-y-3">
+                <input
+                  type="text"
+                  id="street"
+                  name="street"
+                  value={formData.street}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="Street address"
+                  required
+                />
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <div className="col-span-2 md:col-span-1">
+                    <label htmlFor="city" className="block text-xs font-medium text-gray-500 mb-1">
+                      City <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      id="city"
+                      name="city"
+                      value={formData.city}
+                      onChange={handleChange}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      placeholder="City"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="state" className="block text-xs font-medium text-gray-500 mb-1">
+                      State <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      id="state"
+                      name="state"
+                      value={formData.state}
+                      onChange={handleChange}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      placeholder="NY"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="zip" className="block text-xs font-medium text-gray-500 mb-1">
+                      ZIP Code
+                    </label>
+                    <input
+                      type="text"
+                      id="zip"
+                      name="zip"
+                      value={formData.zip}
+                      onChange={handleChange}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      placeholder="10001"
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* Phone Number */}

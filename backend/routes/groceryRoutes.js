@@ -23,6 +23,17 @@ const requireGroceryOwnerAuth = (req, res, next) => {
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
 
+// Ensure delivery_method column exists (idempotent migration)
+(async () => {
+  try {
+    await pool.query(
+      `ALTER TABLE grocery_orders ADD COLUMN IF NOT EXISTS delivery_method VARCHAR(20) DEFAULT 'delivery'`
+    );
+  } catch (_err) {
+    // Column already exists — safe to ignore
+  }
+})();
+
 /**
  * GET /api/grocery/stores
  * Public — returns all active grocery stores with a product preview (up to 4 products each).
@@ -59,6 +70,45 @@ router.get('/stores', async (req, res) => {
   } catch (err) {
     console.error('Get grocery stores error:', err);
     res.status(500).json({ error: 'Failed to load grocery stores' });
+  }
+});
+
+/**
+ * GET /api/grocery/store-address?product_id=X
+ * Returns the store name, address, and phone for the store that sells the given product.
+ * Used by the checkout page to display pickup location.
+ */
+router.get('/store-address', async (req, res) => {
+  try {
+    const { product_id } = req.query;
+
+    let storeResult = null;
+
+    if (product_id) {
+      storeResult = await pool.query(
+        `SELECT gs.id, gs.name, gs.address, gs.phone_number
+         FROM products p
+         JOIN grocery_stores gs ON gs.id = p.store_id
+         WHERE p.id = $1
+         LIMIT 1`,
+        [product_id]
+      );
+    }
+
+    if (!storeResult || storeResult.rows.length === 0) {
+      storeResult = await pool.query(
+        `SELECT id, name, address, phone_number FROM grocery_stores WHERE active = true ORDER BY id LIMIT 1`
+      );
+    }
+
+    if (storeResult.rows.length === 0) {
+      return res.status(404).json({ error: 'No store found' });
+    }
+
+    res.json(storeResult.rows[0]);
+  } catch (err) {
+    console.error('Store address lookup error:', err);
+    res.status(500).json({ error: 'Failed to get store address' });
   }
 });
 
@@ -146,9 +196,11 @@ router.post('/create-order', async (req, res) => {
       deliveryFee,
       total,
       deliveryInfo,
+      deliveryMethod = 'delivery', // 'delivery' | 'pickup'
       guestEmail // For guest checkout
     } = req.body;
 
+    const isPickup = deliveryMethod === 'pickup';
     const userId = req.session?.userId || null;
     const isGuest = !userId;
 
@@ -157,17 +209,34 @@ router.post('/create-order', async (req, res) => {
       return res.status(400).json({ error: 'Cart is empty' });
     }
 
-    if (!deliveryAddress || !deliveryAddress.address || !deliveryAddress.city) {
+    if (!isPickup && (!deliveryAddress || !deliveryAddress.address || !deliveryAddress.city)) {
       return res.status(400).json({ error: 'Complete delivery address is required' });
     }
 
-    if (!deliveryAddress.email) {
+    if (!deliveryAddress?.email) {
       return res.status(400).json({ error: 'Email is required' });
     }
 
     // For guest orders, require guest email
     if (isGuest && !guestEmail) {
       return res.status(400).json({ error: 'Email is required for guest checkout' });
+    }
+
+    // For pickup, resolve store address to use as the "delivery" address
+    let pickupStoreAddress = null;
+    if (isPickup) {
+      const productIds = items.map(i => i.id);
+      const storeRes = await pool.query(
+        `SELECT gs.address, gs.name
+         FROM products p
+         JOIN grocery_stores gs ON gs.id = p.store_id
+         WHERE p.id = ANY($1) AND p.store_id IS NOT NULL
+         LIMIT 1`,
+        [productIds]
+      );
+      if (storeRes.rows.length > 0) {
+        pickupStoreAddress = storeRes.rows[0];
+      }
     }
 
     await client.query('BEGIN');
@@ -178,24 +247,25 @@ router.post('/create-order', async (req, res) => {
         user_id, guest_email, subtotal, platform_fee, delivery_fee, total,
         delivery_address, delivery_city, delivery_state, delivery_zip,
         delivery_phone, delivery_name, notes,
-        distance_miles, status, created_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'pending', NOW())
+        distance_miles, delivery_method, status, created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 'pending', NOW())
       RETURNING id`,
       [
         userId,
         isGuest ? guestEmail : null,
         subtotal,
         platformFee,
-        deliveryFee,
+        isPickup ? 0 : deliveryFee,
         total,
-        deliveryAddress.address,
-        deliveryAddress.city,
-        deliveryAddress.state || '',
-        deliveryAddress.zipCode || '',
+        isPickup ? (pickupStoreAddress?.address || 'Store pickup') : deliveryAddress.address,
+        isPickup ? 'Pickup' : deliveryAddress.city,
+        isPickup ? '' : (deliveryAddress.state || ''),
+        isPickup ? '' : (deliveryAddress.zipCode || ''),
         deliveryAddress.phone,
         deliveryAddress.name,
         notes || null,
-        deliveryInfo?.distance_miles || 0
+        isPickup ? 0 : (deliveryInfo?.distance_miles || 0),
+        deliveryMethod,
       ]
     );
 
@@ -298,20 +368,22 @@ router.post('/create-order', async (req, res) => {
       quantity: 1,
     });
 
-    // Add delivery fee as line item
-    lineItems.push({
-      price_data: {
-        currency: 'usd',
-        product_data: {
-          name: 'Delivery Fee',
-          description: deliveryInfo?.distance_miles
-            ? `${deliveryInfo.distance_miles} miles`
-            : 'Standard delivery',
+    // Add delivery fee as line item (skip for pickup — Stripe rejects $0 amounts)
+    if (!isPickup && deliveryFee > 0) {
+      lineItems.push({
+        price_data: {
+          currency: 'usd',
+          product_data: {
+            name: 'Delivery Fee',
+            description: deliveryInfo?.distance_miles
+              ? `${deliveryInfo.distance_miles} miles`
+              : 'Standard delivery',
+          },
+          unit_amount: Math.round(deliveryFee * 100),
         },
-        unit_amount: Math.round(deliveryFee * 100),
-      },
-      quantity: 1,
-    });
+        quantity: 1,
+      });
+    }
 
     const customerEmail = isGuest ? guestEmail : (req.session?.userEmail || deliveryAddress.email);
     const successUrl = isGuest
