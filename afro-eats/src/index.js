@@ -28,7 +28,7 @@ function ErrorFallback() {
   return (
     <div style={{ textAlign: "center", padding: "60px 20px" }}>
       <h2>Something went wrong</h2>
-      <p>We've been notified and are working on a fix.</p>
+      <p>We&apos;ve been notified and are working on a fix.</p>
       <button onClick={() => window.location.reload()} style={{ marginTop: 16, padding: "8px 20px", cursor: "pointer" }}>
         Reload page
       </button>
