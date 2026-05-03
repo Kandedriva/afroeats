@@ -814,6 +814,8 @@ router.get('/orders', requireGroceryOwnerAuth, async (req, res) => {
         go.delivery_zip,
         go.delivery_name,
         go.delivery_phone,
+        go.delivery_method,
+        go.notes,
         go.created_at,
         go.user_id,
         u.name AS customer_name,

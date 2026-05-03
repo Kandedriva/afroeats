@@ -19,6 +19,8 @@ const GroceryCheckout = () => {
   const [calculatingFee, setCalculatingFee] = useState(false);
   const [deliveryFee, setDeliveryFee] = useState(null);
   const [deliveryInfo, setDeliveryInfo] = useState(null);
+  const [deliveryMethod, setDeliveryMethod] = useState("delivery");
+  const [storeInfo, setStoreInfo] = useState(null);
 
   const [formData, setFormData] = useState({
     name: user?.name || "",
@@ -33,21 +35,19 @@ const GroceryCheckout = () => {
 
   // Redirect if cart is empty
   useEffect(() => {
-    // Check if user is returning from a cancelled Stripe checkout
     const urlParams = new URLSearchParams(window.location.search);
-    const cancelled = urlParams.get('cancelled');
+    const cancelled = urlParams.get("cancelled");
 
     if (groceryCart.length === 0 && !cancelled) {
       toast.error("Your grocery cart is empty");
       navigate("/marketplace");
     } else if (cancelled) {
       toast.info("Payment was cancelled. Your cart is still available.");
-      // Remove the cancelled param from URL
-      window.history.replaceState({}, '', '/grocery-checkout');
+      window.history.replaceState({}, "", "/grocery-checkout");
     }
   }, [groceryCart, navigate]);
 
-  // Pre-fill user data (runs when user object becomes available)
+  // Pre-fill user data
   useEffect(() => {
     if (user) {
       setFormData((prev) => ({
@@ -63,16 +63,38 @@ const GroceryCheckout = () => {
     }
   }, [user]);
 
+  // Fetch store info for pickup display
+  useEffect(() => {
+    if (groceryCart.length === 0) { return; }
+    const firstItem = groceryCart[0];
+    fetch(`${API_BASE_URL}/api/grocery/store-address?product_id=${firstItem.id}`, {
+      credentials: "include",
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data && data.address) { setStoreInfo(data); }
+      })
+      .catch(() => {});
+  }, [groceryCart]);
+
+  // When switching to pickup, clear delivery fee requirement
+  const handleDeliveryMethodChange = (method) => {
+    setDeliveryMethod(method);
+    if (method === "pickup") {
+      setDeliveryFee(0);
+      setDeliveryInfo(null);
+    } else {
+      setDeliveryFee(null);
+      setDeliveryInfo(null);
+    }
+  };
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleCalculateDeliveryFee = async () => {
-    // Validate address fields
     if (!formData.address || !formData.city || !formData.state) {
       toast.error("Please enter your complete delivery address");
       return;
@@ -80,22 +102,15 @@ const GroceryCheckout = () => {
 
     try {
       setCalculatingFee(true);
-
       const fullAddress = `${formData.address}, ${formData.city}, ${formData.state} ${formData.zipCode}`;
 
-      // Call backend to calculate delivery fee
-      // Note: This will use the first product's category to determine a "warehouse" location
-      // In production, you'd have actual warehouse/store locations
       const res = await fetch(`${API_BASE_URL}/api/grocery/calculate-delivery`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
           deliveryAddress: fullAddress,
-          items: groceryCart.map((item) => ({
-            id: item.id,
-            quantity: item.quantity,
-          })),
+          items: groceryCart.map((item) => ({ id: item.id, quantity: item.quantity })),
         }),
       });
 
@@ -107,37 +122,32 @@ const GroceryCheckout = () => {
       const data = await res.json();
       setDeliveryFee(data.delivery_fee);
       setDeliveryInfo(data);
-
       toast.success(`Delivery fee calculated: $${data.delivery_fee.toFixed(2)}`);
     } catch (err) {
       toast.error(err.message);
-      // Set fallback delivery fee
       setDeliveryFee(5.0);
-      setDeliveryInfo({
-        delivery_fee: 5.0,
-        distance_miles: 0,
-        estimated: true,
-      });
+      setDeliveryInfo({ delivery_fee: 5.0, distance_miles: 0, estimated: true });
     } finally {
       setCalculatingFee(false);
     }
   };
 
+  const isPickup = deliveryMethod === "pickup";
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Validate required fields
     if (!formData.name || !formData.email || !formData.phone) {
       toast.error("Please fill in all contact information");
       return;
     }
 
-    if (!formData.address || !formData.city || !formData.state) {
+    if (!isPickup && (!formData.address || !formData.city || !formData.state)) {
       toast.error("Please fill in all delivery address fields");
       return;
     }
 
-    if (deliveryFee === null) {
+    if (!isPickup && deliveryFee === null) {
       toast.error("Please calculate delivery fee first");
       return;
     }
@@ -147,9 +157,9 @@ const GroceryCheckout = () => {
 
       const subtotal = getGrocerySubtotal();
       const platformFee = getGroceryPlatformFee();
-      const total = subtotal + platformFee + deliveryFee;
+      const fee = isPickup ? 0 : deliveryFee;
+      const total = subtotal + platformFee + fee;
 
-      // Create grocery order (supports both guest and authenticated users)
       const res = await fetch(`${API_BASE_URL}/api/grocery/create-order`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -157,10 +167,10 @@ const GroceryCheckout = () => {
         body: JSON.stringify({
           items: groceryCart,
           deliveryAddress: {
-            address: formData.address,
-            city: formData.city,
-            state: formData.state,
-            zipCode: formData.zipCode,
+            address: isPickup ? (storeInfo?.address || "Store pickup") : formData.address,
+            city: isPickup ? "Pickup" : formData.city,
+            state: isPickup ? "" : formData.state,
+            zipCode: isPickup ? "" : formData.zipCode,
             name: formData.name,
             phone: formData.phone,
             email: formData.email,
@@ -168,10 +178,11 @@ const GroceryCheckout = () => {
           notes: formData.notes,
           subtotal,
           platformFee,
-          deliveryFee,
+          deliveryFee: fee,
           total,
-          deliveryInfo,
-          guestEmail: user ? null : formData.email, // For guest checkout
+          deliveryInfo: isPickup ? null : deliveryInfo,
+          deliveryMethod,
+          guestEmail: user ? null : formData.email,
         }),
       });
 
@@ -181,11 +192,6 @@ const GroceryCheckout = () => {
       }
 
       const { sessionUrl } = await res.json();
-
-      // DON'T clear cart here - only clear after successful payment on OrderSuccess page
-      // This allows users to return to checkout if they cancel payment
-
-      // Redirect to Stripe checkout
       window.location.href = sessionUrl;
     } catch (err) {
       toast.error(err.message);
@@ -196,7 +202,12 @@ const GroceryCheckout = () => {
 
   const subtotal = getGrocerySubtotal();
   const platformFee = getGroceryPlatformFee();
-  const total = subtotal + platformFee + (deliveryFee || 0);
+  const fee = isPickup ? 0 : (deliveryFee || 0);
+  const total = subtotal + platformFee + fee;
+
+  const canPlaceOrder = isPickup
+    ? formData.name && formData.email && formData.phone
+    : deliveryFee !== null && formData.name && formData.email && formData.phone;
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
@@ -211,8 +222,7 @@ const GroceryCheckout = () => {
               <div>
                 <p className="text-sm text-green-800 font-medium">Logged in as {user.name}</p>
                 <p className="text-sm text-green-700 mt-1">
-                  Your order will be linked to your account for easy tracking{" "}
-                  to track your orders.
+                  Your order will be linked to your account for easy tracking.
                 </p>
               </div>
             </div>
@@ -223,6 +233,40 @@ const GroceryCheckout = () => {
           {/* Checkout Form */}
           <div className="lg:col-span-2">
             <form onSubmit={handleSubmit} className="space-y-6">
+
+              {/* Delivery Method Toggle */}
+              <div className="bg-white rounded-lg shadow-md p-6">
+                <h2 className="text-xl font-bold text-gray-800 mb-4">How would you like to receive your order?</h2>
+                <div className="grid grid-cols-2 gap-4">
+                  <button
+                    type="button"
+                    onClick={() => handleDeliveryMethodChange("delivery")}
+                    className={`flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all ${
+                      deliveryMethod === "delivery"
+                        ? "border-green-600 bg-green-50 text-green-700"
+                        : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
+                    }`}
+                  >
+                    <span className="text-3xl">🚚</span>
+                    <span className="font-semibold text-lg">Delivery</span>
+                    <span className="text-sm text-center">Delivered to your door</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeliveryMethodChange("pickup")}
+                    className={`flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all ${
+                      deliveryMethod === "pickup"
+                        ? "border-green-600 bg-green-50 text-green-700"
+                        : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
+                    }`}
+                  >
+                    <span className="text-3xl">🏪</span>
+                    <span className="font-semibold text-lg">Pickup</span>
+                    <span className="text-sm text-center">Pick up at the store — free!</span>
+                  </button>
+                </div>
+              </div>
+
               {/* Contact Information */}
               <div className="bg-white rounded-lg shadow-md p-6">
                 <h2 className="text-xl font-bold text-gray-800 mb-4">Contact Information</h2>
@@ -272,111 +316,137 @@ const GroceryCheckout = () => {
                 </div>
               </div>
 
-              {/* Delivery Address */}
-              <div className="bg-white rounded-lg shadow-md p-6">
-                <h2 className="text-xl font-bold text-gray-800 mb-4">Delivery Address</h2>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Street Address <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      name="address"
-                      value={formData.address}
-                      onChange={handleInputChange}
-                      required
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                      placeholder="123 Main Street"
-                    />
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        City <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        name="city"
-                        value={formData.city}
-                        onChange={handleInputChange}
-                        required
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                        placeholder="New York"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        State <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        name="state"
-                        value={formData.state}
-                        onChange={handleInputChange}
-                        required
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                        placeholder="NY"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        ZIP Code
-                      </label>
-                      <input
-                        type="text"
-                        name="zipCode"
-                        value={formData.zipCode}
-                        onChange={handleInputChange}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                        placeholder="10001"
-                      />
-                    </div>
-                  </div>
-
-                  {!deliveryInfo && (
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
-                      <p className="text-sm text-blue-800 text-center font-medium">
-                        ℹ️ Calculate your delivery fee to proceed with checkout
-                      </p>
-                    </div>
-                  )}
-                  <button
-                    type="button"
-                    onClick={handleCalculateDeliveryFee}
-                    disabled={calculatingFee || !formData.address || !formData.city || !formData.state}
-                    className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md hover:shadow-lg"
-                  >
-                    {calculatingFee ? (
-                      <>
-                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                        Calculating...
-                      </>
-                    ) : (
-                      <>📍 Calculate Delivery Fee</>
-                    )}
-                  </button>
-
-                  {deliveryInfo && (
+              {/* Pickup Location (shown when pickup is selected) */}
+              {isPickup && (
+                <div className="bg-white rounded-lg shadow-md p-6">
+                  <h2 className="text-xl font-bold text-gray-800 mb-4">Pickup Location</h2>
+                  {storeInfo ? (
                     <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-green-600 font-semibold">✓ Delivery Fee Calculated</span>
-                      </div>
-                      <div className="text-sm text-gray-700 space-y-1">
-                        {deliveryInfo.distance_miles > 0 && (
-                          <p>Distance: {deliveryInfo.distance_miles} miles</p>
-                        )}
-                        <p className="font-semibold text-lg text-green-700">
-                          Delivery Fee: ${deliveryFee.toFixed(2)}
-                        </p>
-                        {deliveryInfo.estimated && (
-                          <p className="text-gray-600 text-xs">* Estimated delivery fee</p>
-                        )}
+                      <div className="flex items-start gap-3">
+                        <span className="text-2xl">📍</span>
+                        <div>
+                          <p className="font-semibold text-gray-900 text-lg">{storeInfo.name}</p>
+                          <p className="text-gray-700 mt-1">{storeInfo.address}</p>
+                          {storeInfo.phone_number && (
+                            <p className="text-gray-600 mt-1">📞 {storeInfo.phone_number}</p>
+                          )}
+                          <p className="text-sm text-green-700 mt-3 font-medium">
+                            ✅ No delivery fee — pick up your order at this location!
+                          </p>
+                        </div>
                       </div>
                     </div>
+                  ) : (
+                    <div className="text-gray-500 text-sm">Loading store information...</div>
                   )}
                 </div>
-              </div>
+              )}
+
+              {/* Delivery Address (shown when delivery is selected) */}
+              {!isPickup && (
+                <div className="bg-white rounded-lg shadow-md p-6">
+                  <h2 className="text-xl font-bold text-gray-800 mb-4">Delivery Address</h2>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Street Address <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        name="address"
+                        value={formData.address}
+                        onChange={handleInputChange}
+                        required
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        placeholder="123 Main Street"
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          City <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          name="city"
+                          value={formData.city}
+                          onChange={handleInputChange}
+                          required
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                          placeholder="New York"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          State <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          name="state"
+                          value={formData.state}
+                          onChange={handleInputChange}
+                          required
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                          placeholder="NY"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">ZIP Code</label>
+                        <input
+                          type="text"
+                          name="zipCode"
+                          value={formData.zipCode}
+                          onChange={handleInputChange}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                          placeholder="10001"
+                        />
+                      </div>
+                    </div>
+
+                    {!deliveryInfo && (
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
+                        <p className="text-sm text-blue-800 text-center font-medium">
+                          ℹ️ Calculate your delivery fee to proceed with checkout
+                        </p>
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleCalculateDeliveryFee}
+                      disabled={calculatingFee || !formData.address || !formData.city || !formData.state}
+                      className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md hover:shadow-lg"
+                    >
+                      {calculatingFee ? (
+                        <>
+                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                          Calculating...
+                        </>
+                      ) : (
+                        <>📍 Calculate Delivery Fee</>
+                      )}
+                    </button>
+
+                    {deliveryInfo && (
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-green-600 font-semibold">✓ Delivery Fee Calculated</span>
+                        </div>
+                        <div className="text-sm text-gray-700 space-y-1">
+                          {deliveryInfo.distance_miles > 0 && (
+                            <p>Distance: {deliveryInfo.distance_miles} miles</p>
+                          )}
+                          <p className="font-semibold text-lg text-green-700">
+                            Delivery Fee: ${deliveryFee.toFixed(2)}
+                          </p>
+                          {deliveryInfo.estimated && (
+                            <p className="text-gray-600 text-xs">* Estimated delivery fee</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Order Notes */}
               <div className="bg-white rounded-lg shadow-md p-6">
@@ -387,7 +457,11 @@ const GroceryCheckout = () => {
                   onChange={handleInputChange}
                   rows={4}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
-                  placeholder="Any special instructions for delivery..."
+                  placeholder={
+                    isPickup
+                      ? "Any special instructions for your pickup..."
+                      : "Any special instructions for delivery..."
+                  }
                 />
               </div>
             </form>
@@ -428,9 +502,13 @@ const GroceryCheckout = () => {
                 </div>
 
                 <div className="flex justify-between text-gray-700">
-                  <span>Delivery Fee:</span>
-                  <span className="font-semibold">
-                    {deliveryFee !== null ? `$${deliveryFee.toFixed(2)}` : "Calculate above"}
+                  <span>{isPickup ? "Delivery Fee:" : "Delivery Fee:"}</span>
+                  <span className={`font-semibold ${isPickup ? "text-green-600" : ""}`}>
+                    {isPickup
+                      ? "FREE (Pickup)"
+                      : deliveryFee !== null
+                      ? `$${deliveryFee.toFixed(2)}`
+                      : "Calculate above"}
                   </span>
                 </div>
 
@@ -441,11 +519,13 @@ const GroceryCheckout = () => {
               </div>
 
               {/* Place Order Button */}
-              {deliveryFee === null ? (
+              {!canPlaceOrder ? (
                 <div className="mt-6">
                   <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-3">
                     <p className="text-sm text-yellow-800 text-center">
-                      ⚠️ Please calculate delivery fee first to continue
+                      {!isPickup && deliveryFee === null
+                        ? "⚠️ Please calculate delivery fee first to continue"
+                        : "⚠️ Please fill in your contact information"}
                     </p>
                   </div>
                   <button
@@ -467,7 +547,7 @@ const GroceryCheckout = () => {
                       Processing...
                     </>
                   ) : (
-                    <>🔒 Place Order - ${total.toFixed(2)}</>
+                    <>{isPickup ? "🏪" : "🔒"} Place Order — ${total.toFixed(2)}</>
                   )}
                 </button>
               )}

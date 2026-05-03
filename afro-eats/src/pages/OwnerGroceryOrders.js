@@ -333,6 +333,11 @@ const OwnerGroceryOrders = () => {
                       <div>
                         <div className="text-sm font-medium text-gray-900">{order.customer_name}</div>
                         <div className="text-sm text-gray-500">📞 {order.delivery_phone || order.customer_phone || 'N/A'}</div>
+                        {order.delivery_method === 'pickup' ? (
+                          <div className="text-xs text-green-700 font-semibold mt-1">🏪 Pickup</div>
+                        ) : (
+                          <div className="text-xs text-blue-600 mt-1">🚚 Delivery</div>
+                        )}
                         {order.guest_email && (
                           <div className="text-xs text-purple-600 mt-1">Guest Order</div>
                         )}
@@ -445,12 +450,30 @@ const OwnerGroceryOrders = () => {
                   </div>
                 </div>
 
-                {/* Delivery Address */}
+                {/* Delivery / Pickup Info */}
                 <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-                  <h3 className="font-semibold mb-2">Delivery Address</h3>
-                  <p>{selectedOrder.delivery_name}</p>
-                  <p>{selectedOrder.delivery_address}</p>
-                  <p>{selectedOrder.delivery_city}, {selectedOrder.delivery_state} {selectedOrder.delivery_zip}</p>
+                  {selectedOrder.delivery_method === 'pickup' ? (
+                    <>
+                      <h3 className="font-semibold mb-2 flex items-center gap-2">
+                        <span>🏪</span> Pickup Order
+                      </h3>
+                      <p className="text-sm text-green-700 font-medium">
+                        Customer will pick up at your store location.
+                      </p>
+                      <p className="text-sm text-gray-600 mt-1">
+                        Contact: {selectedOrder.delivery_name} — {selectedOrder.customer_phone || selectedOrder.delivery_phone}
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <h3 className="font-semibold mb-2 flex items-center gap-2">
+                        <span>🚚</span> Delivery Address
+                      </h3>
+                      <p>{selectedOrder.delivery_name}</p>
+                      <p>{selectedOrder.delivery_address}</p>
+                      <p>{selectedOrder.delivery_city}, {selectedOrder.delivery_state} {selectedOrder.delivery_zip}</p>
+                    </>
+                  )}
                 </div>
 
                 {/* Order Items */}
@@ -481,8 +504,10 @@ const OwnerGroceryOrders = () => {
                       <span>${Number(selectedOrder.subtotal).toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span>Delivery Fee:</span>
-                      <span>${Number(selectedOrder.delivery_fee).toFixed(2)}</span>
+                      <span>{selectedOrder.delivery_method === 'pickup' ? 'Delivery Fee:' : 'Delivery Fee:'}</span>
+                      <span className={selectedOrder.delivery_method === 'pickup' ? 'text-green-600 font-medium' : ''}>
+                        {selectedOrder.delivery_method === 'pickup' ? 'FREE (Pickup)' : `$${Number(selectedOrder.delivery_fee).toFixed(2)}`}
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span>Platform Fee:</span>
