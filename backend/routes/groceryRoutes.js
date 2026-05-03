@@ -68,20 +68,46 @@ router.get('/stores', async (req, res) => {
  */
 router.post('/calculate-delivery', async (req, res) => {
   try {
-    const { deliveryAddress } = req.body;
+    const { deliveryAddress, items } = req.body;
 
     if (!deliveryAddress) {
       return res.status(400).json({ error: 'Delivery address is required' });
     }
 
-    // For grocery orders, we'll use a fixed warehouse location
-    // In production, this would be the actual warehouse/distribution center address
-    const warehouseAddress = '581 Timpson Pl, Bronx, NY 10455, United States';
+    // Resolve the store address from the cart items
+    let storeAddress = null;
+    if (items && items.length > 0) {
+      const firstProductId = items[0].id;
+      const storeResult = await pool.query(
+        `SELECT gs.address
+         FROM products p
+         JOIN grocery_stores gs ON gs.id = p.store_id
+         WHERE p.id = $1
+         LIMIT 1`,
+        [firstProductId]
+      );
+      if (storeResult.rows.length > 0) {
+        storeAddress = storeResult.rows[0].address;
+      }
+    }
+
+    // Fallback: use the first active store in the system
+    if (!storeAddress) {
+      const fallbackStore = await pool.query(
+        `SELECT address FROM grocery_stores WHERE active = true ORDER BY id LIMIT 1`
+      );
+      if (fallbackStore.rows.length > 0) {
+        storeAddress = fallbackStore.rows[0].address;
+      }
+    }
+
+    if (!storeAddress) {
+      const fallbackFee = getFallbackDeliveryFee();
+      return res.json(fallbackFee);
+    }
 
     try {
-      // Calculate distance and delivery fee using Google Maps
-      const feeData = await calculateDistanceAndFee(warehouseAddress, deliveryAddress);
-
+      const feeData = await calculateDistanceAndFee(storeAddress, deliveryAddress);
       res.json({
         delivery_fee: feeData.total_delivery_fee,
         distance_miles: feeData.distance_miles,
@@ -89,12 +115,10 @@ router.post('/calculate-delivery', async (req, res) => {
         duration_text: feeData.duration_text,
         driver_payout: feeData.driver_payout,
         platform_commission: feeData.platform_commission,
-        estimated: false
+        estimated: false,
+        store_address: storeAddress,
       });
     } catch (error) {
-      console.error('Google Maps calculation failed, using fallback:', error);
-
-      // Use fallback delivery fee if Google Maps fails
       const fallbackFee = getFallbackDeliveryFee();
       res.json(fallbackFee);
     }
