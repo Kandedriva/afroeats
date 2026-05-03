@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/node";
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -52,6 +53,22 @@ import { errorMonitoring, errorMonitoringMiddleware } from "./services/errorMoni
 
 dotenv.config();
 
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV || 'development',
+    tracesSampleRate: 0.1,
+    beforeSend(event) {
+      // Drop 4xx errors — user mistakes, not application bugs
+      const status = event.tags?.['http.status_code'] ?? event.extra?.statusCode;
+      if (status >= 400 && status < 500) {
+        return null;
+      }
+      return event;
+    },
+  });
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -69,6 +86,9 @@ const initializeSessionStore = async () => {
     console.log('⚠️ Session store initialization failed, using memory store');
   }
 };
+
+// Sentry request handler — must be first middleware
+app.use(Sentry.Handlers.requestHandler());
 
 // Security headers
 app.use(helmetConfig);
@@ -724,6 +744,9 @@ app.use('*', (req, res) => {
     }
   });
 });
+
+// Sentry error handler — must be before other error middleware
+app.use(Sentry.Handlers.errorHandler());
 
 // Error monitoring middleware (must be before global error handler)
 app.use(errorMonitoringMiddleware);
