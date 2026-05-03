@@ -13,6 +13,11 @@ import {
 import { validatePassword } from '../middleware/security.js';
 import crypto from 'crypto';
 import { generateRecoveryToken } from '../utils/recoveryToken.js';
+import {
+  checkAccountLockout,
+  handleFailedLogin,
+  handleSuccessfulLogin,
+} from '../middleware/accountLockout.js';
 
 function grocerySafeCompare(a, b) {
   const bufA = Buffer.from(String(a));
@@ -235,7 +240,7 @@ router.post('/resend-verification', async (req, res) => {
 // LOGIN
 // ===========================
 
-router.post('/login', async (req, res) => {
+router.post('/login', checkAccountLockout, async (req, res) => {
   try {
     const { email, password } = req.body;
 
@@ -250,6 +255,7 @@ router.post('/login', async (req, res) => {
     );
 
     if (result.rows.length === 0) {
+      await handleFailedLogin(req, res, () => {});
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
@@ -273,6 +279,7 @@ router.post('/login', async (req, res) => {
     const passwordMatch = await bcrypt.compare(password, groceryOwner.password);
 
     if (!passwordMatch) {
+      await handleFailedLogin(req, res, () => {});
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
@@ -288,12 +295,13 @@ router.post('/login', async (req, res) => {
       req.session.groceryOwnerEmail = groceryOwner.email;
       req.session.loginTime = new Date().toISOString();
 
-      req.session.save((saveErr) => {
+      req.session.save(async (saveErr) => {
         if (saveErr) {
           console.error('Session save error:', saveErr);
           return res.status(500).json({ error: 'Login failed' });
         }
 
+        await handleSuccessfulLogin(req, res, () => {});
         res.json({
           message: 'Login successful',
           groceryOwner: {
