@@ -140,8 +140,8 @@ const ProductCard = ({ product }) => {
             onClick={handleAddToCart}
             className="flex-1 py-1 sm:py-2 bg-green-600 text-white rounded sm:rounded-lg hover:bg-green-700 transition-colors font-medium text-[10px] sm:text-sm flex items-center justify-center gap-0.5 sm:gap-1"
           >
-            <span>🛒</span>
-            <span className="hidden sm:inline">Add to Cart</span>
+            <span className="sm:hidden">+ Add</span>
+            <span className="hidden sm:inline">🛒 Add to Cart</span>
           </button>
         )}
         <Link
