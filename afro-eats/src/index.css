@@ -56,29 +56,27 @@
     -webkit-text-size-adjust: 100%;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
   }
-  
+
   body {
-    overscroll-behavior: contain;
+    overscroll-behavior-y: contain;
+    overflow-x: hidden;
+    max-width: 100vw;
   }
-  
+
   /* Better button and input styling for mobile */
   button, input, select, textarea {
     font-size: inherit;
   }
-  
+
   /* Improve mobile form inputs */
   input, textarea, select {
     font-size: 16px; /* Prevents zoom on iOS */
   }
-  
-  /* Better touch targets */
-  button, a, [role="button"] {
-    min-height: 44px;
-    min-width: 44px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
+
+  /* Touch targets — buttons only; applying to <a> breaks grid/nav layout */
+  button, [role="button"] {
     touch-action: manipulation;
   }
 }
