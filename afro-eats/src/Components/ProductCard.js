@@ -71,9 +71,10 @@ const ProductCard = ({ product }) => {
     product.category === 'spices'     ? '🌶️' : '📦';
 
   return (
-    <div className="bg-white rounded-lg shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden group relative">
+    <div className="bg-white rounded-md sm:rounded-lg shadow-sm sm:shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden group relative">
       <Link to={`/marketplace/product/${slugify(product.name)}`} className="block">
-        <div className="relative h-56 bg-gray-100 overflow-hidden">
+        {/* Image — compact on mobile, full on sm+ */}
+        <div className="relative h-24 sm:h-44 lg:h-56 bg-gray-100 overflow-hidden">
           {product.image_url ? (
             <img
               src={product.image_url}
@@ -81,35 +82,35 @@ const ProductCard = ({ product }) => {
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
               onError={(e) => {
                 e.target.style.display = 'none';
-                e.target.parentElement.innerHTML = `<div class="flex items-center justify-center h-full text-6xl">${categoryEmoji}</div>`;
+                e.target.parentElement.innerHTML = `<div class="flex items-center justify-center h-full text-3xl sm:text-6xl">${categoryEmoji}</div>`;
               }}
             />
           ) : (
-            <div className="flex items-center justify-center h-full text-6xl">{categoryEmoji}</div>
+            <div className="flex items-center justify-center h-full text-3xl sm:text-6xl">{categoryEmoji}</div>
           )}
           {isLowStock && (
-            <div className="absolute top-3 right-3">
-              <span className="px-3 py-1 bg-orange-500 text-white text-xs font-semibold rounded-full shadow-lg">
-                {isOutOfStock ? 'Out of Stock' : 'Low Stock'}
+            <div className="absolute top-1 right-1 sm:top-3 sm:right-3">
+              <span className="px-1.5 py-0.5 sm:px-3 sm:py-1 bg-orange-500 text-white text-[10px] sm:text-xs font-semibold rounded-full shadow-lg">
+                {isOutOfStock ? 'Out' : 'Low'}
               </span>
             </div>
           )}
         </div>
 
-        <div className="p-4">
-          <h3 className="text-lg font-semibold text-gray-800 mb-2 line-clamp-2 group-hover:text-green-600 transition-colors">
+        <div className="p-1.5 sm:p-4">
+          <h3 className="text-[11px] sm:text-base lg:text-lg font-semibold text-gray-800 mb-0.5 sm:mb-2 line-clamp-1 sm:line-clamp-2 group-hover:text-green-600 transition-colors">
             {product.name}
           </h3>
           {product.store_name && (
-            <p className="text-xs text-green-700 font-medium bg-green-50 px-2 py-1 rounded-full inline-block mb-2">
+            <p className="hidden sm:inline-block text-xs text-green-700 font-medium bg-green-50 px-2 py-1 rounded-full mb-2">
               🏪 {product.store_name}
             </p>
           )}
           {product.origin && (
-            <p className="text-sm text-gray-500 mb-2">📍 {product.origin}</p>
+            <p className="hidden sm:block text-sm text-gray-500 mb-2">📍 {product.origin}</p>
           )}
           {badges.length > 0 && (
-            <div className="flex flex-wrap gap-1 mb-3">
+            <div className="hidden sm:flex flex-wrap gap-1 mb-3">
               {badges.map((badge, idx) => (
                 <span key={idx} className={`px-2 py-1 rounded-full text-xs font-medium ${badge.color}`}>
                   {badge.text}
@@ -117,36 +118,38 @@ const ProductCard = ({ product }) => {
               ))}
             </div>
           )}
-          <div className="flex items-baseline justify-between mb-3">
+          <div className="flex items-baseline justify-between mb-0.5 sm:mb-3">
             <div>
-              <span className="text-2xl font-bold text-green-600">
+              <span className="text-xs sm:text-xl lg:text-2xl font-bold text-green-600">
                 ${formatPrice(product.price + (product.platform_fee || 0))}
               </span>
-              <span className="text-sm text-gray-500 ml-1">/ {product.unit}</span>
+              <span className="hidden sm:inline text-sm text-gray-500 ml-1">/ {product.unit}</span>
             </div>
           </div>
           {product.description && (
-            <p className="text-sm text-gray-600 mb-3 line-clamp-2">{product.description}</p>
+            <p className="hidden sm:block text-sm text-gray-600 mb-3 line-clamp-2">{product.description}</p>
           )}
         </div>
       </Link>
 
-      <div className="px-4 pb-4 flex gap-2">
+      <div className="px-1.5 pb-1.5 sm:px-4 sm:pb-4 flex gap-1 sm:gap-2">
         {isOutOfStock || !product.is_available ? (
-          <button disabled className="flex-1 py-2 bg-gray-300 text-gray-500 rounded-lg font-medium text-sm cursor-not-allowed">
-            Out of Stock
+          <button disabled className="flex-1 py-1 sm:py-2 bg-gray-300 text-gray-500 rounded sm:rounded-lg font-medium text-[10px] sm:text-sm cursor-not-allowed">
+            <span className="sm:hidden">✕</span>
+            <span className="hidden sm:inline">Out of Stock</span>
           </button>
         ) : (
           <button
             onClick={handleAddToCart}
-            className="flex-1 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium text-sm flex items-center justify-center gap-1"
+            className="flex-1 py-1 sm:py-2 bg-green-600 text-white rounded sm:rounded-lg hover:bg-green-700 transition-colors font-medium text-[10px] sm:text-sm flex items-center justify-center gap-0.5 sm:gap-1"
           >
-            <span>🛒</span> Add to Cart
+            <span>🛒</span>
+            <span className="hidden sm:inline">Add to Cart</span>
           </button>
         )}
         <Link
           to={`/marketplace/product/${slugify(product.name)}`}
-          className="px-4 py-2 border-2 border-green-600 text-green-600 rounded-lg hover:bg-green-50 transition-colors font-medium text-sm"
+          className="hidden sm:block px-4 py-2 border-2 border-green-600 text-green-600 rounded-lg hover:bg-green-50 transition-colors font-medium text-sm"
         >
           View
         </Link>
