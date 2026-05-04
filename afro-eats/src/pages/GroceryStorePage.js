@@ -119,7 +119,7 @@ export default function GroceryStorePage() {
         </div>
 
         {filtered.length > 0 ? (
-          <div className="grid grid-cols-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-4 lg:gap-6">
+          <div className="grid grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-4 lg:gap-6">
             {filtered.map((product) => (
               <ProductCard key={product.id} product={product} />
             ))}
