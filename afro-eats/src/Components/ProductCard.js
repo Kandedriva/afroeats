@@ -74,7 +74,7 @@ const ProductCard = ({ product }) => {
     <div className="bg-white rounded-md sm:rounded-lg shadow-sm sm:shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden group relative">
       <Link to={`/marketplace/product/${slugify(product.name)}`} className="block">
         {/* Image — compact on mobile, full on sm+ */}
-        <div className="relative h-24 sm:h-44 lg:h-56 bg-gray-100 overflow-hidden">
+        <div className="relative h-28 sm:h-44 lg:h-56 bg-gray-100 overflow-hidden">
           {product.image_url ? (
             <img
               src={product.image_url}
