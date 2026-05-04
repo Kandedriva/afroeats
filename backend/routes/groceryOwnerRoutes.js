@@ -335,6 +335,58 @@ router.post('/logout', (req, res) => {
 });
 
 // ===========================
+// FORGOT PASSWORD (public)
+// ===========================
+
+router.post('/update-password', async (req, res) => {
+  try {
+    const { email, secret_word, new_password } = req.body;
+
+    if (!email || !secret_word || !new_password) {
+      return res.status(400).json({ error: 'All fields are required' });
+    }
+
+    const pwCheck = validatePassword(new_password);
+    if (!pwCheck.valid) {
+      return res.status(400).json({ error: pwCheck.error });
+    }
+
+    const ownerResult = await pool.query(
+      'SELECT id, email, secret_word FROM grocery_store_owners WHERE email = $1',
+      [email.toLowerCase().trim()]
+    );
+
+    if (ownerResult.rows.length === 0) {
+      return res.status(404).json({ error: 'No account found with this email' });
+    }
+
+    const owner = ownerResult.rows[0];
+
+    const secretMatch = await bcrypt.compare(secret_word, owner.secret_word);
+    if (!secretMatch) {
+      return res.status(401).json({ error: 'Incorrect secret word' });
+    }
+
+    const hashedPassword = await bcrypt.hash(new_password, 10);
+    await pool.query(
+      'UPDATE grocery_store_owners SET password = $1 WHERE id = $2',
+      [hashedPassword, owner.id]
+    );
+
+    try {
+      await sendPasswordChangeNotification(owner.email);
+    } catch (_emailErr) {
+      // non-critical
+    }
+
+    res.json({ message: 'Password updated successfully' });
+  } catch (err) {
+    console.error('Grocery owner update-password error:', err);
+    res.status(500).json({ error: 'Failed to update password' });
+  }
+});
+
+// ===========================
 // GET CURRENT GROCERY OWNER
 // ===========================
 

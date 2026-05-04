@@ -152,6 +152,9 @@ backend/migrations/update_admin_credentials.sql
 *.pem
 *secret*
 *password*
+# Allow frontend password-reset pages (not sensitive)
+!afro-eats/src/pages/*Password*.js
+!afro-eats/src/pages/*password*.js
 
 # Development documentation (may contain sensitive setup information)
 # Keep README.md but ignore development/setup guides
