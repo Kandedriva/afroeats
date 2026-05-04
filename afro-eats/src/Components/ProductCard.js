@@ -126,9 +126,6 @@ const ProductCard = ({ product }) => {
               <span className="hidden sm:inline text-sm text-gray-500 ml-1">/ {product.unit}</span>
             </div>
           </div>
-          {product.description && (
-            <p className="hidden sm:block text-sm text-gray-600 mb-3 line-clamp-2">{product.description}</p>
-          )}
         </div>
       </Link>
 
