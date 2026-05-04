@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Link } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import { toast } from "react-toastify";
@@ -11,6 +11,8 @@ const MarketplaceHome = () => {
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [featuredProducts, setFeaturedProducts] = useState([]);
+  const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
+  const categoryDropdownRef = useRef(null);
 
   const loadCategories = useCallback(async () => {
     try {
@@ -75,6 +77,17 @@ const MarketplaceHome = () => {
     loadFeaturedProducts();
   }, [loadCategories, loadProducts, loadFeaturedProducts]);
 
+  useEffect(() => {
+    if (!categoryDropdownOpen) { return () => {}; }
+    const handleClickOutside = (e) => {
+      if (categoryDropdownRef.current && !categoryDropdownRef.current.contains(e.target)) {
+        setCategoryDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [categoryDropdownOpen]);
+
   const handleSearch = (e) => {
     e.preventDefault();
     loadProducts();
@@ -118,34 +131,60 @@ const MarketplaceHome = () => {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Category Filter */}
+        {/* Category Filter — dropdown on all devices */}
         <div className="mb-8">
           <h2 className="text-2xl font-bold text-gray-800 mb-4">Shop by Category</h2>
-          <div className="flex flex-wrap gap-3">
+          <div className="relative inline-block w-full sm:w-72" ref={categoryDropdownRef}>
+            {/* Trigger button */}
             <button
-              onClick={() => setSelectedCategory("all")}
-              className={`px-6 py-3 rounded-lg font-medium transition-all ${
-                selectedCategory === "all"
-                  ? "bg-green-600 text-white shadow-lg"
-                  : "bg-white text-gray-700 hover:bg-gray-100"
-              }`}
+              onClick={() => setCategoryDropdownOpen((o) => !o)}
+              className="w-full flex items-center justify-between gap-3 px-5 py-3 bg-white border border-gray-300 rounded-lg shadow-sm hover:bg-gray-50 transition-colors font-medium text-gray-700"
             >
-              All Products
-            </button>
-            {categories.map((cat) => (
-              <button
-                key={cat.name}
-                onClick={() => setSelectedCategory(cat.name)}
-                className={`px-6 py-3 rounded-lg font-medium transition-all ${
-                  selectedCategory === cat.name
-                    ? "bg-green-600 text-white shadow-lg"
-                    : "bg-white text-gray-700 hover:bg-gray-100"
-                }`}
+              <span className="flex items-center gap-2 truncate">
+                {selectedCategory === "all" ? (
+                  <>🛒 All Products</>
+                ) : (
+                  <>
+                    <span>{categories.find((c) => c.name === selectedCategory)?.icon}</span>
+                    <span className="truncate">{categories.find((c) => c.name === selectedCategory)?.display_name || selectedCategory}</span>
+                  </>
+                )}
+              </span>
+              <svg
+                className={`w-4 h-4 flex-shrink-0 transition-transform duration-200 ${categoryDropdownOpen ? "rotate-180" : ""}`}
+                fill="none" stroke="currentColor" viewBox="0 0 24 24"
               >
-                <span className="mr-2">{cat.icon}</span>
-                {cat.display_name}
-              </button>
-            ))}
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {/* Dropdown list */}
+            {categoryDropdownOpen && (
+              <div className="absolute left-0 top-full mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-xl z-20 py-1 max-h-72 overflow-y-auto">
+                <button
+                  onClick={() => { setSelectedCategory("all"); setCategoryDropdownOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors font-medium ${
+                    selectedCategory === "all" ? "text-green-600 bg-green-50" : "text-gray-700"
+                  }`}
+                >
+                  <span>🛒</span> All Products
+                  {selectedCategory === "all" && <span className="ml-auto text-green-600">✓</span>}
+                </button>
+                {categories.map((cat) => (
+                  <button
+                    key={cat.name}
+                    onClick={() => { setSelectedCategory(cat.name); setCategoryDropdownOpen(false); }}
+                    className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors font-medium ${
+                      selectedCategory === cat.name ? "text-green-600 bg-green-50" : "text-gray-700"
+                    }`}
+                  >
+                    <span>{cat.icon}</span>
+                    <span>{cat.display_name}</span>
+                    {selectedCategory === cat.name && <span className="ml-auto text-green-600">✓</span>}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
