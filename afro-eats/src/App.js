@@ -24,6 +24,7 @@ import Checkout from "./pages/Checkout";
 import { useContext } from "react";
 import OwnerLogin from "./Components/OwnerLogin";
 import GroceryOwnerLogin from "./pages/GroceryOwnerLogin";
+import GroceryOwnerPasswordUpdate from "./pages/GroceryOwnerPasswordUpdate";
 import OwnerPasswordUpdate from "./pages/OwnerPasswordUpdate";
 import UserPasswordUpdate from "./pages/UserPasswordUpdate";
 import CustomerOrders from "./pages/CustomerOrders";
@@ -190,6 +191,7 @@ function AppContent() {
         <Route path="/owner/verify-email" element={<OwnerVerifyEmail />} />
         <Route path="/grocery-owner/login" element={<GroceryOwnerLogin />} />
         <Route path="/grocery-owner/verify-email" element={<GroceryOwnerVerifyEmail />} />
+        <Route path="/grocery-owner/password-update" element={<GroceryOwnerPasswordUpdate />} />
         <Route path="/owner/password-update" element={<OwnerPasswordUpdate />} />
         <Route
           path="/order-success"
