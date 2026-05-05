@@ -3,13 +3,16 @@
  * Handles email and SMS notifications for restaurant owners
  */
 
-import nodemailer from 'nodemailer';
+import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
 import twilio from 'twilio';
+
+const FROM_EMAIL = process.env.AWS_SES_FROM_EMAIL || 'noreply@orderdabaly.com';
+const FROM_NAME = process.env.AWS_SES_FROM_NAME || 'Order Dabaly';
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
 
 class NotificationService {
   constructor() {
-    // Email configuration (using nodemailer with multiple provider support)
-    this.emailTransporter = null;
+    this.sesClient = null;
     this.initializeEmailService();
 
     // SMS configuration (using Twilio)
@@ -17,37 +20,25 @@ class NotificationService {
     this.initializeSMSService();
   }
 
-  /**
-   * Initialize email service
-   */
   initializeEmailService() {
     try {
-      // Generic SMTP configuration (works with Gmail, Outlook, custom SMTP)
-      // Note: This is for restaurant owner notifications
-      // Main platform emails use AWS SES (see emailService.js)
-      if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
-        this.emailTransporter = nodemailer.createTransport({
-          host: process.env.SMTP_HOST,
-          port: parseInt(process.env.SMTP_PORT || '587'),
-          secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
-          auth: {
-            user: process.env.SMTP_USER,
-            pass: process.env.SMTP_PASS,
+      if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
+        this.sesClient = new SESClient({
+          region: process.env.AWS_REGION || 'us-east-1',
+          credentials: {
+            accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+            secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
           },
         });
-        console.log('✅ Notification email service initialized (SMTP)');
+        console.log('✅ Notification email service initialized (AWS SES)');
       } else {
-        console.log('⚠️ Notification email service not configured (missing SMTP credentials)');
-        console.log('   Note: Main platform emails use AWS SES. This SMTP config is optional for restaurant notifications.');
+        console.log('⚠️ Notification email service not configured (missing AWS credentials)');
       }
     } catch (error) {
       console.error('❌ Notification email service initialization failed:', error.message);
     }
   }
 
-  /**
-   * Initialize SMS service (Twilio)
-   */
   initializeSMSService() {
     try {
       if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_PHONE_NUMBER) {
@@ -61,31 +52,53 @@ class NotificationService {
     }
   }
 
-  /**
-   * Send new order email notification to restaurant owner
-   */
-  async sendNewOrderEmail(ownerEmail, ownerName, orderDetails) {
-    if (!this.emailTransporter) {
-      console.log('⚠️ Email service not configured - skipping email notification');
+  async _sendEmail(to, subject, html, text = '') {
+    if (!this.sesClient) {
+      console.log(`📧 [Email Skipped - No AWS Credentials] To: ${to}, Subject: ${subject}`);
       return { success: false, reason: 'Email service not configured' };
     }
 
     try {
-      const { orderId, restaurantName, customerName, customerPhone, items, total, deliveryType, deliveryAddress } = orderDetails;
+      const params = {
+        Source: `${FROM_NAME} <${FROM_EMAIL}>`,
+        Destination: { ToAddresses: [to] },
+        Message: {
+          Subject: { Data: subject, Charset: 'UTF-8' },
+          Body: {
+            Html: { Data: html, Charset: 'UTF-8' },
+            Text: { Data: text || subject, Charset: 'UTF-8' },
+          },
+        },
+      };
 
-      // Build items list HTML
-      const itemsHtml = items
-        .map(
-          (item) => `
-        <tr>
-          <td style="padding: 8px; border-bottom: 1px solid #eee;">${item.quantity}x ${item.name}</td>
-          <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">$${item.price.toFixed(2)}</td>
-        </tr>
-      `
-        )
-        .join('');
+      const command = new SendEmailCommand(params);
+      await this.sesClient.send(command);
+      console.log(`✅ Email sent to ${to}: ${subject}`);
+      return { success: true };
+    } catch (error) {
+      console.error(`❌ Failed to send email to ${to}:`, error.message);
+      return { success: false, error: error.message };
+    }
+  }
 
-      const emailHtml = `
+  /**
+   * Send new order email notification to restaurant owner
+   */
+  async sendNewOrderEmail(ownerEmail, ownerName, orderDetails) {
+    const { orderId, restaurantName, customerName, customerPhone, items, total, deliveryType, deliveryAddress } = orderDetails;
+
+    const itemsHtml = items
+      .map(
+        (item) => `
+      <tr>
+        <td style="padding: 8px; border-bottom: 1px solid #eee;">${item.quantity}x ${item.name}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">$${item.price.toFixed(2)}</td>
+      </tr>
+    `
+      )
+      .join('');
+
+    const html = `
 <!DOCTYPE html>
 <html>
 <head>
@@ -128,38 +141,24 @@ class NotificationService {
 
   <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e0e0e0;">
     <p style="color: #666; font-size: 14px; margin: 5px 0;">
-      <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/owner/orders"
-         style="color: #ff6b35; text-decoration: none; font-weight: bold;">
+      <a href="${FRONTEND_URL}/owner/orders" style="color: #ff6b35; text-decoration: none; font-weight: bold;">
         View Order in Dashboard →
       </a>
     </p>
-    <p style="color: #999; font-size: 12px; margin: 15px 0 5px 0;">
-      This is an automated notification from OrderDabaly
-    </p>
-    <p style="color: #999; font-size: 12px; margin: 5px 0;">
-      © ${new Date().getFullYear()} OrderDabaly. All rights reserved.
-    </p>
+    <p style="color: #999; font-size: 12px; margin: 15px 0 5px 0;">This is an automated notification from OrderDabaly</p>
+    <p style="color: #999; font-size: 12px; margin: 5px 0;">© ${new Date().getFullYear()} OrderDabaly. All rights reserved.</p>
   </div>
 </body>
 </html>
-      `;
+    `;
 
-      const mailOptions = {
-        from: process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || 'noreply@orderdabaly.com',
-        to: ownerEmail,
-        subject: `🔔 New Order #${orderId} - ${restaurantName}`,
-        html: emailHtml,
-        text: `New Order #${orderId}\n\nRestaurant: ${restaurantName}\nCustomer: ${customerName}\nPhone: ${customerPhone}\nDelivery: ${deliveryType}\nTotal: $${total.toFixed(2)}\n\nItems:\n${items.map((item) => `${item.quantity}x ${item.name} - $${item.price.toFixed(2)}`).join('\n')}\n\nPlease confirm this order in your dashboard.`,
-      };
+    const text = `New Order #${orderId}\n\nRestaurant: ${restaurantName}\nCustomer: ${customerName}\nPhone: ${customerPhone}\nDelivery: ${deliveryType}\nTotal: $${total.toFixed(2)}\n\nItems:\n${items.map((item) => `${item.quantity}x ${item.name} - $${item.price.toFixed(2)}`).join('\n')}\n\nPlease confirm this order in your dashboard.`;
 
-      const info = await this.emailTransporter.sendMail(mailOptions);
-      console.log(`✅ Email sent to ${ownerEmail} for order #${orderId}: ${info.messageId}`);
-
-      return { success: true, messageId: info.messageId };
-    } catch (error) {
-      console.error(`❌ Failed to send email to ${ownerEmail}:`, error.message);
-      return { success: false, error: error.message };
+    const result = await this._sendEmail(ownerEmail, `🔔 New Order #${orderId} - ${restaurantName}`, html, text);
+    if (result.success) {
+      console.log(`✅ New order email sent to ${ownerEmail} for order #${orderId}`);
     }
+    return result;
   }
 
   /**
@@ -174,7 +173,6 @@ class NotificationService {
     try {
       const { orderId, restaurantName, customerName, items, total, deliveryType } = orderDetails;
 
-      // Build concise SMS message (SMS has 160 char limit for standard, 1600 for long)
       const itemsText = items.map((item) => `${item.quantity}x ${item.name}`).join(', ');
 
       const smsBody = `🔔 NEW ORDER #${orderId}
@@ -194,7 +192,6 @@ Type: ${deliveryType === 'delivery' ? 'Delivery' : 'Pickup'}
       });
 
       console.log(`✅ SMS sent to ${ownerPhone} for order #${orderId}: ${message.sid}`);
-
       return { success: true, messageSid: message.sid };
     } catch (error) {
       console.error(`❌ Failed to send SMS to ${ownerPhone}:`, error.message);
@@ -206,25 +203,20 @@ Type: ${deliveryType === 'delivery' ? 'Delivery' : 'Pickup'}
    * Send order status update email to customer
    */
   async sendOrderStatusUpdateEmail(customerEmail, customerName, orderDetails) {
-    if (!this.emailTransporter) {
-      return { success: false, reason: 'Email service not configured' };
-    }
+    const { orderId, status, restaurantName } = orderDetails;
 
-    try {
-      const { orderId, status, restaurantName } = orderDetails;
+    const statusMessages = {
+      received: '✅ Your order has been received and is being prepared',
+      confirmed: '✅ Your order has been confirmed by the restaurant',
+      preparing: '👨‍🍳 Your order is being prepared',
+      ready: '✅ Your order is ready for pickup/delivery',
+      out_for_delivery: '🚗 Your order is out for delivery',
+      delivered: '🎉 Your order has been delivered',
+    };
 
-      const statusMessages = {
-        received: '✅ Your order has been received and is being prepared',
-        confirmed: '✅ Your order has been confirmed by the restaurant',
-        preparing: '👨‍🍳 Your order is being prepared',
-        ready: '✅ Your order is ready for pickup/delivery',
-        out_for_delivery: '🚗 Your order is out for delivery',
-        delivered: '🎉 Your order has been delivered',
-      };
+    const statusMessage = statusMessages[status] || 'Your order status has been updated';
 
-      const statusMessage = statusMessages[status] || 'Your order status has been updated';
-
-      const emailHtml = `
+    const html = `
 <!DOCTYPE html>
 <html>
 <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
@@ -240,27 +232,16 @@ Type: ${deliveryType === 'delivery' ? 'Delivery' : 'Pickup'}
   </div>
 
   <div style="text-align: center; margin-top: 20px;">
-    <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/orders/${orderId}"
+    <a href="${FRONTEND_URL}/orders/${orderId}"
        style="display: inline-block; background-color: #ff6b35; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;">
       View Order Details
     </a>
   </div>
 </body>
 </html>
-      `;
+    `;
 
-      await this.emailTransporter.sendMail({
-        from: process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER,
-        to: customerEmail,
-        subject: `Order #${orderId} - ${statusMessage}`,
-        html: emailHtml,
-      });
-
-      return { success: true };
-    } catch (error) {
-      console.error('Failed to send order status email:', error);
-      return { success: false, error: error.message };
-    }
+    return this._sendEmail(customerEmail, `Order #${orderId} - ${statusMessage}`, html);
   }
 
   /**
@@ -295,7 +276,7 @@ Type: ${deliveryType === 'delivery' ? 'Delivery' : 'Pickup'}
 Order #${orderId}
 Restaurant: ${restaurantName}
 
-Track your order: ${process.env.FRONTEND_URL || 'http://localhost:3000'}/order-details/${orderId}`;
+Track your order: ${FRONTEND_URL}/order-details/${orderId}`;
 
       const result = await this.twilioClient.messages.create({
         body: message,
@@ -320,12 +301,10 @@ Track your order: ${process.env.FRONTEND_URL || 'http://localhost:3000'}/order-d
       sms: { success: false },
     };
 
-    // Send email notification
     if (ownerInfo.email) {
       results.email = await this.sendNewOrderEmail(ownerInfo.email, ownerInfo.name, orderDetails);
     }
 
-    // Send SMS notification
     if (ownerInfo.phone) {
       results.sms = await this.sendNewOrderSMS(ownerInfo.phone, orderDetails);
     }
@@ -337,23 +316,12 @@ Track your order: ${process.env.FRONTEND_URL || 'http://localhost:3000'}/order-d
    * Test email configuration
    */
   async testEmailConfig(testEmail) {
-    if (!this.emailTransporter) {
-      return { success: false, error: 'Email service not configured' };
-    }
-
-    try {
-      await this.emailTransporter.sendMail({
-        from: process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER,
-        to: testEmail,
-        subject: 'OrderDabaly - Email Configuration Test',
-        text: 'Your email service is configured correctly!',
-        html: '<p>✅ Your email service is configured correctly!</p>',
-      });
-
-      return { success: true, message: 'Test email sent successfully' };
-    } catch (error) {
-      return { success: false, error: error.message };
-    }
+    return this._sendEmail(
+      testEmail,
+      'OrderDabaly - Email Configuration Test',
+      '<p>✅ Your email service is configured correctly!</p>',
+      'Your email service is configured correctly!'
+    );
   }
 
   /**
@@ -381,420 +349,356 @@ Track your order: ${process.env.FRONTEND_URL || 'http://localhost:3000'}/order-d
    * Send refund request submitted email to customer
    */
   async sendRefundRequestEmail(userEmail, userName, refundDetails) {
-    if (!this.emailTransporter) {
-      console.log('⚠️ Email service not configured - skipping refund request email');
-      return { success: false, reason: 'Email service not configured' };
-    }
+    const { refundId, orderId, amount, reason, status } = refundDetails;
 
-    try {
-      const { refundId, orderId, amount, reason, status } = refundDetails;
+    const reasonText = {
+      quality_issue: 'Quality Issue',
+      wrong_item: 'Wrong Item',
+      late_delivery: 'Late Delivery',
+      item_unavailable: 'Item Unavailable',
+      customer_request: 'Customer Request',
+      order_cancelled: 'Order Cancelled',
+      other: 'Other',
+    }[reason] || reason;
 
-      const reasonText = {
-        'quality_issue': 'Quality Issue',
-        'wrong_item': 'Wrong Item',
-        'late_delivery': 'Late Delivery',
-        'item_unavailable': 'Item Unavailable',
-        'customer_request': 'Customer Request',
-        'order_cancelled': 'Order Cancelled',
-        'other': 'Other'
-      }[reason] || reason;
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+          .content { background: #fff; padding: 30px; border: 1px solid #ddd; border-top: none; }
+          .details { background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; }
+          .detail-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #e0e0e0; }
+          .detail-row:last-child { border-bottom: none; }
+          .label { font-weight: bold; color: #666; }
+          .value { color: #333; }
+          .amount { font-size: 24px; font-weight: bold; color: #764ba2; }
+          .status-badge { display: inline-block; padding: 8px 16px; background: #fef3c7; color: #92400e; border-radius: 20px; font-weight: bold; }
+          .info-box { background: #dbeafe; border-left: 4px solid #3b82f6; padding: 15px; margin: 20px 0; border-radius: 4px; }
+          .footer { text-align: center; color: #666; font-size: 12px; padding: 20px; }
+          .button { display: inline-block; padding: 12px 30px; background: #764ba2; color: white; text-decoration: none; border-radius: 6px; margin: 20px 0; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1 style="margin: 0;">💰 Refund Request Submitted</h1>
+            <p style="margin: 10px 0 0 0; opacity: 0.9;">OrderDabaly Platform</p>
+          </div>
+          <div class="content">
+            <p>Hi ${userName},</p>
+            <p>We've received your refund request and our team will review it shortly.</p>
 
-      const mailOptions = {
-        from: process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER,
-        to: userEmail,
-        subject: `Refund Request Submitted - Order #${orderId}`,
-        html: `
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <style>
-              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-              .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-              .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-              .content { background: #fff; padding: 30px; border: 1px solid #ddd; border-top: none; }
-              .details { background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; }
-              .detail-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #e0e0e0; }
-              .detail-row:last-child { border-bottom: none; }
-              .label { font-weight: bold; color: #666; }
-              .value { color: #333; }
-              .amount { font-size: 24px; font-weight: bold; color: #764ba2; }
-              .status-badge { display: inline-block; padding: 8px 16px; background: #fef3c7; color: #92400e; border-radius: 20px; font-weight: bold; }
-              .info-box { background: #dbeafe; border-left: 4px solid #3b82f6; padding: 15px; margin: 20px 0; border-radius: 4px; }
-              .footer { text-align: center; color: #666; font-size: 12px; padding: 20px; }
-              .button { display: inline-block; padding: 12px 30px; background: #764ba2; color: white; text-decoration: none; border-radius: 6px; margin: 20px 0; }
-            </style>
-          </head>
-          <body>
-            <div class="container">
-              <div class="header">
-                <h1 style="margin: 0;">💰 Refund Request Submitted</h1>
-                <p style="margin: 10px 0 0 0; opacity: 0.9;">OrderDabaly Platform</p>
+            <div class="details">
+              <div class="detail-row">
+                <span class="label">Refund ID:</span>
+                <span class="value">#${refundId}</span>
               </div>
-              <div class="content">
-                <p>Hi ${userName},</p>
-                <p>We've received your refund request and our team will review it shortly.</p>
-
-                <div class="details">
-                  <div class="detail-row">
-                    <span class="label">Refund ID:</span>
-                    <span class="value">#${refundId}</span>
-                  </div>
-                  <div class="detail-row">
-                    <span class="label">Order ID:</span>
-                    <span class="value">#${orderId}</span>
-                  </div>
-                  <div class="detail-row">
-                    <span class="label">Amount:</span>
-                    <span class="amount">$${parseFloat(amount).toFixed(2)}</span>
-                  </div>
-                  <div class="detail-row">
-                    <span class="label">Reason:</span>
-                    <span class="value">${reasonText}</span>
-                  </div>
-                  <div class="detail-row">
-                    <span class="label">Status:</span>
-                    <span class="status-badge">${status.toUpperCase()}</span>
-                  </div>
-                </div>
-
-                <div class="info-box">
-                  <strong>What happens next?</strong>
-                  <ul style="margin: 10px 0 0 0; padding-left: 20px;">
-                    <li>Our team will review your request within 24-48 hours</li>
-                    <li>You'll receive an email once your request is approved or if we need more information</li>
-                    <li>Approved refunds are processed within 5-7 business days</li>
-                    <li>The refund will be credited to your original payment method</li>
-                  </ul>
-                </div>
-
-                <center>
-                  <a href="${process.env.FRONTEND_URL}/my-refunds" class="button">View Refund Status</a>
-                </center>
-
-                <p style="margin-top: 30px;">If you have any questions, please don't hesitate to contact our support team.</p>
-
-                <p>Thank you for your patience!</p>
-                <p><strong>The OrderDabaly Team</strong></p>
+              <div class="detail-row">
+                <span class="label">Order ID:</span>
+                <span class="value">#${orderId}</span>
               </div>
-              <div class="footer">
-                <p>This is an automated email from OrderDabaly. Please do not reply to this email.</p>
+              <div class="detail-row">
+                <span class="label">Amount:</span>
+                <span class="amount">$${parseFloat(amount).toFixed(2)}</span>
+              </div>
+              <div class="detail-row">
+                <span class="label">Reason:</span>
+                <span class="value">${reasonText}</span>
+              </div>
+              <div class="detail-row">
+                <span class="label">Status:</span>
+                <span class="status-badge">${status.toUpperCase()}</span>
               </div>
             </div>
-          </body>
-          </html>
-        `,
-      };
 
-      await this.emailTransporter.sendMail(mailOptions);
-      console.log(`✅ Refund request email sent to ${userEmail}`);
-      return { success: true };
-    } catch (error) {
-      console.error('❌ Failed to send refund request email:', error);
-      return { success: false, error: error.message };
-    }
+            <div class="info-box">
+              <strong>What happens next?</strong>
+              <ul style="margin: 10px 0 0 0; padding-left: 20px;">
+                <li>Our team will review your request within 24-48 hours</li>
+                <li>You'll receive an email once your request is approved or if we need more information</li>
+                <li>Approved refunds are processed within 5-7 business days</li>
+                <li>The refund will be credited to your original payment method</li>
+              </ul>
+            </div>
+
+            <center>
+              <a href="${FRONTEND_URL}/my-refunds" class="button">View Refund Status</a>
+            </center>
+
+            <p style="margin-top: 30px;">If you have any questions, please don't hesitate to contact our support team.</p>
+            <p>Thank you for your patience!</p>
+            <p><strong>The OrderDabaly Team</strong></p>
+          </div>
+          <div class="footer">
+            <p>This is an automated email from OrderDabaly. Please do not reply to this email.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const result = await this._sendEmail(userEmail, `Refund Request Submitted - Order #${orderId}`, html);
+    if (result.success) console.log(`✅ Refund request email sent to ${userEmail}`);
+    return result;
   }
 
   /**
    * Send refund approved email to customer
    */
   async sendRefundApprovedEmail(userEmail, userName, refundDetails) {
-    if (!this.emailTransporter) {
-      console.log('⚠️ Email service not configured - skipping refund approved email');
-      return { success: false, reason: 'Email service not configured' };
-    }
+    const { refundId, orderId, amount } = refundDetails;
 
-    try {
-      const { refundId, orderId, amount } = refundDetails;
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+          .content { background: #fff; padding: 30px; border: 1px solid #ddd; border-top: none; }
+          .success-icon { font-size: 60px; margin: 20px 0; }
+          .amount { font-size: 36px; font-weight: bold; color: #10b981; margin: 20px 0; }
+          .details { background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; }
+          .detail-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #e0e0e0; }
+          .detail-row:last-child { border-bottom: none; }
+          .label { font-weight: bold; color: #666; }
+          .value { color: #333; }
+          .info-box { background: #dbeafe; border-left: 4px solid #3b82f6; padding: 15px; margin: 20px 0; border-radius: 4px; }
+          .footer { text-align: center; color: #666; font-size: 12px; padding: 20px; }
+          .button { display: inline-block; padding: 12px 30px; background: #10b981; color: white; text-decoration: none; border-radius: 6px; margin: 20px 0; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <div class="success-icon">✅</div>
+            <h1 style="margin: 0;">Refund Approved!</h1>
+            <p style="margin: 10px 0 0 0; opacity: 0.9;">Your refund is being processed</p>
+          </div>
+          <div class="content">
+            <p>Hi ${userName},</p>
+            <p>Great news! Your refund request has been approved and is now being processed.</p>
 
-      const mailOptions = {
-        from: process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER,
-        to: userEmail,
-        subject: `Refund Approved - $${parseFloat(amount).toFixed(2)} for Order #${orderId}`,
-        html: `
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <style>
-              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-              .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-              .header { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-              .content { background: #fff; padding: 30px; border: 1px solid #ddd; border-top: none; }
-              .success-icon { font-size: 60px; margin: 20px 0; }
-              .amount { font-size: 36px; font-weight: bold; color: #10b981; margin: 20px 0; }
-              .details { background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; }
-              .detail-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #e0e0e0; }
-              .detail-row:last-child { border-bottom: none; }
-              .label { font-weight: bold; color: #666; }
-              .value { color: #333; }
-              .info-box { background: #dbeafe; border-left: 4px solid #3b82f6; padding: 15px; margin: 20px 0; border-radius: 4px; }
-              .footer { text-align: center; color: #666; font-size: 12px; padding: 20px; }
-              .button { display: inline-block; padding: 12px 30px; background: #10b981; color: white; text-decoration: none; border-radius: 6px; margin: 20px 0; }
-            </style>
-          </head>
-          <body>
-            <div class="container">
-              <div class="header">
-                <div class="success-icon">✅</div>
-                <h1 style="margin: 0;">Refund Approved!</h1>
-                <p style="margin: 10px 0 0 0; opacity: 0.9;">Your refund is being processed</p>
+            <center>
+              <div class="amount">$${parseFloat(amount).toFixed(2)}</div>
+            </center>
+
+            <div class="details">
+              <div class="detail-row">
+                <span class="label">Refund ID:</span>
+                <span class="value">#${refundId}</span>
               </div>
-              <div class="content">
-                <p>Hi ${userName},</p>
-                <p>Great news! Your refund request has been approved and is now being processed.</p>
-
-                <center>
-                  <div class="amount">$${parseFloat(amount).toFixed(2)}</div>
-                </center>
-
-                <div class="details">
-                  <div class="detail-row">
-                    <span class="label">Refund ID:</span>
-                    <span class="value">#${refundId}</span>
-                  </div>
-                  <div class="detail-row">
-                    <span class="label">Order ID:</span>
-                    <span class="value">#${orderId}</span>
-                  </div>
-                  <div class="detail-row">
-                    <span class="label">Refund Amount:</span>
-                    <span class="value" style="font-weight: bold; color: #10b981;">$${parseFloat(amount).toFixed(2)}</span>
-                  </div>
-                </div>
-
-                <div class="info-box">
-                  <strong>When will I receive my refund?</strong>
-                  <ul style="margin: 10px 0 0 0; padding-left: 20px;">
-                    <li>The refund will be processed to your original payment method</li>
-                    <li>It typically takes 5-7 business days to appear in your account</li>
-                    <li>The exact timing depends on your bank or card issuer</li>
-                    <li>You'll receive a confirmation once the refund is completed</li>
-                  </ul>
-                </div>
-
-                <center>
-                  <a href="${process.env.FRONTEND_URL}/my-refunds" class="button">View Refund Status</a>
-                </center>
-
-                <p style="margin-top: 30px;">Thank you for your patience and for being a valued customer!</p>
-
-                <p><strong>The OrderDabaly Team</strong></p>
+              <div class="detail-row">
+                <span class="label">Order ID:</span>
+                <span class="value">#${orderId}</span>
               </div>
-              <div class="footer">
-                <p>This is an automated email from OrderDabaly. Please do not reply to this email.</p>
+              <div class="detail-row">
+                <span class="label">Refund Amount:</span>
+                <span class="value" style="font-weight: bold; color: #10b981;">$${parseFloat(amount).toFixed(2)}</span>
               </div>
             </div>
-          </body>
-          </html>
-        `,
-      };
 
-      await this.emailTransporter.sendMail(mailOptions);
-      console.log(`✅ Refund approved email sent to ${userEmail}`);
-      return { success: true };
-    } catch (error) {
-      console.error('❌ Failed to send refund approved email:', error);
-      return { success: false, error: error.message };
-    }
+            <div class="info-box">
+              <strong>When will I receive my refund?</strong>
+              <ul style="margin: 10px 0 0 0; padding-left: 20px;">
+                <li>The refund will be processed to your original payment method</li>
+                <li>It typically takes 5-7 business days to appear in your account</li>
+                <li>The exact timing depends on your bank or card issuer</li>
+                <li>You'll receive a confirmation once the refund is completed</li>
+              </ul>
+            </div>
+
+            <center>
+              <a href="${FRONTEND_URL}/my-refunds" class="button">View Refund Status</a>
+            </center>
+
+            <p style="margin-top: 30px;">Thank you for your patience and for being a valued customer!</p>
+            <p><strong>The OrderDabaly Team</strong></p>
+          </div>
+          <div class="footer">
+            <p>This is an automated email from OrderDabaly. Please do not reply to this email.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const result = await this._sendEmail(userEmail, `Refund Approved - $${parseFloat(amount).toFixed(2)} for Order #${orderId}`, html);
+    if (result.success) console.log(`✅ Refund approved email sent to ${userEmail}`);
+    return result;
   }
 
   /**
    * Send refund completed email to customer
    */
   async sendRefundCompletedEmail(userEmail, userName, refundDetails) {
-    if (!this.emailTransporter) {
-      console.log('⚠️ Email service not configured - skipping refund completed email');
-      return { success: false, reason: 'Email service not configured' };
-    }
+    const { refundId, orderId, amount } = refundDetails;
 
-    try {
-      const { refundId, orderId, amount } = refundDetails;
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+          .content { background: #fff; padding: 30px; border: 1px solid #ddd; border-top: none; }
+          .success-icon { font-size: 60px; margin: 20px 0; }
+          .amount { font-size: 36px; font-weight: bold; color: #10b981; margin: 20px 0; }
+          .details { background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; }
+          .detail-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #e0e0e0; }
+          .detail-row:last-child { border-bottom: none; }
+          .label { font-weight: bold; color: #666; }
+          .value { color: #333; }
+          .info-box { background: #d1fae5; border-left: 4px solid #10b981; padding: 15px; margin: 20px 0; border-radius: 4px; }
+          .footer { text-align: center; color: #666; font-size: 12px; padding: 20px; }
+          .button { display: inline-block; padding: 12px 30px; background: #10b981; color: white; text-decoration: none; border-radius: 6px; margin: 20px 0; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <div class="success-icon">🎉</div>
+            <h1 style="margin: 0;">Refund Completed!</h1>
+            <p style="margin: 10px 0 0 0; opacity: 0.9;">Your money is on its way</p>
+          </div>
+          <div class="content">
+            <p>Hi ${userName},</p>
+            <p>Your refund has been successfully processed!</p>
 
-      const mailOptions = {
-        from: process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER,
-        to: userEmail,
-        subject: `Refund Completed - $${parseFloat(amount).toFixed(2)} Refunded`,
-        html: `
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <style>
-              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-              .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-              .header { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-              .content { background: #fff; padding: 30px; border: 1px solid #ddd; border-top: none; }
-              .success-icon { font-size: 60px; margin: 20px 0; }
-              .amount { font-size: 36px; font-weight: bold; color: #10b981; margin: 20px 0; }
-              .details { background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; }
-              .detail-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #e0e0e0; }
-              .detail-row:last-child { border-bottom: none; }
-              .label { font-weight: bold; color: #666; }
-              .value { color: #333; }
-              .info-box { background: #d1fae5; border-left: 4px solid #10b981; padding: 15px; margin: 20px 0; border-radius: 4px; }
-              .footer { text-align: center; color: #666; font-size: 12px; padding: 20px; }
-              .button { display: inline-block; padding: 12px 30px; background: #10b981; color: white; text-decoration: none; border-radius: 6px; margin: 20px 0; }
-            </style>
-          </head>
-          <body>
-            <div class="container">
-              <div class="header">
-                <div class="success-icon">🎉</div>
-                <h1 style="margin: 0;">Refund Completed!</h1>
-                <p style="margin: 10px 0 0 0; opacity: 0.9;">Your money is on its way</p>
+            <center>
+              <div class="amount">$${parseFloat(amount).toFixed(2)}</div>
+              <p style="color: #10b981; font-weight: bold;">REFUNDED</p>
+            </center>
+
+            <div class="details">
+              <div class="detail-row">
+                <span class="label">Refund ID:</span>
+                <span class="value">#${refundId}</span>
               </div>
-              <div class="content">
-                <p>Hi ${userName},</p>
-                <p>Your refund has been successfully processed!</p>
-
-                <center>
-                  <div class="amount">$${parseFloat(amount).toFixed(2)}</div>
-                  <p style="color: #10b981; font-weight: bold;">REFUNDED</p>
-                </center>
-
-                <div class="details">
-                  <div class="detail-row">
-                    <span class="label">Refund ID:</span>
-                    <span class="value">#${refundId}</span>
-                  </div>
-                  <div class="detail-row">
-                    <span class="label">Order ID:</span>
-                    <span class="value">#${orderId}</span>
-                  </div>
-                  <div class="detail-row">
-                    <span class="label">Refund Amount:</span>
-                    <span class="value" style="font-weight: bold; color: #10b981;">$${parseFloat(amount).toFixed(2)}</span>
-                  </div>
-                  <div class="detail-row">
-                    <span class="label">Completed:</span>
-                    <span class="value">${new Date().toLocaleDateString()}</span>
-                  </div>
-                </div>
-
-                <div class="info-box">
-                  <strong>✅ Refund Successfully Processed</strong>
-                  <p style="margin: 10px 0 0 0;">The refund has been credited to your original payment method. Depending on your bank or card issuer, it may take 3-5 business days to appear in your account.</p>
-                </div>
-
-                <center>
-                  <a href="${process.env.FRONTEND_URL}" class="button">Order Again</a>
-                </center>
-
-                <p style="margin-top: 30px;">We hope to serve you again soon!</p>
-
-                <p><strong>The OrderDabaly Team</strong></p>
+              <div class="detail-row">
+                <span class="label">Order ID:</span>
+                <span class="value">#${orderId}</span>
               </div>
-              <div class="footer">
-                <p>This is an automated email from OrderDabaly. Please do not reply to this email.</p>
+              <div class="detail-row">
+                <span class="label">Refund Amount:</span>
+                <span class="value" style="font-weight: bold; color: #10b981;">$${parseFloat(amount).toFixed(2)}</span>
+              </div>
+              <div class="detail-row">
+                <span class="label">Completed:</span>
+                <span class="value">${new Date().toLocaleDateString()}</span>
               </div>
             </div>
-          </body>
-          </html>
-        `,
-      };
 
-      await this.emailTransporter.sendMail(mailOptions);
-      console.log(`✅ Refund completed email sent to ${userEmail}`);
-      return { success: true };
-    } catch (error) {
-      console.error('❌ Failed to send refund completed email:', error);
-      return { success: false, error: error.message };
-    }
+            <div class="info-box">
+              <strong>✅ Refund Successfully Processed</strong>
+              <p style="margin: 10px 0 0 0;">The refund has been credited to your original payment method. Depending on your bank or card issuer, it may take 3-5 business days to appear in your account.</p>
+            </div>
+
+            <center>
+              <a href="${FRONTEND_URL}" class="button">Order Again</a>
+            </center>
+
+            <p style="margin-top: 30px;">We hope to serve you again soon!</p>
+            <p><strong>The OrderDabaly Team</strong></p>
+          </div>
+          <div class="footer">
+            <p>This is an automated email from OrderDabaly. Please do not reply to this email.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const result = await this._sendEmail(userEmail, `Refund Completed - $${parseFloat(amount).toFixed(2)} Refunded`, html);
+    if (result.success) console.log(`✅ Refund completed email sent to ${userEmail}`);
+    return result;
   }
 
   /**
    * Send refund failed email to customer
    */
   async sendRefundFailedEmail(userEmail, userName, refundDetails) {
-    if (!this.emailTransporter) {
-      console.log('⚠️ Email service not configured - skipping refund failed email');
-      return { success: false, reason: 'Email service not configured' };
-    }
+    const { refundId, orderId, amount } = refundDetails;
 
-    try {
-      const { refundId, orderId, amount } = refundDetails;
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+          .content { background: #fff; padding: 30px; border: 1px solid #ddd; border-top: none; }
+          .warning-icon { font-size: 60px; margin: 20px 0; }
+          .details { background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; }
+          .detail-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #e0e0e0; }
+          .detail-row:last-child { border-bottom: none; }
+          .label { font-weight: bold; color: #666; }
+          .value { color: #333; }
+          .warning-box { background: #fef2f2; border-left: 4px solid #ef4444; padding: 15px; margin: 20px 0; border-radius: 4px; }
+          .footer { text-align: center; color: #666; font-size: 12px; padding: 20px; }
+          .button { display: inline-block; padding: 12px 30px; background: #ef4444; color: white; text-decoration: none; border-radius: 6px; margin: 20px 0; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <div class="warning-icon">⚠️</div>
+            <h1 style="margin: 0;">Refund Processing Issue</h1>
+            <p style="margin: 10px 0 0 0; opacity: 0.9;">Action required</p>
+          </div>
+          <div class="content">
+            <p>Hi ${userName},</p>
+            <p>We encountered an issue while processing your refund. Our support team has been notified and will contact you shortly to resolve this.</p>
 
-      const mailOptions = {
-        from: process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER,
-        to: userEmail,
-        subject: `Action Required - Refund Processing Issue for Order #${orderId}`,
-        html: `
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <style>
-              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-              .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-              .header { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-              .content { background: #fff; padding: 30px; border: 1px solid #ddd; border-top: none; }
-              .warning-icon { font-size: 60px; margin: 20px 0; }
-              .details { background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; }
-              .detail-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #e0e0e0; }
-              .detail-row:last-child { border-bottom: none; }
-              .label { font-weight: bold; color: #666; }
-              .value { color: #333; }
-              .warning-box { background: #fef2f2; border-left: 4px solid #ef4444; padding: 15px; margin: 20px 0; border-radius: 4px; }
-              .footer { text-align: center; color: #666; font-size: 12px; padding: 20px; }
-              .button { display: inline-block; padding: 12px 30px; background: #ef4444; color: white; text-decoration: none; border-radius: 6px; margin: 20px 0; }
-            </style>
-          </head>
-          <body>
-            <div class="container">
-              <div class="header">
-                <div class="warning-icon">⚠️</div>
-                <h1 style="margin: 0;">Refund Processing Issue</h1>
-                <p style="margin: 10px 0 0 0; opacity: 0.9;">Action required</p>
+            <div class="details">
+              <div class="detail-row">
+                <span class="label">Refund ID:</span>
+                <span class="value">#${refundId}</span>
               </div>
-              <div class="content">
-                <p>Hi ${userName},</p>
-                <p>We encountered an issue while processing your refund. Our support team has been notified and will contact you shortly to resolve this.</p>
-
-                <div class="details">
-                  <div class="detail-row">
-                    <span class="label">Refund ID:</span>
-                    <span class="value">#${refundId}</span>
-                  </div>
-                  <div class="detail-row">
-                    <span class="label">Order ID:</span>
-                    <span class="value">#${orderId}</span>
-                  </div>
-                  <div class="detail-row">
-                    <span class="label">Amount:</span>
-                    <span class="value">$${parseFloat(amount).toFixed(2)}</span>
-                  </div>
-                </div>
-
-                <div class="warning-box">
-                  <strong>What should I do?</strong>
-                  <ul style="margin: 10px 0 0 0; padding-left: 20px;">
-                    <li>Our support team will reach out to you within 24 hours</li>
-                    <li>Please check that your payment method is still active</li>
-                    <li>You can also contact us directly for immediate assistance</li>
-                  </ul>
-                </div>
-
-                <center>
-                  <a href="${process.env.FRONTEND_URL}/my-refunds" class="button">View Refund Status</a>
-                </center>
-
-                <p style="margin-top: 30px;">We apologize for any inconvenience and will resolve this as quickly as possible.</p>
-
-                <p><strong>The OrderDabaly Team</strong></p>
+              <div class="detail-row">
+                <span class="label">Order ID:</span>
+                <span class="value">#${orderId}</span>
               </div>
-              <div class="footer">
-                <p>This is an automated email from OrderDabaly. Please do not reply to this email.</p>
+              <div class="detail-row">
+                <span class="label">Amount:</span>
+                <span class="value">$${parseFloat(amount).toFixed(2)}</span>
               </div>
             </div>
-          </body>
-          </html>
-        `,
-      };
 
-      await this.emailTransporter.sendMail(mailOptions);
-      console.log(`✅ Refund failed email sent to ${userEmail}`);
-      return { success: true };
-    } catch (error) {
-      console.error('❌ Failed to send refund failed email:', error);
-      return { success: false, error: error.message };
-    }
+            <div class="warning-box">
+              <strong>What should I do?</strong>
+              <ul style="margin: 10px 0 0 0; padding-left: 20px;">
+                <li>Our support team will reach out to you within 24 hours</li>
+                <li>Please check that your payment method is still active</li>
+                <li>You can also contact us directly for immediate assistance</li>
+              </ul>
+            </div>
+
+            <center>
+              <a href="${FRONTEND_URL}/my-refunds" class="button">View Refund Status</a>
+            </center>
+
+            <p style="margin-top: 30px;">We apologize for any inconvenience and will resolve this as quickly as possible.</p>
+            <p><strong>The OrderDabaly Team</strong></p>
+          </div>
+          <div class="footer">
+            <p>This is an automated email from OrderDabaly. Please do not reply to this email.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const result = await this._sendEmail(userEmail, `Action Required - Refund Processing Issue for Order #${orderId}`, html);
+    if (result.success) console.log(`✅ Refund failed email sent to ${userEmail}`);
+    return result;
   }
 }
 

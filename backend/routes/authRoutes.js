@@ -14,7 +14,6 @@ import {
   sendEmailChangeVerification,
   sendEmailChangeNotification,
 } from "../services/emailService.js";
-import { generateRecoveryToken } from "../utils/recoveryToken.js";
 import { validatePassword } from "../middleware/security.js";
 
 const router = express.Router();
@@ -51,7 +50,7 @@ router.post("/register", async (req, res) => {
     const hashedPassword = await bcryptjs.hash(password, saltRounds);
 
     // Generate 6-digit verification code
-    const verificationCode = crypto.randomInt(100000, 1000000).toString();
+    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
     const codeExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes from now
 
     console.log('Registering user:', { name, email });
@@ -230,7 +229,7 @@ router.post("/resend-verification", async (req, res) => {
     }
 
     // Generate new 6-digit verification code
-    const verificationCode = crypto.randomInt(100000, 1000000).toString();
+    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
     const codeExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes from now
 
     // Update verification code and reset attempts
@@ -333,17 +332,16 @@ router.post("/login", checkAccountLockout, async (req, res) => {
             'Access-Control-Allow-Credentials': 'true'
           });
           
-          res.json({
-            user: {
-              id: user.id,
-              name: user.name,
-              email: user.email
+          res.json({ 
+            user: { 
+              id: user.id, 
+              name: user.name, 
+              email: user.email 
             },
             sessionInfo: {
               sessionId: req.sessionID,
               loginTime: req.session.loginTime
-            },
-            recoveryToken: generateRecoveryToken('user', user.id),
+            }
           });
         });
       });
@@ -514,7 +512,7 @@ router.post("/request-password-reset", async (req, res) => {
     const user = userResult.rows[0];
 
     // Generate 6-digit verification code
-    const resetCode = crypto.randomInt(100000, 1000000).toString();
+    const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
     const codeExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
     // Store reset code in verification columns (reusing existing columns)
@@ -1468,7 +1466,7 @@ router.put('/update-profile', requireAuth, async (req, res) => {
 
     if (emailChanging) {
       // Initiate email change confirmation
-      const changeCode = crypto.randomInt(100000, 1000000).toString();
+      const changeCode = Math.floor(100000 + Math.random() * 900000).toString();
       const codeExpiry = new Date(Date.now() + 10 * 60 * 1000);
       await pool.query(
         "UPDATE users SET pending_email = $1, email_change_code = $2, email_change_code_expires_at = $3 WHERE id = $4",
