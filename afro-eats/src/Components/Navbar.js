@@ -33,7 +33,7 @@ function Navbar() {
       const res = await fetch(`${API_BASE_URL}/api/auth/notifications`, {
         credentials: "include",
       });
-      
+
       if (res.ok) {
         const data = await res.json();
         setNotificationCount(data.unreadCount || 0);
@@ -121,11 +121,8 @@ function Navbar() {
                 <Link to="/register" className="text-gray-700 hover:text-green-600 transition-colors duration-200">
                   Register
                 </Link>
-                <Link to="/register-owner" className="text-blue-600 hover:text-blue-800 transition-colors duration-200 text-sm">
-                  Restaurant Owner
-                </Link>
-                <Link to="/register-grocery-owner" className="text-green-600 hover:text-green-800 transition-colors duration-200 text-sm">
-                  Grocery Owner
+                <Link to="/sell-with-us" className="text-white bg-green-600 hover:bg-green-700 transition-colors duration-200 text-sm font-medium px-3 py-1.5 rounded-full">
+                  Sell with us
                 </Link>
               </>
             )}
@@ -134,8 +131,8 @@ function Navbar() {
           {/* Mobile menu button */}
           <div className="md:hidden flex items-center space-x-3">
             {/* Mobile Cart Icon */}
-            <Link 
-              to="/cart" 
+            <Link
+              to="/cart"
               className="text-gray-700 hover:text-green-600 transition-colors duration-200 relative p-2"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -147,7 +144,7 @@ function Navbar() {
                 </span>
               )}
             </Link>
-            
+
             {/* Hamburger menu button */}
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -201,8 +198,8 @@ function Navbar() {
                   >
                     📋 My Orders
                   </Link>
-                  <Link 
-                    to="/my-notifications" 
+                  <Link
+                    to="/my-notifications"
                     className="block px-3 py-2 text-gray-700 hover:text-green-600 hover:bg-gray-50 rounded-md transition-colors duration-200 relative"
                     onClick={() => setIsMenuOpen(false)}
                   >
@@ -213,8 +210,8 @@ function Navbar() {
                       </span>
                     )}
                   </Link>
-                  <Link 
-                    to="/my-profile" 
+                  <Link
+                    to="/my-profile"
                     className="block px-3 py-2 text-gray-700 hover:text-green-600 hover:bg-gray-50 rounded-md transition-colors duration-200"
                     onClick={() => setIsMenuOpen(false)}
                   >
@@ -250,18 +247,11 @@ function Navbar() {
                     📝 Register
                   </Link>
                   <Link
-                    to="/register-owner"
-                    className="block px-3 py-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-md transition-colors duration-200"
+                    to="/sell-with-us"
+                    className="block px-3 py-2 text-green-700 hover:text-green-900 hover:bg-green-50 rounded-md transition-colors duration-200 font-medium"
                     onClick={() => setIsMenuOpen(false)}
                   >
-                    🍴 Restaurant Owner
-                  </Link>
-                  <Link
-                    to="/register-grocery-owner"
-                    className="block px-3 py-2 text-green-600 hover:text-green-800 hover:bg-green-50 rounded-md transition-colors duration-200"
-                    onClick={() => setIsMenuOpen(false)}
-                  >
-                    🛒 Grocery Owner
+                    🤝 Sell with us
                   </Link>
                 </>
               )}

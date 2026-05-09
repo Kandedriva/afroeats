@@ -80,6 +80,7 @@ import GroceryOwnerNotifications from "./pages/GroceryOwnerNotifications";
 import GroceryOwnerReports from "./pages/GroceryOwnerReports";
 import OwnerVerifyEmail from "./pages/OwnerVerifyEmail";
 import GroceryOwnerVerifyEmail from "./pages/GroceryOwnerVerifyEmail";
+import SellWithUs from "./pages/SellWithUs";
 
 
 function AppContent() {
@@ -379,6 +380,7 @@ function AppContent() {
         />
 
         {/* Legal Pages */}
+        <Route path="/sell-with-us" element={<SellWithUs />} />
         <Route path="/terms" element={<TermsAndConditions />} />
         <Route path="/privacy" element={<PrivacyPolicy />} />
         

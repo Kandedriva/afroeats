@@ -17,6 +17,7 @@ import {
   checkAccountLockout,
   handleFailedLogin,
   handleSuccessfulLogin,
+  clearLoginAttempts,
 } from '../middleware/accountLockout.js';
 
 function grocerySafeCompare(a, b) {
@@ -84,8 +85,8 @@ router.post('/register', uploadRestaurantLogo, async (req, res) => {
 
     // Check if email already exists
     const emailCheck = await client.query(
-      'SELECT id FROM grocery_store_owners WHERE email = $1',
-      [email]
+      'SELECT id FROM grocery_store_owners WHERE LOWER(email) = $1',
+      [email.toLowerCase().trim()]
     );
 
     if (emailCheck.rows.length > 0) {
@@ -108,7 +109,7 @@ router.post('/register', uploadRestaurantLogo, async (req, res) => {
       `INSERT INTO grocery_store_owners (name, email, password, secret_word, email_verified, verification_code, verification_code_expires_at, created_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
        RETURNING id, name, email, created_at`,
-      [name, email, hashedPassword, hashedSecretWord, false, verificationCode, codeExpiry]
+      [name, email.toLowerCase().trim(), hashedPassword, hashedSecretWord, false, verificationCode, codeExpiry]
     );
 
     const ownerId = ownerResult.rows[0].id;
@@ -139,7 +140,7 @@ router.post('/register', uploadRestaurantLogo, async (req, res) => {
     await client.query('COMMIT');
 
     // Send verification code — do not create session until email confirmed
-    sendEmailVerificationCode(email, name, verificationCode)
+    sendEmailVerificationCode(email.toLowerCase().trim(), name, verificationCode)
       .catch(err => console.error('Failed to send grocery owner verification email:', err));
 
     res.status(201).json({
@@ -166,8 +167,8 @@ router.post('/verify-email', async (req, res) => {
   if (!email || !code) return res.status(400).json({ error: 'Email and code are required' });
   try {
     const ownerRes = await pool.query(
-      'SELECT id, name, email, email_verified, verification_code, verification_code_expires_at FROM grocery_store_owners WHERE email = $1',
-      [email]
+      'SELECT id, name, email, email_verified, verification_code, verification_code_expires_at FROM grocery_store_owners WHERE LOWER(email) = $1',
+      [email.toLowerCase().trim()]
     );
     if (ownerRes.rows.length === 0) return res.status(404).json({ error: 'Account not found' });
     const owner = ownerRes.rows[0];
@@ -215,8 +216,8 @@ router.post('/resend-verification', async (req, res) => {
   if (!email) return res.status(400).json({ error: 'Email is required' });
   try {
     const ownerRes = await pool.query(
-      'SELECT id, name, email_verified FROM grocery_store_owners WHERE email = $1',
-      [email]
+      'SELECT id, name, email_verified FROM grocery_store_owners WHERE LOWER(email) = $1',
+      [email.toLowerCase().trim()]
     );
     if (ownerRes.rows.length === 0) return res.status(404).json({ error: 'Account not found' });
     const owner = ownerRes.rows[0];
@@ -250,8 +251,8 @@ router.post('/login', checkAccountLockout, async (req, res) => {
 
     // Find grocery owner by email
     const result = await pool.query(
-      'SELECT * FROM grocery_store_owners WHERE email = $1',
-      [email]
+      'SELECT * FROM grocery_store_owners WHERE LOWER(email) = $1',
+      [email.toLowerCase().trim()]
     );
 
     if (result.rows.length === 0) {
@@ -352,7 +353,7 @@ router.post('/update-password', async (req, res) => {
     }
 
     const ownerResult = await pool.query(
-      'SELECT id, email, secret_word FROM grocery_store_owners WHERE email = $1',
+      'SELECT id, email, secret_word FROM grocery_store_owners WHERE LOWER(email) = $1',
       [email.toLowerCase().trim()]
     );
 
@@ -368,10 +369,18 @@ router.post('/update-password', async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(new_password, 10);
-    await pool.query(
-      'UPDATE grocery_store_owners SET password = $1 WHERE id = $2',
+    const updateResult = await pool.query(
+      'UPDATE grocery_store_owners SET password = $1 WHERE id = $2 RETURNING id',
       [hashedPassword, owner.id]
     );
+
+    if (updateResult.rowCount === 0) {
+      console.error(`Grocery owner update-password: UPDATE affected 0 rows for id=${owner.id}`);
+      return res.status(500).json({ error: 'Failed to update password' });
+    }
+
+    // Clear any login lockout so the new password works immediately
+    await clearLoginAttempts(email.toLowerCase().trim()).catch(() => {});
 
     try {
       await sendPasswordChangeNotification(owner.email);
@@ -448,8 +457,8 @@ router.patch('/me', requireGroceryOwnerAuth, async (req, res) => {
 
     // Check new email isn't already taken by another account
     const emailTaken = await pool.query(
-      'SELECT id FROM grocery_store_owners WHERE email = $1 AND id != $2',
-      [email.toLowerCase(), req.groceryOwner.id]
+      'SELECT id FROM grocery_store_owners WHERE LOWER(email) = $1 AND id != $2',
+      [email.toLowerCase().trim(), req.groceryOwner.id]
     );
     if (emailTaken.rows.length > 0) {
       return res.status(409).json({ error: 'This email address is already in use' });

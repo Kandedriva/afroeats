@@ -201,9 +201,14 @@ app.use((err, req, res, next) => {
 app.use('/api/auth/register', rateLimits.register);
 app.use('/api/auth/login', rateLimits.auth);
 app.use('/api/owners/login', rateLimits.auth);
+app.use('/api/grocery-owners/login', rateLimits.auth);
+app.use('/api/drivers/login', rateLimits.auth);
 app.use('/api/admin/login', rateLimits.auth);
 app.use('/api/orders/guest-track', rateLimits.auth);
 app.use('/api/grocery/guest-track', rateLimits.auth);
+app.use('/api/auth/request-password-reset', rateLimits.passwordReset);
+app.use('/api/grocery-owners/update-password', rateLimits.passwordReset);
+app.use('/api/owners/update-password', rateLimits.passwordReset);
 app.use('/api/orders', rateLimits.orders);
 app.use('/api/', rateLimits.general);
 
