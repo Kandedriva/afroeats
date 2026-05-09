@@ -113,6 +113,24 @@ export default function Login() {
       </div>
 
       {error && <p className="text-red-600 mt-2">{error}</p>}
+
+      <div className="mt-6 pt-5 border-t border-gray-200">
+        <p className="text-xs text-gray-500 text-center mb-3">Not a customer? Log in as:</p>
+        <div className="flex flex-col gap-2">
+          <Link
+            to="/grocery-owner/login"
+            className="text-center text-sm text-green-700 bg-green-50 hover:bg-green-100 border border-green-200 rounded py-2 px-4 transition-colors"
+          >
+            Grocery Store Owner
+          </Link>
+          <Link
+            to="/owner/login"
+            className="text-center text-sm text-orange-700 bg-orange-50 hover:bg-orange-100 border border-orange-200 rounded py-2 px-4 transition-colors"
+          >
+            Restaurant Owner
+          </Link>
+        </div>
+      </div>
     </div>
    </>
   );

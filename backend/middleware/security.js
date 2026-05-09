@@ -3,8 +3,9 @@ import helmet from 'helmet';
 import cors from 'cors';
 import { body, param, query, validationResult } from 'express-validator';
 import { cache } from '../utils/cache.js';
+import { PgRateLimitStore } from '../utils/pgRateLimitStore.js';
 
-// Rate limiting configurations with fallback
+// Rate limiting backed by PostgreSQL — survives server restarts
 export const createRateLimit = (windowMs, max, message) => {
   return rateLimit({
     windowMs,
@@ -12,8 +13,7 @@ export const createRateLimit = (windowMs, max, message) => {
     message: { error: message },
     standardHeaders: true,
     legacyHeaders: false,
-    // Use default memory store for now to avoid Redis hanging issues
-    // store: undefined (uses default MemoryStore)
+    store: new PgRateLimitStore(windowMs),
   });
 };
 
