@@ -116,8 +116,8 @@ router.post('/register', uploadRestaurantLogo, async (req, res) => {
 
     // Create grocery store (without geocoding initially)
     const storeResult = await client.query(
-      `INSERT INTO grocery_stores (name, address, phone_number, image_url, owner_id, created_at)
-       VALUES ($1, $2, $3, $4, $5, NOW())
+      `INSERT INTO grocery_stores (name, address, phone_number, image_url, owner_id, active, approval_status, created_at)
+       VALUES ($1, $2, $3, $4, $5, false, 'pending', NOW())
        RETURNING id`,
       [store_name, location, phone_number, logoUrl, ownerId]
     );

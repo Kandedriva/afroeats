@@ -1512,4 +1512,187 @@ router.get('/drivers/stats/summary', requireAdminAuth, async (req, res) => {
   }
 });
 
+// ─── Grocery Store Approval ───────────────────────────────────────────────────
+
+// One-time migration: add approval columns if they don't exist
+pool.query(`
+  ALTER TABLE grocery_stores
+    ADD COLUMN IF NOT EXISTS approval_status VARCHAR(20) NOT NULL DEFAULT 'pending',
+    ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS rejection_reason TEXT;
+
+  UPDATE grocery_stores
+    SET approval_status = 'approved'
+    WHERE active = true AND approval_status = 'pending';
+`).catch(err => console.error('Grocery store migration error:', err));
+
+/**
+ * GET /api/admin/grocery-stores
+ * List all grocery stores with owner info and approval status.
+ */
+router.get('/grocery-stores', requireAdminAuth, async (req, res) => {
+  try {
+    const { status = 'all', page = 1, limit = 20 } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+
+    let whereClause = '';
+    const params = [];
+
+    if (status !== 'all') {
+      whereClause = 'WHERE gs.approval_status = $1';
+      params.push(status);
+    }
+
+    const countResult = await pool.query(
+      `SELECT COUNT(*) FROM grocery_stores gs ${whereClause}`,
+      params
+    );
+
+    const storesResult = await pool.query(
+      `SELECT
+         gs.id, gs.name, gs.address, gs.phone_number, gs.image_url,
+         gs.active, gs.approval_status, gs.approved_at, gs.rejection_reason,
+         gs.created_at,
+         gso.id as owner_id, gso.name as owner_name, gso.email as owner_email,
+         (SELECT COUNT(*) FROM products p WHERE p.store_id = gs.id) as product_count
+       FROM grocery_stores gs
+       JOIN grocery_store_owners gso ON gs.owner_id = gso.id
+       ${whereClause}
+       ORDER BY
+         CASE gs.approval_status WHEN 'pending' THEN 0 WHEN 'suspended' THEN 1 ELSE 2 END,
+         gs.created_at DESC
+       LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+      [...params, parseInt(limit), offset]
+    );
+
+    res.json({
+      stores: storesResult.rows,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: parseInt(countResult.rows[0].count),
+        pages: Math.ceil(countResult.rows[0].count / parseInt(limit))
+      }
+    });
+  } catch (error) {
+    console.error('Admin grocery stores list error:', error);
+    res.status(500).json({ error: 'Failed to load grocery stores' });
+  }
+});
+
+/**
+ * POST /api/admin/grocery-stores/:id/approve
+ */
+router.post('/grocery-stores/:id/approve', requireAdminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      `UPDATE grocery_stores
+       SET active = true, approval_status = 'approved', approved_at = NOW(), rejection_reason = NULL
+       WHERE id = $1
+       RETURNING id, name`,
+      [id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Store not found' });
+    }
+
+    logger.info(`Admin ${req.admin.username} approved grocery store "${result.rows[0].name}" (ID: ${id})`);
+    res.json({ success: true, message: 'Store approved and now visible to the public' });
+  } catch (error) {
+    console.error('Approve grocery store error:', error);
+    res.status(500).json({ error: 'Failed to approve store' });
+  }
+});
+
+/**
+ * POST /api/admin/grocery-stores/:id/reject
+ */
+router.post('/grocery-stores/:id/reject', requireAdminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    if (!reason || !reason.trim()) {
+      return res.status(400).json({ error: 'Rejection reason is required' });
+    }
+
+    const result = await pool.query(
+      `UPDATE grocery_stores
+       SET active = false, approval_status = 'rejected', rejection_reason = $1, approved_at = NULL
+       WHERE id = $2
+       RETURNING id, name`,
+      [reason.trim(), id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Store not found' });
+    }
+
+    logger.info(`Admin ${req.admin.username} rejected grocery store "${result.rows[0].name}" (ID: ${id}): ${reason}`);
+    res.json({ success: true, message: 'Store rejected' });
+  } catch (error) {
+    console.error('Reject grocery store error:', error);
+    res.status(500).json({ error: 'Failed to reject store' });
+  }
+});
+
+/**
+ * POST /api/admin/grocery-stores/:id/suspend
+ */
+router.post('/grocery-stores/:id/suspend', requireAdminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    const result = await pool.query(
+      `UPDATE grocery_stores
+       SET active = false, approval_status = 'suspended', rejection_reason = $1
+       WHERE id = $2
+       RETURNING id, name`,
+      [reason ? reason.trim() : null, id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Store not found' });
+    }
+
+    logger.info(`Admin ${req.admin.username} suspended grocery store "${result.rows[0].name}" (ID: ${id})`);
+    res.json({ success: true, message: 'Store suspended and hidden from public' });
+  } catch (error) {
+    console.error('Suspend grocery store error:', error);
+    res.status(500).json({ error: 'Failed to suspend store' });
+  }
+});
+
+/**
+ * POST /api/admin/grocery-stores/:id/reactivate
+ * Reactivate a suspended or rejected store.
+ */
+router.post('/grocery-stores/:id/reactivate', requireAdminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      `UPDATE grocery_stores
+       SET active = true, approval_status = 'approved', rejection_reason = NULL, approved_at = NOW()
+       WHERE id = $1
+       RETURNING id, name`,
+      [id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Store not found' });
+    }
+
+    logger.info(`Admin ${req.admin.username} reactivated grocery store "${result.rows[0].name}" (ID: ${id})`);
+    res.json({ success: true, message: 'Store reactivated and visible to the public' });
+  } catch (error) {
+    console.error('Reactivate grocery store error:', error);
+    res.status(500).json({ error: 'Failed to reactivate store' });
+  }
+});
+
 export default router;
