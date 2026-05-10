@@ -51,6 +51,7 @@ const AdminDashboard = () => {
   const [supportMessages, setSupportMessages] = useState([]);
   const [supportStats, setSupportStats] = useState(null);
   const [restaurantContacts, setRestaurantContacts] = useState([]);
+  const [groceryStores, setGroceryStores] = useState([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [confirmAction, setConfirmAction] = useState(null);
@@ -335,9 +336,23 @@ const AdminDashboard = () => {
     }
   };
 
+  const loadGroceryStores = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/admin/grocery-stores`, {
+        credentials: 'include'
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setGroceryStores(data.stores);
+      }
+    } catch (error) {
+      // silent
+    }
+  };
+
   const handleTabChange = (tab) => {
     setActiveTab(tab);
-    
+
     // Load data for specific tab
     switch (tab) {
       case 'users':
@@ -376,6 +391,11 @@ const AdminDashboard = () => {
       case 'contacts':
         if (restaurantContacts.length === 0) {
           loadRestaurantContacts();
+        }
+        break;
+      case 'grocery-stores':
+        if (groceryStores.length === 0) {
+          loadGroceryStores();
         }
         break;
       default:
@@ -486,6 +506,7 @@ const AdminDashboard = () => {
               { id: 'drivers', label: '🚗 Drivers' },
               { id: 'orders', label: '📋 Orders' },
               { id: 'grocery-orders', label: '🛒 Grocery Orders' },
+              { id: 'grocery-stores', label: '🥬 Grocery Stores' },
               { id: 'refunds', label: '💰 Refunds' },
               { id: 'support', label: '🎧 Support' },
               { id: 'contacts', label: '📞 Contacts' },
@@ -546,6 +567,10 @@ const AdminDashboard = () => {
 
         {activeTab === 'grocery-orders' && (
           <GroceryOrdersTab groceryOrders={groceryOrders} onOrderUpdate={loadGroceryOrders} />
+        )}
+
+        {activeTab === 'grocery-stores' && (
+          <GroceryStoresTab groceryStores={groceryStores} onStoreUpdate={loadGroceryStores} />
         )}
 
         {activeTab === 'refunds' && (
@@ -2107,6 +2132,326 @@ GroceryOrdersTab.propTypes = {
 GroceryOrdersTab.defaultProps = {
   groceryOrders: [],
   onOrderUpdate: () => {},
+};
+
+// Grocery Stores Tab Component
+const GroceryStoresTab = ({ groceryStores, onStoreUpdate }) => {
+  const [filterStatus, setFilterStatus] = useState('pending');
+  const [selectedStore, setSelectedStore] = useState(null);
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [suspendReason, setSuspendReason] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const handleApprove = async (storeId) => {
+    setIsProcessing(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/admin/grocery-stores/${storeId}/approve`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (res.ok) {
+        showToast.success('Store approved — now visible to the public');
+        setSelectedStore(null);
+        onStoreUpdate();
+      } else {
+        const data = await res.json();
+        showToast.error(data.error || 'Failed to approve store');
+      }
+    } catch {
+      showToast.error('An error occurred while approving the store');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleReject = async (storeId) => {
+    if (!rejectionReason.trim()) {
+      showToast.warning('Please provide a rejection reason');
+      return;
+    }
+    setIsProcessing(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/admin/grocery-stores/${storeId}/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ reason: rejectionReason }),
+      });
+      if (res.ok) {
+        showToast.success('Store rejected');
+        setSelectedStore(null);
+        setRejectionReason('');
+        onStoreUpdate();
+      } else {
+        const data = await res.json();
+        showToast.error(data.error || 'Failed to reject store');
+      }
+    } catch {
+      showToast.error('An error occurred while rejecting the store');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleSuspend = async (storeId) => {
+    setIsProcessing(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/admin/grocery-stores/${storeId}/suspend`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ reason: suspendReason }),
+      });
+      if (res.ok) {
+        showToast.success('Store suspended and hidden from public');
+        setSelectedStore(null);
+        setSuspendReason('');
+        onStoreUpdate();
+      } else {
+        const data = await res.json();
+        showToast.error(data.error || 'Failed to suspend store');
+      }
+    } catch {
+      showToast.error('An error occurred while suspending the store');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleReactivate = async (storeId) => {
+    setIsProcessing(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/admin/grocery-stores/${storeId}/reactivate`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (res.ok) {
+        showToast.success('Store reactivated and visible to the public');
+        setSelectedStore(null);
+        onStoreUpdate();
+      } else {
+        const data = await res.json();
+        showToast.error(data.error || 'Failed to reactivate store');
+      }
+    } catch {
+      showToast.error('An error occurred while reactivating the store');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const statusBadge = (status) => {
+    const map = {
+      pending:   'bg-yellow-100 text-yellow-800',
+      approved:  'bg-green-100 text-green-800',
+      rejected:  'bg-red-100 text-red-800',
+      suspended: 'bg-gray-100 text-gray-800',
+    };
+    return (
+      <span className={`px-2 py-1 rounded-full text-xs font-semibold capitalize ${map[status] || 'bg-gray-100 text-gray-700'}`}>
+        {status}
+      </span>
+    );
+  };
+
+  const filtered = filterStatus === 'all'
+    ? groceryStores
+    : groceryStores.filter(s => s.approval_status === filterStatus);
+
+  const counts = {
+    pending:   groceryStores.filter(s => s.approval_status === 'pending').length,
+    approved:  groceryStores.filter(s => s.approval_status === 'approved').length,
+    rejected:  groceryStores.filter(s => s.approval_status === 'rejected').length,
+    suspended: groceryStores.filter(s => s.approval_status === 'suspended').length,
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Filter buttons */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
+        <div className="flex flex-wrap gap-2">
+          {[
+            { key: 'all', label: `All (${groceryStores.length})`, color: 'blue' },
+            { key: 'pending', label: `Pending (${counts.pending})`, color: 'yellow' },
+            { key: 'approved', label: `Approved (${counts.approved})`, color: 'green' },
+            { key: 'rejected', label: `Rejected (${counts.rejected})`, color: 'red' },
+            { key: 'suspended', label: `Suspended (${counts.suspended})`, color: 'gray' },
+          ].map(({ key, label, color }) => (
+            <button
+              key={key}
+              onClick={() => setFilterStatus(key)}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                filterStatus === key
+                  ? `bg-${color}-600 text-white`
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Stores list */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+        {filtered.length === 0 ? (
+          <div className="p-12 text-center text-gray-500">
+            No stores with status &quot;{filterStatus}&quot;
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-100">
+            {filtered.map((store) => (
+              <div
+                key={store.id}
+                className="p-4 hover:bg-gray-50 cursor-pointer transition-colors"
+                onClick={() => { setSelectedStore(store); setRejectionReason(''); setSuspendReason(''); }}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    {store.image_url ? (
+                      <img src={store.image_url} alt={store.name} className="w-10 h-10 rounded-full object-cover" />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-lg">🥬</div>
+                    )}
+                    <div>
+                      <p className="font-semibold text-gray-900">{store.name}</p>
+                      <p className="text-sm text-gray-500">{store.address}</p>
+                      <p className="text-xs text-gray-400">
+                        Owner: {store.owner_name} · {store.owner_email}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-gray-400">{store.product_count} products</span>
+                    {statusBadge(store.approval_status)}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Detail modal */}
+      {selectedStore && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              {/* Header */}
+              <div className="flex items-start justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  {selectedStore.image_url ? (
+                    <img src={selectedStore.image_url} alt={selectedStore.name} className="w-14 h-14 rounded-full object-cover" />
+                  ) : (
+                    <div className="w-14 h-14 rounded-full bg-green-100 flex items-center justify-center text-2xl">🥬</div>
+                  )}
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-900">{selectedStore.name}</h2>
+                    {statusBadge(selectedStore.approval_status)}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSelectedStore(null)}
+                  className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
+                >
+                  &times;
+                </button>
+              </div>
+
+              {/* Info */}
+              <div className="space-y-3 mb-6 text-sm text-gray-700">
+                <div><span className="font-medium">Address:</span> {selectedStore.address}</div>
+                <div><span className="font-medium">Phone:</span> {selectedStore.phone_number}</div>
+                <div><span className="font-medium">Owner:</span> {selectedStore.owner_name} ({selectedStore.owner_email})</div>
+                <div><span className="font-medium">Products:</span> {selectedStore.product_count}</div>
+                <div><span className="font-medium">Registered:</span> {new Date(selectedStore.created_at).toLocaleDateString()}</div>
+                {selectedStore.approved_at && (
+                  <div><span className="font-medium">Approved at:</span> {new Date(selectedStore.approved_at).toLocaleDateString()}</div>
+                )}
+                {selectedStore.rejection_reason && (
+                  <div className="p-3 bg-red-50 rounded-lg">
+                    <span className="font-medium text-red-700">Reason:</span>
+                    <p className="text-red-600 mt-1">{selectedStore.rejection_reason}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="space-y-4">
+                {selectedStore.approval_status === 'pending' && (
+                  <>
+                    <button
+                      onClick={() => handleApprove(selectedStore.id)}
+                      disabled={isProcessing}
+                      className="w-full py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+                    >
+                      {isProcessing ? 'Processing…' : '✓ Approve Store'}
+                    </button>
+                    <div>
+                      <label htmlFor="gs-rejection-reason" className="block text-sm font-medium text-gray-700 mb-1">Rejection reason</label>
+                      <textarea
+                        id="gs-rejection-reason"
+                        value={rejectionReason}
+                        onChange={e => setRejectionReason(e.target.value)}
+                        placeholder="Explain why this store is being rejected…"
+                        rows={3}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                      />
+                      <button
+                        onClick={() => handleReject(selectedStore.id)}
+                        disabled={isProcessing || !rejectionReason.trim()}
+                        className="w-full mt-2 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+                      >
+                        {isProcessing ? 'Processing…' : '✗ Reject Store'}
+                      </button>
+                    </div>
+                  </>
+                )}
+
+                {selectedStore.approval_status === 'approved' && (
+                  <div>
+                    <label htmlFor="gs-suspend-reason" className="block text-sm font-medium text-gray-700 mb-1">Suspension reason (optional)</label>
+                    <textarea
+                      id="gs-suspend-reason"
+                      value={suspendReason}
+                      onChange={e => setSuspendReason(e.target.value)}
+                      placeholder="Reason for suspension…"
+                      rows={2}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-gray-500 focus:border-transparent"
+                    />
+                    <button
+                      onClick={() => handleSuspend(selectedStore.id)}
+                      disabled={isProcessing}
+                      className="w-full mt-2 py-2.5 bg-gray-700 hover:bg-gray-800 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+                    >
+                      {isProcessing ? 'Processing…' : '⏸ Suspend Store'}
+                    </button>
+                  </div>
+                )}
+
+                {(selectedStore.approval_status === 'rejected' || selectedStore.approval_status === 'suspended') && (
+                  <button
+                    onClick={() => handleReactivate(selectedStore.id)}
+                    disabled={isProcessing}
+                    className="w-full py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+                  >
+                    {isProcessing ? 'Processing…' : '↺ Reactivate Store'}
+                  </button>
+                )}
+
+                <button
+                  onClick={() => setSelectedStore(null)}
+                  className="w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 };
 
 // Drivers Tab Component
