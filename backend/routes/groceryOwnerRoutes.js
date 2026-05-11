@@ -12,7 +12,6 @@ import {
 } from '../services/emailService.js';
 import { validatePassword } from '../middleware/security.js';
 import crypto from 'crypto';
-import { generateRecoveryToken } from '../utils/recoveryToken.js';
 import {
   checkAccountLockout,
   handleFailedLogin,
@@ -310,7 +309,6 @@ router.post('/login', checkAccountLockout, async (req, res) => {
             name: groceryOwner.name,
             email: groceryOwner.email,
           },
-          recoveryToken: generateRecoveryToken('grocery', groceryOwner.id),
         });
       });
     });
