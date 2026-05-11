@@ -57,7 +57,7 @@ const AdminLogin = () => {
             <span className="text-3xl">🍽️</span>
           </div>
           <h2 className="mt-6 text-3xl font-extrabold text-white">
-            A Food Zone Admin
+            OrderDabaly Admin
           </h2>
           <p className="mt-2 text-sm text-gray-300">
             Platform Administrator Access
@@ -67,9 +67,6 @@ const AdminLogin = () => {
         <div className="bg-white bg-opacity-10 backdrop-blur-lg rounded-xl shadow-2xl p-8">
           <form className="space-y-6" onSubmit={handleSubmit}>
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-white mb-2">
-                Email Address
-              </label>
               <input
                 id="email"
                 name="email"
@@ -77,15 +74,11 @@ const AdminLogin = () => {
                 required
                 value={formData.email}
                 onChange={handleChange}
-                className="appearance-none relative block w-full px-4 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white bg-opacity-90"
-                placeholder="drivanokande4985@gmail.com"
+                className="appearance-none relative block w-full px-4 py-3 border border-gray-300 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white bg-opacity-90"
               />
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-white mb-2">
-                Password
-              </label>
               <input
                 id="password"
                 name="password"
@@ -93,8 +86,7 @@ const AdminLogin = () => {
                 required
                 value={formData.password}
                 onChange={handleChange}
-                className="appearance-none relative block w-full px-4 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white bg-opacity-90"
-                placeholder="Enter your password"
+                className="appearance-none relative block w-full px-4 py-3 border border-gray-300 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white bg-opacity-90"
               />
             </div>
 
