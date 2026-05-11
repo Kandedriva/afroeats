@@ -2301,9 +2301,10 @@ const GroceryStoresTab = ({ groceryStores, onStoreUpdate }) => {
         ) : (
           <div className="divide-y divide-gray-100">
             {filtered.map((store) => (
-              <div
+              <button
                 key={store.id}
-                className="p-4 hover:bg-gray-50 cursor-pointer transition-colors"
+                type="button"
+                className="w-full text-left p-4 hover:bg-gray-50 cursor-pointer transition-colors"
                 onClick={() => { setSelectedStore(store); setRejectionReason(''); setSuspendReason(''); }}
               >
                 <div className="flex items-center justify-between">
@@ -2326,7 +2327,7 @@ const GroceryStoresTab = ({ groceryStores, onStoreUpdate }) => {
                     {statusBadge(store.approval_status)}
                   </div>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         )}
@@ -2452,6 +2453,16 @@ const GroceryStoresTab = ({ groceryStores, onStoreUpdate }) => {
       )}
     </div>
   );
+};
+
+GroceryStoresTab.propTypes = {
+  groceryStores: PropTypes.arrayOf(PropTypes.object),
+  onStoreUpdate: PropTypes.func,
+};
+
+GroceryStoresTab.defaultProps = {
+  groceryStores: [],
+  onStoreUpdate: () => {},
 };
 
 // Drivers Tab Component
