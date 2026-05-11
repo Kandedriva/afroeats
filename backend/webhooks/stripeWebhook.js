@@ -1007,6 +1007,59 @@ export const handleStripeWebhook = async (req, res) => {
       }
       break;
 
+    case 'account.updated': {
+      const account = event.data.object;
+      const accountId = account.id;
+      const chargesEnabled = account.charges_enabled;
+      const detailsSubmitted = account.details_submitted;
+      const payoutsEnabled = account.payouts_enabled;
+      const onboardingComplete = detailsSubmitted && chargesEnabled;
+
+      console.log(`🔄 account.updated: ${accountId} | charges_enabled=${chargesEnabled} | details_submitted=${detailsSubmitted}`);
+
+      try {
+        // Update grocery store owner status
+        const groceryResult = await pool.query(
+          `UPDATE grocery_store_owners
+           SET stripe_charges_enabled   = $1,
+               stripe_details_submitted = $2,
+               stripe_payouts_enabled   = $3,
+               stripe_onboarding_complete = $4,
+               stripe_connected_at = CASE
+                 WHEN $1 = true AND stripe_connected_at IS NULL THEN NOW()
+                 ELSE stripe_connected_at
+               END
+           WHERE stripe_account_id = $5
+           RETURNING id, stripe_charges_enabled`,
+          [chargesEnabled, detailsSubmitted, payoutsEnabled, onboardingComplete, accountId]
+        );
+
+        if (groceryResult.rowCount > 0) {
+          console.log(`✅ Synced Stripe status for grocery owner (account ${accountId}): charges_enabled=${chargesEnabled}`);
+        }
+
+        // Update restaurant owner status (stripe_account_id column only — no status columns)
+        const restaurantResult = await pool.query(
+          `UPDATE restaurant_owners
+           SET stripe_account_id = stripe_account_id
+           WHERE stripe_account_id = $1
+           RETURNING id`,
+          [accountId]
+        );
+
+        if (restaurantResult.rowCount > 0) {
+          console.log(`✅ Confirmed Stripe account ${accountId} for restaurant owner`);
+        }
+
+        if (groceryResult.rowCount === 0 && restaurantResult.rowCount === 0) {
+          console.warn(`⚠️ account.updated for unknown account ${accountId} — no matching owner found`);
+        }
+      } catch (err) {
+        console.error(`❌ Failed to sync account.updated for ${accountId}:`, err.message);
+      }
+      break;
+    }
+
     default:
       console.log(`Unhandled event type: ${event.type}`);
   }
