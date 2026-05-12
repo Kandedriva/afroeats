@@ -542,7 +542,7 @@ router.get('/grocery-orders', requireAdminAuth, async (req, res) => {
         go.delivery_zip,
         go.delivery_name,
         go.delivery_phone,
-        go.special_instructions,
+        go.notes,
         go.created_at,
         go.paid_at,
         go.delivered_at,
@@ -550,7 +550,7 @@ router.get('/grocery-orders', requireAdminAuth, async (req, res) => {
         go.guest_email,
         COALESCE(u.name, go.delivery_name, 'Guest') as customer_name,
         COALESCE(u.email, go.guest_email) as customer_email,
-        u.phone as customer_phone,
+        go.delivery_phone as customer_phone,
         COUNT(DISTINCT goi.id) as total_items,
         json_agg(
           json_build_object(
@@ -567,7 +567,7 @@ router.get('/grocery-orders', requireAdminAuth, async (req, res) => {
       LEFT JOIN grocery_order_items goi ON go.id = goi.grocery_order_id
       LEFT JOIN products p ON goi.product_id = p.id
       ${whereClause}
-      GROUP BY go.id, u.name, u.email, u.phone
+      GROUP BY go.id, u.name, u.email
       ORDER BY go.created_at DESC
       LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}
     `, [...params, limit, offset]);
