@@ -64,65 +64,7 @@ export const handleStripeWebhook = async (req, res) => {
               }
             }
 
-            // Fetch order data once; used for both customer email and owner notification
-            let orderResult = null;
-            try {
-              orderResult = await pool.query(
-                `SELECT
-                  go.id, go.subtotal, go.platform_fee, go.delivery_fee, go.total,
-                  go.delivery_address, go.delivery_city, go.delivery_state, go.delivery_zip,
-                  go.delivery_name, go.delivery_phone, go.user_id, go.guest_email,
-                  u.name as user_name, u.email as user_email,
-                  json_agg(
-                    json_build_object(
-                      'name', p.name,
-                      'product_name', p.name,
-                      'quantity', goi.quantity,
-                      'price', goi.unit_price
-                    )
-                  ) as items
-                FROM grocery_orders go
-                LEFT JOIN users u ON go.user_id = u.id
-                LEFT JOIN grocery_order_items goi ON go.id = goi.grocery_order_id
-                LEFT JOIN products p ON goi.product_id = p.id
-                WHERE go.id = $1
-                GROUP BY go.id, u.name, u.email`,
-                [orderId]
-              );
-
-              if (orderResult.rows.length > 0) {
-                const order = orderResult.rows[0];
-                const customerEmail = order.user_email || order.guest_email;
-                const customerName = order.user_name || order.delivery_name || 'Customer';
-
-                if (customerEmail) {
-                  await sendOrderConfirmationEmail(customerEmail, customerName, {
-                    orderId: order.id,
-                    items: order.items,
-                    subtotal: parseFloat(order.subtotal),
-                    deliveryFee: parseFloat(order.delivery_fee),
-                    platformFee: parseFloat(order.platform_fee),
-                    total: parseFloat(order.total),
-                    orderType: 'grocery',
-                    isGuestOrder: !!order.guest_email,
-                    deliveryAddress: {
-                      name: order.delivery_name,
-                      address: order.delivery_address,
-                      city: order.delivery_city,
-                      state: order.delivery_state,
-                      zipCode: order.delivery_zip,
-                      phone: order.delivery_phone
-                    }
-                  });
-                  console.log(`✅ Grocery order confirmation email sent to ${customerEmail}`);
-                }
-              }
-            } catch (emailError) {
-              console.error('❌ Failed to send grocery order confirmation email:', emailError);
-            }
-
-            // ✅ Send notification to grocery store owner
-            // ensureGroceryNotification handles all fallbacks and deduplication
+            // ensureGroceryNotification handles owner notification + both customer and owner emails
             await ensureGroceryNotification(orderId, session.id);
 
             // ✅ Handle Stripe Connect payout to grocery owner

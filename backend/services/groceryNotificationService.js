@@ -178,9 +178,14 @@ export async function ensureGroceryNotification(orderId, stripeSessionId = null)
           platformFee: parseFloat(order?.platform_fee || 0),
           total,
           orderType: 'grocery',
-          deliveryAddress: order?.delivery_address
-            ? `${order.delivery_address}, ${order.delivery_city || ''}${order.delivery_state ? ', ' + order.delivery_state : ''}${order.delivery_zip ? ' ' + order.delivery_zip : ''}`
-            : '',
+          deliveryAddress: order?.delivery_address ? {
+            name: order.delivery_name || customerName,
+            address: order.delivery_address,
+            city: order.delivery_city || '',
+            state: order.delivery_state || '',
+            zipCode: order.delivery_zip || '',
+            phone: order.delivery_phone || '',
+          } : null,
           isGuestOrder: !!order?.guest_email,
         });
         console.log(`✅ [Email] Customer confirmation sent to ${customerEmail}`);
