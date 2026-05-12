@@ -1852,8 +1852,7 @@ router.post('/grocery-retry-payout/:orderId', requireAdminAuth, async (req, res)
     }
 
     const subtotal = parseFloat(payoutRow.subtotal);
-    const platformFee = parseFloat(payoutRow.platform_fee || 0);
-    const ownerAmount = Math.round((subtotal - platformFee) * 100);
+    const ownerAmount = Math.round(subtotal * 100); // owner gets full subtotal; platform_fee is a separate customer charge
 
     if (ownerAmount < 50) {
       return res.status(400).json({ error: `Amount too small: $${(ownerAmount / 100).toFixed(2)}` });
