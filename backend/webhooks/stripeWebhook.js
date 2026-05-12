@@ -127,33 +127,59 @@ export const handleStripeWebhook = async (req, res) => {
 
             // ✅ Handle Stripe Connect payout to grocery owner
             try {
-              // Get order details and owner's Stripe account
-              const payoutInfoResult = await pool.query(
-                `SELECT
-                  go.total, go.platform_fee, go.delivery_fee, go.subtotal,
-                  gso.stripe_account_id, gso.stripe_charges_enabled,
-                  gs.name as store_name
-                 FROM grocery_orders go
-                 JOIN grocery_order_items goi ON go.id = goi.grocery_order_id
-                 JOIN products p ON goi.product_id = p.id
-                 JOIN grocery_stores gs ON p.store_id = gs.id
-                 JOIN grocery_store_owners gso ON gs.owner_id = gso.id
-                 WHERE go.id = $1
-                 LIMIT 1`,
-                [orderId]
-              );
+              // Use ownerId from Stripe session metadata directly — avoids JOIN through
+              // products.store_id which can be NULL, causing the chain to return 0 rows.
+              const metaOwnerId = session.metadata?.ownerId ? parseInt(session.metadata.ownerId) : null;
+              console.log(`🔍 Payout lookup for order ${orderId}: metaOwnerId=${metaOwnerId}`);
+
+              let payoutInfoResult;
+              if (metaOwnerId) {
+                payoutInfoResult = await pool.query(
+                  `SELECT
+                    go.total, go.platform_fee, go.delivery_fee, go.subtotal,
+                    gso.stripe_account_id, gso.stripe_charges_enabled,
+                    gs.name as store_name
+                   FROM grocery_orders go
+                   JOIN grocery_store_owners gso ON gso.id = $2
+                   LEFT JOIN grocery_stores gs ON gs.owner_id = gso.id
+                   WHERE go.id = $1
+                   LIMIT 1`,
+                  [orderId, metaOwnerId]
+                );
+                console.log(`🔍 Payout query via metadata ownerId: ${payoutInfoResult.rows.length} row(s) found`);
+              } else {
+                // Fallback: resolve through product store_id join
+                payoutInfoResult = await pool.query(
+                  `SELECT
+                    go.total, go.platform_fee, go.delivery_fee, go.subtotal,
+                    gso.stripe_account_id, gso.stripe_charges_enabled,
+                    gs.name as store_name
+                   FROM grocery_orders go
+                   JOIN grocery_order_items goi ON go.id = goi.grocery_order_id
+                   JOIN products p ON goi.product_id = p.id
+                   JOIN grocery_stores gs ON p.store_id = gs.id
+                   JOIN grocery_store_owners gso ON gs.owner_id = gso.id
+                   WHERE go.id = $1
+                   LIMIT 1`,
+                  [orderId]
+                );
+                console.log(`🔍 Payout query via product JOIN (fallback): ${payoutInfoResult.rows.length} row(s) found`);
+              }
 
               if (payoutInfoResult.rows.length > 0) {
                 const payoutInfo = payoutInfoResult.rows[0];
+                console.log(`🔍 Payout info: stripe_account_id=${payoutInfo.stripe_account_id || 'NULL'} stripe_charges_enabled=${payoutInfo.stripe_charges_enabled}`);
 
                 // If the DB says charges are not enabled, do a live Stripe check —
                 // the DB column may be stale if the owner never reloaded their dashboard
                 // after completing onboarding.
                 if (payoutInfo.stripe_account_id && !payoutInfo.stripe_charges_enabled) {
                   try {
+                    console.log(`⚡ DB shows stripe_charges_enabled=false for ${payoutInfo.stripe_account_id} — checking live Stripe...`);
                     const liveAccount = await stripe.accounts.retrieve(payoutInfo.stripe_account_id);
+                    console.log(`⚡ Live Stripe: charges_enabled=${liveAccount.charges_enabled} details_submitted=${liveAccount.details_submitted} payouts_enabled=${liveAccount.payouts_enabled}`);
                     if (liveAccount.charges_enabled) {
-                      console.log(`⚡ DB had stale stripe_charges_enabled=false for ${payoutInfo.stripe_account_id} — Stripe says true, syncing DB`);
+                      console.log(`⚡ Stripe confirms charges enabled — syncing DB and proceeding with transfer`);
                       payoutInfo.stripe_charges_enabled = true;
                       // Sync DB so future orders don't need the live check
                       await pool.query(
@@ -166,6 +192,8 @@ export const handleStripeWebhook = async (req, res) => {
                          WHERE stripe_account_id = $3`,
                         [liveAccount.details_submitted, liveAccount.payouts_enabled, payoutInfo.stripe_account_id]
                       );
+                    } else {
+                      console.warn(`⚠️ Stripe also says charges NOT enabled for ${payoutInfo.stripe_account_id} — owner must complete onboarding`);
                     }
                   } catch (liveCheckErr) {
                     console.error(`⚠️ Live Stripe account check failed for ${payoutInfo.stripe_account_id}:`, liveCheckErr.message);

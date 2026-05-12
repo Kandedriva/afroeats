@@ -1,6 +1,7 @@
 import express from 'express';
 import bcryptjs from 'bcryptjs';
 import pool from '../db.js';
+import stripe from '../stripe.js';
 import { AnalyticsService } from '../services/analytics.js';
 import { getQueueStats } from '../services/queue.js';
 import { cache } from '../utils/cache.js';
@@ -1721,6 +1722,172 @@ router.post('/grocery-stores/:id/reactivate', requireAdminAuth, async (req, res)
   } catch (error) {
     console.error('Reactivate grocery store error:', error);
     res.status(500).json({ error: 'Failed to reactivate store' });
+  }
+});
+
+/**
+ * GET /api/admin/grocery-payout-status/:orderId
+ * Diagnose why a grocery order payout may not have transferred to the owner.
+ * Returns DB state + live Stripe account status.
+ */
+router.get('/grocery-payout-status/:orderId', requireAdminAuth, async (req, res) => {
+  const orderId = parseInt(req.params.orderId);
+  if (isNaN(orderId)) return res.status(400).json({ error: 'Invalid orderId' });
+
+  try {
+    // 1. Order + owner info via metadata ownerId join (preferred path)
+    const orderResult = await pool.query(
+      `SELECT go.id, go.subtotal, go.platform_fee, go.delivery_fee, go.total,
+              go.status, go.paid_at,
+              gso.id as owner_id, gso.stripe_account_id, gso.stripe_charges_enabled,
+              gso.stripe_onboarding_complete,
+              gs.name as store_name
+       FROM grocery_orders go
+       LEFT JOIN grocery_order_items goi ON go.id = goi.grocery_order_id
+       LEFT JOIN products p ON goi.product_id = p.id
+       LEFT JOIN grocery_stores gs ON p.store_id = gs.id
+       LEFT JOIN grocery_store_owners gso ON gs.owner_id = gso.id
+       WHERE go.id = $1
+       LIMIT 1`,
+      [orderId]
+    );
+
+    const payment = await pool.query(
+      `SELECT * FROM grocery_owner_payments WHERE grocery_order_id = $1`,
+      [orderId]
+    );
+
+    const row = orderResult.rows[0] || null;
+    let liveStripe = null;
+
+    if (row?.stripe_account_id) {
+      try {
+        const acct = await stripe.accounts.retrieve(row.stripe_account_id);
+        liveStripe = {
+          charges_enabled: acct.charges_enabled,
+          payouts_enabled: acct.payouts_enabled,
+          details_submitted: acct.details_submitted,
+          requirements_currently_due: acct.requirements?.currently_due || [],
+        };
+      } catch (e) {
+        liveStripe = { error: e.message };
+      }
+    }
+
+    res.json({
+      order: row,
+      payment_records: payment.rows,
+      live_stripe: liveStripe,
+    });
+  } catch (error) {
+    console.error('Grocery payout status error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/admin/grocery-retry-payout/:orderId
+ * Manually trigger the transfer to the grocery owner for an order that missed it.
+ * Safe to call multiple times — uses ON CONFLICT DO NOTHING.
+ */
+router.post('/grocery-retry-payout/:orderId', requireAdminAuth, async (req, res) => {
+  const orderId = parseInt(req.params.orderId);
+  if (isNaN(orderId)) return res.status(400).json({ error: 'Invalid orderId' });
+
+  try {
+    // Resolve owner via product JOIN chain
+    let payoutRow = null;
+
+    const byJoin = await pool.query(
+      `SELECT go.total, go.platform_fee, go.delivery_fee, go.subtotal,
+              gso.id as owner_id, gso.stripe_account_id, gso.stripe_charges_enabled,
+              gs.name as store_name
+       FROM grocery_orders go
+       JOIN grocery_order_items goi ON go.id = goi.grocery_order_id
+       JOIN products p ON goi.product_id = p.id
+       JOIN grocery_stores gs ON p.store_id = gs.id
+       JOIN grocery_store_owners gso ON gs.owner_id = gso.id
+       WHERE go.id = $1
+       LIMIT 1`,
+      [orderId]
+    );
+    if (byJoin.rows.length > 0) payoutRow = byJoin.rows[0];
+
+    // Fallback: look up the only grocery store owner
+    if (!payoutRow) {
+      const fallback = await pool.query(
+        `SELECT go.total, go.platform_fee, go.delivery_fee, go.subtotal,
+                gso.id as owner_id, gso.stripe_account_id, gso.stripe_charges_enabled,
+                gs.name as store_name
+         FROM grocery_orders go
+         CROSS JOIN grocery_store_owners gso
+         LEFT JOIN grocery_stores gs ON gs.owner_id = gso.id
+         WHERE go.id = $1
+         LIMIT 1`,
+        [orderId]
+      );
+      if (fallback.rows.length > 0) payoutRow = fallback.rows[0];
+    }
+
+    if (!payoutRow) return res.status(404).json({ error: 'Order or owner not found' });
+    if (!payoutRow.stripe_account_id) return res.status(400).json({ error: 'Owner has no Stripe account ID' });
+
+    // Live check
+    const liveAccount = await stripe.accounts.retrieve(payoutRow.stripe_account_id);
+    if (!liveAccount.charges_enabled) {
+      return res.status(400).json({
+        error: 'Stripe account charges not enabled — owner must complete onboarding',
+        charges_enabled: false,
+        requirements: liveAccount.requirements?.currently_due,
+      });
+    }
+
+    // Check if transfer already exists
+    const existing = await pool.query(
+      `SELECT stripe_transfer_id, status FROM grocery_owner_payments WHERE grocery_order_id = $1`,
+      [orderId]
+    );
+    if (existing.rows.length > 0 && existing.rows[0].status === 'completed') {
+      return res.status(409).json({ error: 'Transfer already completed', transfer_id: existing.rows[0].stripe_transfer_id });
+    }
+
+    const subtotal = parseFloat(payoutRow.subtotal);
+    const platformFee = parseFloat(payoutRow.platform_fee || 0);
+    const ownerAmount = Math.round((subtotal - platformFee) * 100);
+
+    if (ownerAmount < 50) {
+      return res.status(400).json({ error: `Amount too small: $${(ownerAmount / 100).toFixed(2)}` });
+    }
+
+    const transfer = await stripe.transfers.create({
+      amount: ownerAmount,
+      currency: 'usd',
+      destination: payoutRow.stripe_account_id,
+      transfer_group: `grocery_order_${orderId}`,
+      metadata: { orderId: orderId.toString(), orderType: 'grocery', storeName: payoutRow.store_name || '', retried_by_admin: 'true' },
+    });
+
+    await pool.query(
+      `INSERT INTO grocery_owner_payments (
+         grocery_order_id, grocery_owner_id, amount, stripe_transfer_id, status, processed_at
+       ) VALUES ($1, $2, $3, $4, 'completed', NOW())
+       ON CONFLICT DO NOTHING`,
+      [orderId, payoutRow.owner_id, (ownerAmount / 100).toFixed(2), transfer.id]
+    );
+
+    // Update existing awaiting_connect record if present
+    await pool.query(
+      `UPDATE grocery_owner_payments
+       SET status = 'completed', stripe_transfer_id = $1, processed_at = NOW()
+       WHERE grocery_order_id = $2 AND status != 'completed'`,
+      [transfer.id, orderId]
+    );
+
+    logger.info(`Admin ${req.admin.username} manually retried payout for grocery order ${orderId}: transfer ${transfer.id}`);
+    res.json({ success: true, transfer_id: transfer.id, amount: (ownerAmount / 100).toFixed(2) });
+  } catch (error) {
+    console.error('Grocery retry payout error:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
