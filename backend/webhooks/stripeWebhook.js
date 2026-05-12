@@ -201,15 +201,15 @@ export const handleStripeWebhook = async (req, res) => {
                 }
 
                 if (payoutInfo.stripe_account_id && payoutInfo.stripe_charges_enabled) {
-                  // Calculate payout amount
-                  // Grocery owner gets: subtotal - platform_fee
-                  // Platform keeps: platform_fee + delivery_fee
+                  // Calculate payout amount.
+                  // The platform_fee and delivery_fee are separate line items the customer
+                  // pays on top of the subtotal — they stay in the platform account automatically.
+                  // The owner receives the full subtotal.
                   const platformFee = parseFloat(payoutInfo.platform_fee || 0);
                   const deliveryFee = parseFloat(payoutInfo.delivery_fee || 0);
                   const subtotal = parseFloat(payoutInfo.subtotal);
 
-                  // Grocery owner receives subtotal minus their share of platform fee
-                  const ownerAmount = Math.round((subtotal - platformFee) * 100); // in cents
+                  const ownerAmount = Math.round(subtotal * 100); // in cents — owner gets full subtotal
 
                   if (ownerAmount >= 50) { // Minimum 50 cents ($0.50)
                     console.log(
@@ -269,7 +269,7 @@ export const handleStripeWebhook = async (req, res) => {
                      WHERE goi.grocery_order_id = $1
                      LIMIT 1
                      ON CONFLICT DO NOTHING`,
-                    [orderId, parseFloat(payoutInfo.subtotal) - parseFloat(payoutInfo.platform_fee)]
+                    [orderId, parseFloat(payoutInfo.subtotal)]
                   );
                 }
               }
