@@ -734,13 +734,7 @@ export const handleStripeWebhook = async (req, res) => {
 
           // ✅ Handle payment transfers to restaurant owners (if using Stripe Connect)
           if (restaurantTotals && stripe) {
-            console.log(`💰 Processing payment transfers...`);
-
-            // Platform fee is flat $1.20 per order, split proportionally among restaurants
-            const totalPlatformFee = platformFee || 1.20;
-            const totalOrderAmount = Object.values(restaurantTotals).reduce((sum, r) => sum + r.total, 0);
-
-            console.log(`📊 Order totals - Total: $${totalOrderAmount.toFixed(2)}, Platform fee: $${totalPlatformFee.toFixed(2)}, Restaurants: ${Object.keys(restaurantTotals).length}`);
+            console.log(`💰 Processing payment transfers for ${Object.keys(restaurantTotals).length} restaurant(s)...`);
 
             for (const [restaurantId, restaurantData] of Object.entries(restaurantTotals)) {
               const { restaurant, total: restaurantTotal } = restaurantData;
@@ -749,19 +743,17 @@ export const handleStripeWebhook = async (req, res) => {
 
               if (restaurant.stripe_account_id) {
                 try {
-                  // Calculate proportional platform fee for this restaurant
-                  // Each restaurant pays their share of the $1.20 based on their order percentage
-                  const restaurantPercentage = restaurantTotal / totalOrderAmount;
-                  const restaurantPlatformFee = Math.round(totalPlatformFee * restaurantPercentage * 100); // in cents
-                  const restaurantAmount = Math.round(restaurantTotal * 100) - restaurantPlatformFee;
+                  // Restaurant receives its full food total.
+                  // The $1.20 platform fee is a separate line item the customer paid —
+                  // it stays in the platform account; no deduction from the restaurant.
+                  const restaurantAmount = Math.round(restaurantTotal * 100); // in cents
 
-                  // Validate transfer amount (must be at least 1 cent)
-                  if (restaurantAmount < 1) {
+                  // Validate transfer amount (must be at least 50 cents)
+                  if (restaurantAmount < 50) {
                     console.warn(
-                      `⚠️ Skipping transfer to ${restaurant.name}: Amount too small ($${(restaurantAmount / 100).toFixed(2)}). Order total: $${restaurantTotal.toFixed(2)}, Platform fee share: $${(restaurantPlatformFee / 100).toFixed(2)}`
+                      `⚠️ Skipping transfer to ${restaurant.name}: Amount too small ($${(restaurantAmount / 100).toFixed(2)})`
                     );
 
-                    // Mark payment as completed with note about small amount
                     await pool.query(
                       'UPDATE restaurant_payments SET status = $1, processed_at = NOW() WHERE order_id = $2 AND restaurant_id = $3',
                       ['completed_no_transfer', orderId, restaurantId]
@@ -770,10 +762,9 @@ export const handleStripeWebhook = async (req, res) => {
                   }
 
                   console.log(
-                    `💸 Transferring $${(restaurantAmount / 100).toFixed(2)} to restaurant ${restaurant.name} (Their share of $1.20 platform fee: $${(restaurantPlatformFee / 100).toFixed(2)})`
+                    `💸 Transferring $${(restaurantAmount / 100).toFixed(2)} to restaurant ${restaurant.name}`
                   );
 
-                  // Transfer to restaurant (minus their portion of platform fee)
                   const transfer = await stripe.transfers.create({
                     amount: restaurantAmount,
                     currency: 'usd',
@@ -782,7 +773,6 @@ export const handleStripeWebhook = async (req, res) => {
                       orderId: orderId.toString(),
                       restaurantId: restaurantId.toString(),
                       restaurantName: restaurant.name,
-                      platformFeeShare: (restaurantPlatformFee / 100).toFixed(2),
                     },
                   });
 
