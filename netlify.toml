@@ -49,8 +49,10 @@
     # Permissions Policy — disable APIs the app does not use
     Permissions-Policy = "accelerometer=(), camera=(), fullscreen=(self), geolocation=(self), gyroscope=(), interest-cohort=(), magnetometer=(), microphone=(), payment=(self), usb=()"
 
-    # Cache static assets
-    Cache-Control = "public, max-age=31536000, immutable"
+    # HTML pages and SPA routes must never be cached aggressively —
+    # if they were, browsers would keep old JS hash references after a deploy.
+    # Hashed static files (/static/js/*, /static/css/*) get the long cache below.
+    Cache-Control = "public, no-cache"
 
 [[headers]]
   for = "/*.html"
