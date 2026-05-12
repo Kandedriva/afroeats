@@ -6,6 +6,8 @@ import { getQueueStats } from '../services/queue.js';
 import { cache } from '../utils/cache.js';
 import { rateLimits, validators, handleValidationErrors } from '../middleware/security.js';
 import { logger } from '../services/logger.js';
+import NotificationService from '../services/NotificationService.js';
+import { sendOrderConfirmationEmail } from '../services/emailService.js';
 
 const router = express.Router();
 
@@ -104,6 +106,33 @@ router.get('/me', requireAdminAuth, async (req, res) => {
   } catch (error) {
     console.error('Get admin info error:', error);
     res.status(500).json({ error: 'Failed to get admin info' });
+  }
+});
+
+/**
+ * GET /api/admin/test-email?to=someone@example.com
+ * Send a test email to verify AWS SES is configured correctly on this server.
+ * Admin-only — safe to use in production.
+ */
+router.get('/test-email', requireAdminAuth, async (req, res) => {
+  const to = req.query.to;
+  if (!to) {
+    return res.status(400).json({ error: 'Missing ?to= query param', usage: '/api/admin/test-email?to=you@example.com' });
+  }
+
+  // Report env var presence (not values) so you can confirm they loaded
+  const envCheck = {
+    AWS_ACCESS_KEY_ID:     !!process.env.AWS_ACCESS_KEY_ID,
+    AWS_SECRET_ACCESS_KEY: !!process.env.AWS_SECRET_ACCESS_KEY,
+    AWS_REGION:            process.env.AWS_REGION || '(not set — defaults to us-east-1)',
+    AWS_SES_FROM_EMAIL:    process.env.AWS_SES_FROM_EMAIL || '(not set — defaults to noreply@orderdabaly.com)',
+  };
+
+  try {
+    const result = await NotificationService.testEmailConfig(to);
+    res.json({ result, envCheck });
+  } catch (error) {
+    res.status(500).json({ error: error.message, envCheck });
   }
 });
 
