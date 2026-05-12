@@ -146,6 +146,32 @@ export const handleStripeWebhook = async (req, res) => {
               if (payoutInfoResult.rows.length > 0) {
                 const payoutInfo = payoutInfoResult.rows[0];
 
+                // If the DB says charges are not enabled, do a live Stripe check —
+                // the DB column may be stale if the owner never reloaded their dashboard
+                // after completing onboarding.
+                if (payoutInfo.stripe_account_id && !payoutInfo.stripe_charges_enabled) {
+                  try {
+                    const liveAccount = await stripe.accounts.retrieve(payoutInfo.stripe_account_id);
+                    if (liveAccount.charges_enabled) {
+                      console.log(`⚡ DB had stale stripe_charges_enabled=false for ${payoutInfo.stripe_account_id} — Stripe says true, syncing DB`);
+                      payoutInfo.stripe_charges_enabled = true;
+                      // Sync DB so future orders don't need the live check
+                      await pool.query(
+                        `UPDATE grocery_store_owners
+                         SET stripe_charges_enabled   = true,
+                             stripe_details_submitted = $1,
+                             stripe_payouts_enabled   = $2,
+                             stripe_onboarding_complete = true,
+                             stripe_connected_at = COALESCE(stripe_connected_at, NOW())
+                         WHERE stripe_account_id = $3`,
+                        [liveAccount.details_submitted, liveAccount.payouts_enabled, payoutInfo.stripe_account_id]
+                      );
+                    }
+                  } catch (liveCheckErr) {
+                    console.error(`⚠️ Live Stripe account check failed for ${payoutInfo.stripe_account_id}:`, liveCheckErr.message);
+                  }
+                }
+
                 if (payoutInfo.stripe_account_id && payoutInfo.stripe_charges_enabled) {
                   // Calculate payout amount
                   // Grocery owner gets: subtotal - platform_fee
