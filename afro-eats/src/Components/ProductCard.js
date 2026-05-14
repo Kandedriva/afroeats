@@ -44,8 +44,8 @@ const ProductCard = ({ product }) => {
   };
 
   const handleConfirmWeight = async () => {
-    if (weight < 0.1 || weight > product.stock_quantity) {
-      toast.error(`Please enter a valid weight between 0.1 and ${product.stock_quantity} ${product.unit}`);
+    if (!weight || weight < 0.1) {
+      toast.error(`Please enter a valid amount (minimum 0.1 ${product.unit})`);
       return;
     }
     try {
@@ -61,8 +61,8 @@ const ProductCard = ({ product }) => {
   const badges = getBadges(product);
   const isLowStock = product.stock_quantity <= product.low_stock_threshold;
   const isOutOfStock = product.stock_quantity === 0;
-  const pricePerUnit = product.price + (product.platform_fee || 0);
-  const calculatedTotal = (pricePerUnit * weight).toFixed(2);
+  const pricePerUnit = parseFloat(product.price) + parseFloat(product.platform_fee || 0);
+  const calculatedTotal = weight > 0 ? (pricePerUnit * weight).toFixed(2) : '0.00';
 
   const categoryEmoji =
     product.category === 'vegetables' ? '🥬' :
@@ -177,16 +177,15 @@ const ProductCard = ({ product }) => {
                       if (!isNaN(n) && n >= 0) { setWeight(n); }
                     }
                   }}
-                  step="0.1" min="0" max={product.stock_quantity} placeholder="0.0"
+                  step="0.1" min="0.1" placeholder="0.0"
                   className="flex-1 text-center text-xl font-semibold border-2 border-gray-300 rounded-lg py-3 focus:ring-2 focus:ring-green-500 focus:border-transparent"
                 />
                 <button
-                  onClick={() => setWeight(Math.min(product.stock_quantity, parseFloat((weight + 0.1).toFixed(1))))}
+                  onClick={() => setWeight(parseFloat((weight + 0.1).toFixed(1)))}
                   className="px-4 py-3 bg-gray-200 hover:bg-gray-300 rounded-lg font-semibold text-lg"
                 >+</button>
                 <span className="text-gray-600 font-medium">{product.unit}</span>
               </div>
-              <p className="text-sm text-gray-500 mt-2">Available: {product.stock_quantity} {product.unit}</p>
             </div>
             <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
               <div className="flex justify-between items-center mb-2">
