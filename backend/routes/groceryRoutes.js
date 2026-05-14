@@ -199,8 +199,8 @@ router.post('/create-order', async (req, res) => {
     } = req.body;
 
     // Platform fee is calculated server-side — never trust client value.
-    // Formula: 15% of subtotal, minimum $2.00
-    const platformFee = parseFloat(Math.max(subtotal * 0.15, 2.00).toFixed(2));
+    // Formula: 10% of subtotal, minimum $2.00
+    const platformFee = parseFloat(Math.max(subtotal * 0.10, 2.00).toFixed(2));
     const total = parseFloat((subtotal + platformFee + (deliveryMethod === 'pickup' ? 0 : (deliveryFee || 0))).toFixed(2));
 
     const isPickup = deliveryMethod === 'pickup';
