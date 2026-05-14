@@ -314,24 +314,12 @@ export const GroceryCartProvider = ({ children }) => {
   };
 
   /**
-   * Calculate platform fee (5% of subtotal, min $1.50, max $10)
+   * Calculate platform fee: 15% of subtotal, minimum $2.00
+   * Must match the server-side formula in groceryRoutes.js
    */
   const getGroceryPlatformFee = () => {
     const subtotal = getGrocerySubtotal();
-    const feePercent = 0.05; // 5%
-    const calculatedFee = subtotal * feePercent;
-
-    const minFee = 1.50;
-    const maxFee = 10.00;
-
-    if (calculatedFee < minFee) {
-      return minFee;
-    }
-    if (calculatedFee > maxFee) {
-      return maxFee;
-    }
-
-    return calculatedFee;
+    return parseFloat(Math.max(subtotal * 0.15, 2.00).toFixed(2));
   };
 
   /**
