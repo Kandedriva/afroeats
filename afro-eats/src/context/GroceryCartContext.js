@@ -100,9 +100,37 @@ export const GroceryCartProvider = ({ children }) => {
   }, [user, fetchCart, loadGuestCart]);
 
   /**
-   * Add product to cart (works for both guest and authenticated users)
+   * Add product to cart (works for both guest and authenticated users).
+   * Throws a STORE_CONFLICT error if the product belongs to a different store
+   * than the items already in the cart.
    */
   const addToGroceryCart = async (product, quantity = 1) => {
+    // Detect store conflict before doing anything
+    if (product.store_id && groceryCart.length > 0) {
+      const existingItem = groceryCart.find(i => i.store_id && i.store_id !== product.store_id);
+      if (existingItem) {
+        const err = new Error('STORE_CONFLICT');
+        err.type = 'STORE_CONFLICT';
+        err.existingStoreName = existingItem.store_name || 'your current store';
+        err.newStoreName = product.store_name || 'the new store';
+        throw err;
+      }
+    }
+
+    // Shared cart item shape
+    const cartItem = {
+      id: product.id,
+      name: product.name,
+      price: parseFloat(product.price),
+      unit: product.unit,
+      quantity,
+      image_url: product.image_url,
+      stock_quantity: product.stock_quantity,
+      category: product.category,
+      store_id: product.store_id,
+      store_name: product.store_name || '',
+    };
+
     if (user) {
       // Authenticated user - add to database
       try {
@@ -128,9 +156,7 @@ export const GroceryCartProvider = ({ children }) => {
           throw new Error(errorData.error || "Failed to add to cart");
         }
 
-        // Update local state optimistically
         const existingIndex = groceryCart.findIndex((item) => item.id === product.id);
-
         if (existingIndex >= 0) {
           setGroceryCart((prev) =>
             prev.map((item) =>
@@ -140,25 +166,12 @@ export const GroceryCartProvider = ({ children }) => {
             )
           );
         } else {
-          setGroceryCart((prev) => [
-            ...prev,
-            {
-              id: product.id,
-              name: product.name,
-              price: parseFloat(product.price),
-              unit: product.unit,
-              quantity,
-              image_url: product.image_url,
-              stock_quantity: product.stock_quantity,
-              category: product.category,
-              store_id: product.store_id
-            },
-          ]);
+          setGroceryCart((prev) => [...prev, cartItem]);
         }
 
         return true;
       } catch (error) {
-        await fetchCart(); // Re-fetch to sync state
+        if (error.type !== 'STORE_CONFLICT') { await fetchCart(); }
         throw error;
       }
     } else {
@@ -173,20 +186,7 @@ export const GroceryCartProvider = ({ children }) => {
             : item
         );
       } else {
-        newCart = [
-          ...groceryCart,
-          {
-            id: product.id,
-            name: product.name,
-            price: parseFloat(product.price),
-            unit: product.unit,
-            quantity,
-            image_url: product.image_url,
-            stock_quantity: product.stock_quantity,
-            category: product.category,
-            store_id: product.store_id
-          },
-        ];
+        newCart = [...groceryCart, cartItem];
       }
 
       setGroceryCart(newCart);

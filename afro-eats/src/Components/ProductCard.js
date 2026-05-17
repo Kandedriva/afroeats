@@ -6,9 +6,11 @@ import { useGroceryCart } from '../context/GroceryCartContext';
 import { slugify } from '../utils/slugify';
 
 const ProductCard = ({ product }) => {
-  const { addToGroceryCart } = useGroceryCart();
+  const { addToGroceryCart, clearGroceryCart } = useGroceryCart();
   const [showWeightModal, setShowWeightModal] = useState(false);
   const [weight, setWeight] = useState(0);
+  const [storeConflict, setStoreConflict] = useState(null); // { existingStoreName, newStoreName, quantity }
+
   const formatPrice = (price) => parseFloat(price).toFixed(2);
 
   const isWeightBased = ['lb', 'kg', 'oz', 'g'].includes(product.unit);
@@ -39,7 +41,11 @@ const ProductCard = ({ product }) => {
       await addToGroceryCart(product, 1);
       toast.success(`Added ${product.name} to grocery cart!`);
     } catch (err) {
-      toast.error(err.message || 'Failed to add to cart');
+      if (err.type === 'STORE_CONFLICT') {
+        setStoreConflict({ existingStoreName: err.existingStoreName, newStoreName: err.newStoreName, quantity: 1 });
+      } else {
+        toast.error(err.message || 'Failed to add to cart');
+      }
     }
   };
 
@@ -54,7 +60,24 @@ const ProductCard = ({ product }) => {
       setShowWeightModal(false);
       setWeight(0);
     } catch (err) {
+      if (err.type === 'STORE_CONFLICT') {
+        setShowWeightModal(false);
+        setStoreConflict({ existingStoreName: err.existingStoreName, newStoreName: err.newStoreName, quantity: parseFloat(weight) });
+      } else {
+        toast.error(err.message || 'Failed to add to cart');
+      }
+    }
+  };
+
+  const handleConfirmStoreSwitch = async () => {
+    try {
+      await clearGroceryCart();
+      await addToGroceryCart(product, storeConflict.quantity);
+      toast.success(`Cart cleared. Added ${product.name} to grocery cart!`);
+    } catch (err) {
       toast.error(err.message || 'Failed to add to cart');
+    } finally {
+      setStoreConflict(null);
     }
   };
 
@@ -207,6 +230,37 @@ const ProductCard = ({ product }) => {
                 className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center justify-center gap-2"
               >
                 <span>🛒</span> Add to Cart
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {storeConflict && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-sm w-full p-6">
+            <div className="text-center mb-4">
+              <span className="text-4xl">🛒</span>
+            </div>
+            <h3 className="text-lg font-bold text-gray-900 mb-3 text-center">
+              Start a new cart?
+            </h3>
+            <p className="text-gray-600 text-sm text-center mb-6">
+              Your cart has items from <strong>{storeConflict.existingStoreName}</strong>.
+              Adding items from <strong>{storeConflict.newStoreName}</strong> will clear your current cart.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setStoreConflict(null)}
+                className="flex-1 px-4 py-3 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium text-sm"
+              >
+                Keep current cart
+              </button>
+              <button
+                onClick={handleConfirmStoreSwitch}
+                className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium text-sm"
+              >
+                Clear &amp; add
               </button>
             </div>
           </div>
