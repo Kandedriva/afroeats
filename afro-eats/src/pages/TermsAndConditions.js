@@ -1,4 +1,6 @@
 
+import PropTypes from 'prop-types';
+
 const Section = ({ number, title, children }) => (
   <div className="mb-8">
     <h2 className="text-xl font-bold text-gray-900 mb-3">{number}. {title}</h2>
@@ -6,12 +8,23 @@ const Section = ({ number, title, children }) => (
   </div>
 );
 
+Section.propTypes = {
+  number: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+  title: PropTypes.string.isRequired,
+  children: PropTypes.node.isRequired,
+};
+
 const SubSection = ({ title, children }) => (
   <div className="ml-4 mb-3">
     <h3 className="font-semibold text-gray-800 mb-1">{title}</h3>
     <div className="text-gray-700">{children}</div>
   </div>
 );
+
+SubSection.propTypes = {
+  title: PropTypes.string.isRequired,
+  children: PropTypes.node.isRequired,
+};
 
 const TermsAndConditions = () => {
   return (
