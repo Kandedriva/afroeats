@@ -72,7 +72,7 @@ const ProductCard = ({ product }) => {
   const handleConfirmStoreSwitch = async () => {
     try {
       await clearGroceryCart();
-      await addToGroceryCart(product, storeConflict.quantity);
+      await addToGroceryCart(product, storeConflict.quantity, true);
       toast.success(`Cart cleared. Added ${product.name} to grocery cart!`);
     } catch (err) {
       toast.error(err.message || 'Failed to add to cart');

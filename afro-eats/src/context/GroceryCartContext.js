@@ -104,9 +104,9 @@ export const GroceryCartProvider = ({ children }) => {
    * Throws a STORE_CONFLICT error if the product belongs to a different store
    * than the items already in the cart.
    */
-  const addToGroceryCart = async (product, quantity = 1) => {
+  const addToGroceryCart = async (product, quantity = 1, skipConflictCheck = false) => {
     // Detect store conflict before doing anything
-    if (product.store_id && groceryCart.length > 0) {
+    if (!skipConflictCheck && product.store_id && groceryCart.length > 0) {
       const existingItem = groceryCart.find(i => i.store_id && i.store_id !== product.store_id);
       if (existingItem) {
         const err = new Error('STORE_CONFLICT');
@@ -176,21 +176,18 @@ export const GroceryCartProvider = ({ children }) => {
       }
     } else {
       // Guest user - add to localStorage
-      const existingIndex = groceryCart.findIndex((item) => item.id === product.id);
-      let newCart;
-
-      if (existingIndex >= 0) {
-        newCart = groceryCart.map((item) =>
-          item.id === product.id
-            ? { ...item, quantity: item.quantity + quantity }
-            : item
-        );
-      } else {
-        newCart = [...groceryCart, cartItem];
-      }
-
-      setGroceryCart(newCart);
-      saveGuestCart(newCart);
+      setGroceryCart(prev => {
+        const existingIndex = prev.findIndex((item) => item.id === product.id);
+        const newCart = existingIndex >= 0
+          ? prev.map((item) =>
+              item.id === product.id
+                ? { ...item, quantity: item.quantity + quantity }
+                : item
+            )
+          : [...prev, cartItem];
+        saveGuestCart(newCart);
+        return newCart;
+      });
       return true;
     }
   };
