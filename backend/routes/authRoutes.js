@@ -28,7 +28,7 @@ function safeCompare(a, b) {
 
 // 🔐 REGISTER
 router.post("/register", async (req, res) => {
-  const { name, email, password, address, phone } = req.body;
+  const { name, email, password, address, city, state, zip_code, phone } = req.body;
 
   const client = await pool.connect();
   try {
@@ -59,13 +59,13 @@ router.post("/register", async (req, res) => {
     let newUser;
     try {
       newUser = await client.query(
-        `INSERT INTO users (name, email, password, address, phone, email_verified, verification_code, verification_code_expires_at, verification_attempts)
-         VALUES ($1, $2, $3, $4, $5, false, $6, $7, 0)
+        `INSERT INTO users (name, email, password, address, city, state, zip_code, phone, email_verified, verification_code, verification_code_expires_at, verification_attempts)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false, $9, $10, 0)
          RETURNING id, name, email`,
-        [name, email, hashedPassword, address, phone, verificationCode, codeExpiresAt]
+        [name, email, hashedPassword, address, city, state, zip_code, phone, verificationCode, codeExpiresAt]
       );
     } catch (err) {
-      // Fallback to basic registration if address/phone columns don't exist
+      // Fallback to basic registration if extended columns don't exist
       newUser = await client.query(
         `INSERT INTO users (name, email, password, email_verified, verification_code, verification_code_expires_at, verification_attempts)
          VALUES ($1, $2, $3, false, $4, $5, 0)

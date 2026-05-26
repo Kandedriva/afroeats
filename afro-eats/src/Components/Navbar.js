@@ -121,9 +121,6 @@ function Navbar() {
                 <Link to="/register" className="text-gray-700 hover:text-green-600 transition-colors duration-200">
                   Register
                 </Link>
-                <Link to="/sell-with-us" className="text-white bg-green-600 hover:bg-green-700 transition-colors duration-200 text-sm font-medium px-3 py-1.5 rounded-full">
-                  Sell with us
-                </Link>
               </>
             )}
           </div>
@@ -245,13 +242,6 @@ function Navbar() {
                     onClick={() => setIsMenuOpen(false)}
                   >
                     📝 Register
-                  </Link>
-                  <Link
-                    to="/sell-with-us"
-                    className="block px-3 py-2 text-green-700 hover:text-green-900 hover:bg-green-50 rounded-md transition-colors duration-200 font-medium"
-                    onClick={() => setIsMenuOpen(false)}
-                  >
-                    🤝 Sell with us
                   </Link>
                 </>
               )}

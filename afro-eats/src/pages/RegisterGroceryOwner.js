@@ -13,8 +13,12 @@ function RegisterGroceryOwner() {
     confirmPassword: '',
     secret_word: '',
     store_name: '',
-    location: '',
+    address: '',
+    city: '',
+    state: '',
+    zip_code: '',
     phone_number: '',
+    invite_code: '',
     acceptedTerms: false,
   });
   const [logo, setLogo] = useState(null);
@@ -74,11 +78,23 @@ function RegisterGroceryOwner() {
     if (!formData.store_name.trim()) {
       newErrors.store_name = 'Store name is required';
     }
-    if (!formData.location.trim()) {
-      newErrors.location = 'Store location is required';
+    if (!formData.address.trim()) {
+      newErrors.address = 'Street address is required';
+    }
+    if (!formData.city.trim()) {
+      newErrors.city = 'City is required';
+    }
+    if (!formData.state.trim()) {
+      newErrors.state = 'State is required';
+    }
+    if (!formData.zip_code.trim()) {
+      newErrors.zip_code = 'ZIP code is required';
     }
     if (!formData.phone_number.trim()) {
       newErrors.phone_number = 'Phone number is required';
+    }
+    if (!formData.invite_code.trim()) {
+      newErrors.invite_code = 'Invite code is required';
     }
     if (!formData.acceptedTerms) {
       newErrors.acceptedTerms = 'You must accept the terms and conditions';
@@ -105,8 +121,12 @@ function RegisterGroceryOwner() {
       formDataToSend.append('password', formData.password);
       formDataToSend.append('secret_word', formData.secret_word);
       formDataToSend.append('store_name', formData.store_name);
-      formDataToSend.append('location', formData.location);
+      formDataToSend.append('address', formData.address);
+      formDataToSend.append('city', formData.city);
+      formDataToSend.append('state', formData.state);
+      formDataToSend.append('zip_code', formData.zip_code);
       formDataToSend.append('phone_number', formData.phone_number);
+      formDataToSend.append('invite_code', formData.invite_code);
 
       if (logo) {
         formDataToSend.append('logo', logo);
@@ -277,21 +297,76 @@ function RegisterGroceryOwner() {
                 </div>
 
                 <div>
-                  <label htmlFor="location" className="block text-sm font-medium text-gray-700 mb-1">
-                    Store Address *
+                  <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-1">
+                    Street Address *
                   </label>
                   <input
-                    id="location"
+                    id="address"
                     type="text"
-                    name="location"
-                    value={formData.location}
+                    name="address"
+                    value={formData.address}
                     onChange={handleChange}
                     className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 ${
-                      errors.location ? 'border-red-500' : 'border-gray-300'
+                      errors.address ? 'border-red-500' : 'border-gray-300'
                     }`}
-                    placeholder="123 Main St, City, State ZIP"
+                    placeholder="123 Main St"
                   />
-                  {errors.location && <p className="text-red-500 text-sm mt-1">{errors.location}</p>}
+                  {errors.address && <p className="text-red-500 text-sm mt-1">{errors.address}</p>}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label htmlFor="city" className="block text-sm font-medium text-gray-700 mb-1">
+                      City *
+                    </label>
+                    <input
+                      id="city"
+                      type="text"
+                      name="city"
+                      value={formData.city}
+                      onChange={handleChange}
+                      className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 ${
+                        errors.city ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                      placeholder="New York"
+                    />
+                    {errors.city && <p className="text-red-500 text-sm mt-1">{errors.city}</p>}
+                  </div>
+                  <div>
+                    <label htmlFor="state" className="block text-sm font-medium text-gray-700 mb-1">
+                      State *
+                    </label>
+                    <input
+                      id="state"
+                      type="text"
+                      name="state"
+                      value={formData.state}
+                      onChange={handleChange}
+                      className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 ${
+                        errors.state ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                      placeholder="NY"
+                    />
+                    {errors.state && <p className="text-red-500 text-sm mt-1">{errors.state}</p>}
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="zip_code" className="block text-sm font-medium text-gray-700 mb-1">
+                    ZIP Code *
+                  </label>
+                  <input
+                    id="zip_code"
+                    type="text"
+                    name="zip_code"
+                    value={formData.zip_code}
+                    onChange={handleChange}
+                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 ${
+                      errors.zip_code ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                    placeholder="10001"
+                  />
+                  {errors.zip_code && <p className="text-red-500 text-sm mt-1">{errors.zip_code}</p>}
                 </div>
 
                 <div>
@@ -310,6 +385,27 @@ function RegisterGroceryOwner() {
                     placeholder="(555) 123-4567"
                   />
                   {errors.phone_number && <p className="text-red-500 text-sm mt-1">{errors.phone_number}</p>}
+                </div>
+
+                <div>
+                  <label htmlFor="invite_code" className="block text-sm font-medium text-gray-700 mb-1">
+                    Invite Code *
+                  </label>
+                  <input
+                    id="invite_code"
+                    type="text"
+                    name="invite_code"
+                    value={formData.invite_code}
+                    onChange={handleChange}
+                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 ${
+                      errors.invite_code ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                    placeholder="Enter your invite code"
+                  />
+                  {errors.invite_code
+                    ? <p className="text-red-500 text-sm mt-1">{errors.invite_code}</p>
+                    : <p className="text-xs text-gray-500 mt-1">Contact OrderDabaly to get your invite code.</p>
+                  }
                 </div>
 
                 <div>

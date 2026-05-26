@@ -12,8 +12,12 @@ const RegisterOwner = () => {
     password: "",
     secret_word: "",
     restaurant_name: "",
-    location: "",
+    address: "",
+    city: "",
+    state: "",
+    zip_code: "",
     phone_number: "",
+    invite_code: "",
   });
   const [logo, setLogo] = useState(null);
   const [error, setError] = useState("");
@@ -169,9 +173,40 @@ const RegisterOwner = () => {
 
         <input
           type="text"
-          name="location"
-          placeholder="Restaurant Address"
-          value={formData.location}
+          name="address"
+          placeholder="Street Address"
+          value={formData.address}
+          onChange={handleChange}
+          className="block w-full mb-3 border p-2 rounded"
+          required
+        />
+
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          <input
+            type="text"
+            name="city"
+            placeholder="City"
+            value={formData.city}
+            onChange={handleChange}
+            className="border p-2 rounded w-full"
+            required
+          />
+          <input
+            type="text"
+            name="state"
+            placeholder="State"
+            value={formData.state}
+            onChange={handleChange}
+            className="border p-2 rounded w-full"
+            required
+          />
+        </div>
+
+        <input
+          type="text"
+          name="zip_code"
+          placeholder="ZIP Code"
+          value={formData.zip_code}
           onChange={handleChange}
           className="block w-full mb-3 border p-2 rounded"
           required
@@ -194,6 +229,17 @@ const RegisterOwner = () => {
           onChange={handleChange}
           className="block mb-3"
         />
+
+        <input
+          type="text"
+          name="invite_code"
+          placeholder="Invite Code"
+          value={formData.invite_code}
+          onChange={handleChange}
+          className="block w-full mb-3 border p-2 rounded"
+          required
+        />
+        <p className="text-xs text-gray-500 -mt-2 mb-3">Contact OrderDabaly to get your invite code.</p>
 
         <div className="flex items-start space-x-3 mb-4">
           <input

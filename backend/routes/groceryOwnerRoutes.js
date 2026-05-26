@@ -2,6 +2,7 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import Stripe from 'stripe';
 import pool from '../db.js';
+import { sendSMS } from '../services/smsService.js';
 import { uploadRestaurantLogo, uploadProductImage, handleR2UploadResult } from '../middleware/r2Upload.js';
 import {
   sendGroceryOwnerWelcomeEmail,
@@ -60,19 +61,34 @@ router.post('/register', uploadRestaurantLogo, async (req, res) => {
       password,
       secret_word,
       store_name,
-      location,
+      address,
+      city,
+      state,
+      zip_code,
       phone_number,
+      invite_code,
     } = req.body;
 
     // Validate required fields
-    if (!name || !email || !password || !secret_word || !store_name || !location || !phone_number) {
+    if (!name || !email || !password || !secret_word || !store_name || !address || !city || !state || !zip_code || !phone_number) {
       return res.status(400).json({ error: 'All fields are required' });
+    }
+
+    // Validate invite code
+    const validCode = process.env.OWNER_INVITE_CODE;
+    if (!validCode || invite_code !== validCode) {
+      return res.status(403).json({ error: 'Invalid invite code' });
     }
 
     const pwCheck = validatePassword(password);
     if (!pwCheck.valid) {
       return res.status(400).json({ error: pwCheck.error });
     }
+
+    // Ensure address columns exist on grocery_stores
+    await client.query(`ALTER TABLE grocery_stores ADD COLUMN IF NOT EXISTS city VARCHAR(100)`);
+    await client.query(`ALTER TABLE grocery_stores ADD COLUMN IF NOT EXISTS state VARCHAR(100)`);
+    await client.query(`ALTER TABLE grocery_stores ADD COLUMN IF NOT EXISTS zip_code VARCHAR(20)`);
 
     // Ensure email verification columns exist (existing rows default to verified)
     await client.query(`ALTER TABLE grocery_store_owners ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT TRUE`);
@@ -113,12 +129,14 @@ router.post('/register', uploadRestaurantLogo, async (req, res) => {
 
     const ownerId = ownerResult.rows[0].id;
 
+    const fullAddress = `${address}, ${city}, ${state} ${zip_code}`;
+
     // Create grocery store (without geocoding initially)
     const storeResult = await client.query(
-      `INSERT INTO grocery_stores (name, address, phone_number, image_url, owner_id, active, approval_status, created_at)
-       VALUES ($1, $2, $3, $4, $5, false, 'pending', NOW())
+      `INSERT INTO grocery_stores (name, address, city, state, zip_code, phone_number, image_url, owner_id, active, approval_status, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false, 'pending', NOW())
        RETURNING id`,
-      [store_name, location, phone_number, logoUrl, ownerId]
+      [store_name, address, city, state, zip_code, phone_number, logoUrl, ownerId]
     );
 
     const storeId = storeResult.rows[0].id;
@@ -130,7 +148,7 @@ router.post('/register', uploadRestaurantLogo, async (req, res) => {
       if (geocoded) {
         console.log(`✅ Auto-geocoded grocery store ${store_name}: (${geocoded.latitude}, ${geocoded.longitude})`);
       } else {
-        console.warn(`⚠️ Could not auto-geocode grocery store ${store_name} at address: ${location}`);
+        console.warn(`⚠️ Could not auto-geocode grocery store ${store_name} at address: ${fullAddress}`);
       }
     } catch (geocodeError) {
       console.warn(`⚠️ Auto-geocoding failed for grocery store ${store_name}:`, geocodeError.message);
@@ -963,43 +981,63 @@ const GROCERY_STATUS_NOTIFICATIONS = {
   cancelled:        { title: 'Order Cancelled ❌',      message: (id) => `Your grocery order #${id} has been cancelled.` },
 };
 
+// SMS copy per status (shorter, no emojis for SMS compatibility)
+const GROCERY_SMS_MESSAGES = {
+  preparing:        (id) => `OrderDabaly: Your grocery order #${id} is being prepared. We'll let you know when it's on the way!`,
+  out_for_delivery: (id) => `OrderDabaly: Your grocery order #${id} is on its way! Please be available to receive it.`,
+  delivered:        (id) => `OrderDabaly: Your grocery order #${id} has been delivered. Enjoy! Questions? support@orderdabaly.com`,
+  cancelled:        (id) => `OrderDabaly: Your grocery order #${id} has been cancelled. Contact support@orderdabaly.com for help.`,
+};
+
 async function notifyGroceryCustomer(orderId, newStatus) {
   const notif = GROCERY_STATUS_NOTIFICATIONS[newStatus];
   if (!notif) return;
   try {
     const orderRow = await pool.query(
-      'SELECT user_id FROM grocery_orders WHERE id = $1',
+      'SELECT user_id, delivery_phone FROM grocery_orders WHERE id = $1',
       [orderId]
     );
-    const userId = orderRow.rows[0]?.user_id;
-    if (!userId) return; // guest — no in-app notification
+    const order = orderRow.rows[0];
+    if (!order) return;
 
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS customer_notifications (
-        id SERIAL PRIMARY KEY,
-        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-        order_id INTEGER REFERENCES orders(id) ON DELETE CASCADE,
-        type VARCHAR(50) NOT NULL,
-        title VARCHAR(255) NOT NULL,
-        message TEXT NOT NULL,
-        data JSONB DEFAULT '{}',
-        read BOOLEAN DEFAULT FALSE,
-        created_at TIMESTAMP DEFAULT NOW()
-      )
-    `);
+    const userId = order.user_id;
+    const phone  = order.delivery_phone;
 
-    await pool.query(
-      `INSERT INTO customer_notifications (user_id, order_id, type, title, message, data)
-       VALUES ($1, NULL, $2, $3, $4, $5)`,
-      [
-        userId,
-        'grocery_order_status',
-        notif.title,
-        notif.message(orderId),
-        JSON.stringify({ groceryOrderId: orderId, status: newStatus }),
-      ]
-    );
-    console.log(`✅ [GroceryNotif] user ${userId} notified: order ${orderId} → ${newStatus}`);
+    // In-app notification (authenticated users only)
+    if (userId) {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS customer_notifications (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+          order_id INTEGER REFERENCES orders(id) ON DELETE CASCADE,
+          type VARCHAR(50) NOT NULL,
+          title VARCHAR(255) NOT NULL,
+          message TEXT NOT NULL,
+          data JSONB DEFAULT '{}',
+          read BOOLEAN DEFAULT FALSE,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+
+      await pool.query(
+        `INSERT INTO customer_notifications (user_id, order_id, type, title, message, data)
+         VALUES ($1, NULL, $2, $3, $4, $5)`,
+        [
+          userId,
+          'grocery_order_status',
+          notif.title,
+          notif.message(orderId),
+          JSON.stringify({ groceryOrderId: orderId, status: newStatus }),
+        ]
+      );
+      console.log(`✅ [GroceryNotif] user ${userId} notified: order ${orderId} → ${newStatus}`);
+    }
+
+    // SMS notification (all customers with a phone number)
+    const smsBody = GROCERY_SMS_MESSAGES[newStatus];
+    if (phone && smsBody) {
+      await sendSMS(phone, smsBody(orderId));
+    }
   } catch (err) {
     console.error(`[GroceryNotif] Failed for order ${orderId}:`, err.message);
   }
