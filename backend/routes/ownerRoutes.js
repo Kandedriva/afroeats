@@ -36,7 +36,7 @@ const router = express.Router();
 
 // ========= OWNER REGISTRATION ==========
 router.post("/register", ...uploadRestaurantLogo, async (req, res) => {
-  const { name, email, password, secret_word, restaurant_name, location, phone_number } = req.body;
+  const { name, email, password, secret_word, restaurant_name, address, city, state, zip_code, phone_number, invite_code } = req.body;
   
   // Handle R2 upload result
   const uploadResult = handleR2UploadResult(req);
@@ -50,6 +50,17 @@ router.post("/register", ...uploadRestaurantLogo, async (req, res) => {
   }
 
   try {
+    // Validate invite code
+    const validCode = process.env.OWNER_INVITE_CODE;
+    if (!validCode || invite_code !== validCode) {
+      return res.status(403).json({ error: 'Invalid invite code' });
+    }
+
+    // Ensure address columns exist on restaurants
+    await pool.query(`ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS city VARCHAR(100)`);
+    await pool.query(`ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS state VARCHAR(100)`);
+    await pool.query(`ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS zip_code VARCHAR(20)`);
+
     // Ensure email verification columns exist (existing rows default to verified)
     await pool.query(`ALTER TABLE restaurant_owners ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT TRUE`);
     await pool.query(`ALTER TABLE restaurant_owners ADD COLUMN IF NOT EXISTS verification_code VARCHAR(10)`);
@@ -99,11 +110,13 @@ router.post("/register", ...uploadRestaurantLogo, async (req, res) => {
     }
     const ownerId = ownerResult.rows[0].id;
 
+    const fullAddress = `${address}, ${city}, ${state} ${zip_code}`;
+
     // Create restaurant
     const restaurantResult = await pool.query(
-      `INSERT INTO restaurants (name, address, phone_number, image_url, owner_id)
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [restaurant_name, location, phone_number, logoPath, ownerId]
+      `INSERT INTO restaurants (name, address, city, state, zip_code, phone_number, image_url, owner_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+      [restaurant_name, address, city, state, zip_code, phone_number, logoPath, ownerId]
     );
 
     const restaurantId = restaurantResult.rows[0].id;
@@ -115,7 +128,7 @@ router.post("/register", ...uploadRestaurantLogo, async (req, res) => {
       if (geocoded) {
         console.log(`✅ Auto-geocoded new restaurant ${restaurant_name}: (${geocoded.latitude}, ${geocoded.longitude})`);
       } else {
-        console.warn(`⚠️ Could not auto-geocode restaurant ${restaurant_name} at address: ${location}`);
+        console.warn(`⚠️ Could not auto-geocode restaurant ${restaurant_name} at address: ${fullAddress}`);
       }
     } catch (geocodeError) {
       console.warn(`⚠️ Auto-geocoding failed for restaurant ${restaurant_name}:`, geocodeError.message);

@@ -12,6 +12,9 @@ export default function Register() {
     email: "",
     password: "",
     address: "",
+    city: "",
+    state: "",
+    zip_code: "",
     phone: ""
   });
   const [acceptedTerms, setAcceptedTerms] = useState(false);
@@ -122,8 +125,37 @@ export default function Register() {
         <input
           type="text"
           name="address"
-          placeholder="Delivery Address"
+          placeholder="Street Address"
           value={form.address}
+          onChange={handleChange}
+          className="w-full px-4 py-2 border rounded"
+          required
+        />
+        <div className="grid grid-cols-2 gap-3">
+          <input
+            type="text"
+            name="city"
+            placeholder="City"
+            value={form.city}
+            onChange={handleChange}
+            className="w-full px-4 py-2 border rounded"
+            required
+          />
+          <input
+            type="text"
+            name="state"
+            placeholder="State"
+            value={form.state}
+            onChange={handleChange}
+            className="w-full px-4 py-2 border rounded"
+            required
+          />
+        </div>
+        <input
+          type="text"
+          name="zip_code"
+          placeholder="ZIP Code"
+          value={form.zip_code}
           onChange={handleChange}
           className="w-full px-4 py-2 border rounded"
           required
