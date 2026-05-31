@@ -2,11 +2,11 @@ import axios from 'axios';
 import pool from '../db.js';
 
 const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
-const BASE_DELIVERY_FEE = 3.00; // Base fee for any delivery
-const PRICE_PER_MILE = 1.50; // Additional fee per mile
-const DRIVER_COMMISSION_RATE = 0.85; // Driver gets 85% of delivery fee
-const PLATFORM_COMMISSION_RATE = 0.15; // Platform gets 15%
-const FALLBACK_DELIVERY_FEE = 5.00; // Default fallback when calculation fails
+const BASE_DELIVERY_FEE = 3.50;
+const PRICE_PER_MILE = 1.00;
+const DRIVER_COMMISSION_RATE = 0.85;
+const PLATFORM_COMMISSION_RATE = 0.15;
+const FALLBACK_DELIVERY_FEE = 5.00;
 
 /**
  * Geocode an address to latitude/longitude
