@@ -12,7 +12,6 @@ function DriverDashboard() {
   const [activeDelivery, setActiveDelivery] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Connect to socket for real-time notifications
   const { isConnected, newOrderNotification, acknowledgeNotification } = useDriverSocket(
     driver?.id,
     driver?.is_available
@@ -24,7 +23,6 @@ function DriverDashboard() {
 
   const fetchDashboardData = async () => {
     try {
-      // Get active delivery
       const deliveriesRes = await fetch(
         `${API_BASE_URL}/api/drivers/my-deliveries?status=active`,
         { credentials: "include" }
@@ -36,7 +34,6 @@ function DriverDashboard() {
         }
       }
 
-      // Get earnings stats
       const earningsRes = await fetch(
         `${API_BASE_URL}/api/drivers/earnings?period=all`,
         { credentials: "include" }
@@ -59,10 +56,8 @@ function DriverDashboard() {
         credentials: "include"
       });
       const data = await res.json();
-
       if (res.ok) {
         toast.success(data.message || (data.is_available ? "You're now online!" : "You're now offline"));
-        // Refresh driver data to update status
         await refreshAuth();
       } else {
         toast.error("Failed to update availability");
@@ -75,24 +70,23 @@ function DriverDashboard() {
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
-        <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-green-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-green-600"></div>
       </div>
     );
   }
 
-  // Pending approval state
   if (driver.approval_status === 'pending') {
     return (
-      <div className="max-w-4xl mx-auto p-6">
-        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-6 rounded-lg shadow-md">
-          <div className="flex items-center">
-            <span className="text-5xl mr-4">⏳</span>
+      <div className="max-w-2xl mx-auto p-4 sm:p-6">
+        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-5 rounded-lg shadow-md">
+          <div className="flex items-start gap-3">
+            <span className="text-4xl">⏳</span>
             <div>
-              <h2 className="text-2xl font-bold text-yellow-800 mb-2">Account Pending Approval</h2>
-              <p className="text-yellow-700 text-lg">
-                Your driver account is currently under review by our admin team. You&apos;ll be notified via email once approved.
+              <h2 className="text-xl font-bold text-yellow-800 mb-1">Account Pending Approval</h2>
+              <p className="text-yellow-700">
+                Your driver account is under review. You'll be notified via email once approved.
               </p>
-              <p className="text-yellow-600 mt-2">This usually takes 1-2 business days.</p>
+              <p className="text-yellow-600 text-sm mt-1">This usually takes 1–2 business days.</p>
             </div>
           </div>
         </div>
@@ -100,17 +94,16 @@ function DriverDashboard() {
     );
   }
 
-  // Rejected state
   if (driver.approval_status === 'rejected') {
     return (
-      <div className="max-w-4xl mx-auto p-6">
-        <div className="bg-red-50 border-l-4 border-red-400 p-6 rounded-lg shadow-md">
-          <div className="flex items-center">
-            <span className="text-5xl mr-4">❌</span>
+      <div className="max-w-2xl mx-auto p-4 sm:p-6">
+        <div className="bg-red-50 border-l-4 border-red-400 p-5 rounded-lg shadow-md">
+          <div className="flex items-start gap-3">
+            <span className="text-4xl">❌</span>
             <div>
-              <h2 className="text-2xl font-bold text-red-800 mb-2">Application Not Approved</h2>
-              <p className="text-red-700 text-lg">
-                Unfortunately, your driver application was not approved. Please contact support for more information.
+              <h2 className="text-xl font-bold text-red-800 mb-1">Application Not Approved</h2>
+              <p className="text-red-700">
+                Your driver application was not approved. Please contact support for more information.
               </p>
             </div>
           </div>
@@ -120,10 +113,12 @@ function DriverDashboard() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-6">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-800 mb-2">Driver Dashboard</h1>
-        <p className="text-gray-600">Welcome back, {driver.name}!</p>
+    <div className="max-w-4xl mx-auto px-4 py-5 sm:px-6 sm:py-8">
+
+      {/* Header */}
+      <div className="mb-5">
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">Driver Dashboard</h1>
+        <p className="text-gray-500 text-sm mt-0.5">Welcome back, {driver.name}!</p>
         {isConnected && (
           <p className="text-xs text-green-600 mt-1">🟢 Connected to live notifications</p>
         )}
@@ -131,32 +126,29 @@ function DriverDashboard() {
 
       {/* New Order Notification Banner */}
       {newOrderNotification && (
-        <div className="mb-6 bg-gradient-to-r from-green-500 to-green-600 rounded-lg shadow-xl p-6 text-white animate-pulse">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="text-5xl">🚗</div>
+        <div className="mb-5 bg-gradient-to-r from-green-500 to-green-600 rounded-xl shadow-xl p-4 sm:p-6 text-white animate-pulse">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <span className="text-4xl">🚗</span>
               <div>
-                <h3 className="text-2xl font-bold mb-1">New Delivery Order Available!</h3>
-                <p className="text-green-100 mb-2">{newOrderNotification.restaurantName}</p>
-                <div className="flex gap-4 text-sm">
+                <h3 className="text-lg sm:text-2xl font-bold leading-tight">New Delivery Available!</h3>
+                <p className="text-green-100 text-sm mt-0.5">{newOrderNotification.restaurantName}</p>
+                <div className="flex flex-wrap gap-3 text-sm mt-1">
                   <span>📍 {newOrderNotification.distanceMiles} miles</span>
                   <span>💰 ${newOrderNotification.driverPayout.toFixed(2)} payout</span>
                 </div>
               </div>
             </div>
-            <div className="flex flex-col gap-2">
+            <div className="flex gap-2 sm:flex-col">
               <button
-                onClick={() => {
-                  acknowledgeNotification();
-                  navigate('/driver/available-orders');
-                }}
-                className="bg-white text-green-600 hover:bg-green-50 px-6 py-3 rounded-lg font-bold shadow-lg transition"
+                onClick={() => { acknowledgeNotification(); navigate('/driver/available-orders'); }}
+                className="flex-1 sm:flex-none bg-white text-green-600 hover:bg-green-50 px-4 py-2 sm:px-6 sm:py-3 rounded-lg font-bold shadow transition text-sm sm:text-base"
               >
                 View Orders
               </button>
               <button
                 onClick={acknowledgeNotification}
-                className="bg-green-700 hover:bg-green-800 px-6 py-2 rounded-lg text-sm transition"
+                className="flex-1 sm:flex-none bg-green-700 hover:bg-green-800 px-4 py-2 rounded-lg text-sm transition"
               >
                 Dismiss
               </button>
@@ -166,17 +158,17 @@ function DriverDashboard() {
       )}
 
       {/* Availability Toggle */}
-      <div className="mb-6 bg-white rounded-lg shadow-md p-6">
-        <div className="flex items-center justify-between">
+      <div className="mb-5 bg-white rounded-xl shadow-sm border border-gray-100 p-4 sm:p-5">
+        <div className="flex items-center justify-between gap-4">
           <div>
-            <h3 className="text-lg font-semibold text-gray-800">Availability Status</h3>
-            <p className="text-gray-600 text-sm">
-              {driver.is_available ? "You're online and can accept orders" : "You're offline"}
+            <h3 className="font-semibold text-gray-800">Availability</h3>
+            <p className="text-gray-500 text-sm mt-0.5">
+              {driver.is_available ? "You're online and accepting orders" : "You're currently offline"}
             </p>
           </div>
           <button
             onClick={toggleAvailability}
-            className={`px-6 py-3 rounded-lg font-semibold transition ${
+            className={`shrink-0 px-4 py-2 sm:px-6 sm:py-3 rounded-lg font-semibold text-sm sm:text-base transition ${
               driver.is_available
                 ? "bg-red-500 hover:bg-red-600 text-white"
                 : "bg-green-500 hover:bg-green-600 text-white"
@@ -187,59 +179,59 @@ function DriverDashboard() {
         </div>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <div className="text-gray-500 text-sm mb-2">Total Deliveries</div>
-          <div className="text-3xl font-bold text-gray-800">{driver.total_deliveries || 0}</div>
+      {/* Stats Grid — 2 cols on mobile, 4 on desktop */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-5">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+          <p className="text-gray-500 text-xs mb-1">Total Deliveries</p>
+          <p className="text-2xl sm:text-3xl font-bold text-gray-800">{driver.total_deliveries || 0}</p>
         </div>
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <div className="text-gray-500 text-sm mb-2">Completed</div>
-          <div className="text-3xl font-bold text-green-600">{driver.completed_deliveries || 0}</div>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+          <p className="text-gray-500 text-xs mb-1">Completed</p>
+          <p className="text-2xl sm:text-3xl font-bold text-green-600">{driver.completed_deliveries || 0}</p>
         </div>
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <div className="text-gray-500 text-sm mb-2">Total Earnings</div>
-          <div className="text-3xl font-bold text-blue-600">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+          <p className="text-gray-500 text-xs mb-1">Total Earnings</p>
+          <p className="text-2xl sm:text-3xl font-bold text-blue-600">
             ${parseFloat(driver.total_earnings || 0).toFixed(2)}
-          </div>
+          </p>
         </div>
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <div className="text-gray-500 text-sm mb-2">Rating</div>
-          <div className="text-3xl font-bold text-yellow-600">
-            {driver.average_rating || 0} ⭐
-          </div>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+          <p className="text-gray-500 text-xs mb-1">Rating</p>
+          <p className="text-2xl sm:text-3xl font-bold text-yellow-500">
+            {driver.average_rating || '—'} ⭐
+          </p>
         </div>
       </div>
 
       {/* Active Delivery */}
       {activeDelivery ? (
-        <div className="bg-green-50 border-2 border-green-400 rounded-lg p-6 mb-8 shadow-md">
-          <h3 className="text-xl font-bold text-green-800 mb-4">🚗 Active Delivery</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <p className="text-sm text-gray-600">Order #{activeDelivery.order_id}</p>
-              <p className="text-sm text-gray-600">Status: <span className="font-semibold">{activeDelivery.status}</span></p>
-              <p className="text-sm text-gray-600">Distance: {activeDelivery.distance_miles} miles</p>
+        <div className="bg-green-50 border border-green-300 rounded-xl p-4 sm:p-6 mb-5 shadow-sm">
+          <h3 className="text-base sm:text-lg font-bold text-green-800 mb-3">🚗 Active Delivery</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-gray-700 mb-4">
+            <div className="space-y-1">
+              <p><span className="font-medium">Order:</span> #{activeDelivery.order_id}</p>
+              <p><span className="font-medium">Status:</span> {activeDelivery.status}</p>
+              <p><span className="font-medium">Distance:</span> {activeDelivery.distance_miles} miles</p>
             </div>
-            <div>
-              <p className="text-sm text-gray-600">Payout: ${activeDelivery.driver_payout}</p>
-              <p className="text-sm text-gray-600">Pickup: {activeDelivery.pickup_location}</p>
-              <p className="text-sm text-gray-600">Delivery: {activeDelivery.delivery_location}</p>
+            <div className="space-y-1">
+              <p><span className="font-medium">Payout:</span> ${activeDelivery.driver_payout}</p>
+              <p><span className="font-medium">Pickup:</span> {activeDelivery.pickup_location}</p>
+              <p><span className="font-medium">Dropoff:</span> {activeDelivery.delivery_location}</p>
             </div>
           </div>
           <Link
             to="/driver/my-deliveries"
-            className="mt-4 inline-block bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg"
+            className="inline-block bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded-lg text-sm font-semibold transition"
           >
             View Details
           </Link>
         </div>
       ) : (
-        <div className="bg-gray-50 border-2 border-gray-300 rounded-lg p-6 mb-8 text-center shadow-md">
-          <p className="text-gray-600 mb-4">No active deliveries</p>
+        <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 mb-5 text-center shadow-sm">
+          <p className="text-gray-500 mb-3 text-sm">No active deliveries right now</p>
           <Link
             to="/driver/available-orders"
-            className="inline-block bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold"
+            className="inline-block bg-green-600 hover:bg-green-700 text-white px-5 py-2.5 rounded-lg font-semibold text-sm transition"
           >
             Browse Available Orders
           </Link>
@@ -247,34 +239,33 @@ function DriverDashboard() {
       )}
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-3 gap-3 sm:gap-4">
         <Link
           to="/driver/available-orders"
-          className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition text-center"
+          className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 sm:p-6 hover:shadow-md transition text-center"
         >
-          <span className="text-4xl mb-3 block">📦</span>
-          <h3 className="text-lg font-semibold text-gray-800 mb-2">Available Orders</h3>
-          <p className="text-gray-600 text-sm">View and claim delivery orders</p>
+          <span className="text-3xl sm:text-4xl mb-2 block">📦</span>
+          <h3 className="text-xs sm:text-base font-semibold text-gray-800 leading-tight">Available Orders</h3>
+          <p className="text-gray-500 text-xs mt-1 hidden sm:block">View and claim delivery orders</p>
         </Link>
-
         <Link
           to="/driver/my-deliveries"
-          className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition text-center"
+          className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 sm:p-6 hover:shadow-md transition text-center"
         >
-          <span className="text-4xl mb-3 block">🚗</span>
-          <h3 className="text-lg font-semibold text-gray-800 mb-2">My Deliveries</h3>
-          <p className="text-gray-600 text-sm">Track active and past deliveries</p>
+          <span className="text-3xl sm:text-4xl mb-2 block">🚗</span>
+          <h3 className="text-xs sm:text-base font-semibold text-gray-800 leading-tight">My Deliveries</h3>
+          <p className="text-gray-500 text-xs mt-1 hidden sm:block">Track active and past deliveries</p>
         </Link>
-
         <Link
           to="/driver/earnings"
-          className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition text-center"
+          className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 sm:p-6 hover:shadow-md transition text-center"
         >
-          <span className="text-4xl mb-3 block">💰</span>
-          <h3 className="text-lg font-semibold text-gray-800 mb-2">Earnings</h3>
-          <p className="text-gray-600 text-sm">View your earnings history</p>
+          <span className="text-3xl sm:text-4xl mb-2 block">💰</span>
+          <h3 className="text-xs sm:text-base font-semibold text-gray-800 leading-tight">Earnings</h3>
+          <p className="text-gray-500 text-xs mt-1 hidden sm:block">View your earnings history</p>
         </Link>
       </div>
+
     </div>
   );
 }
