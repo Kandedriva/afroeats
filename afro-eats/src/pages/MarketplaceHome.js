@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import { toast } from "react-toastify";
 import ProductCard from "../Components/ProductCard";
-import SEO from "../Components/SEO";
+import PageSeo from "../Components/SEO";
 
 const MarketplaceHome = () => {
   const [products, setProducts] = useState([]);
@@ -98,7 +98,7 @@ const MarketplaceHome = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <SEO
+      <PageSeo
         title="African Grocery Marketplace"
         description="Shop fresh African groceries online — vegetables, fruits, spices, grains and more. Delivered straight to your door by local stores."
         path="/marketplace"
