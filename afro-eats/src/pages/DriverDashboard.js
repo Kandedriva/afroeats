@@ -84,7 +84,7 @@ function DriverDashboard() {
             <div>
               <h2 className="text-xl font-bold text-yellow-800 mb-1">Account Pending Approval</h2>
               <p className="text-yellow-700">
-                Your driver account is under review. You'll be notified via email once approved.
+                Your driver account is under review. You&apos;ll be notified via email once approved.
               </p>
               <p className="text-yellow-600 text-sm mt-1">This usually takes 1–2 business days.</p>
             </div>
