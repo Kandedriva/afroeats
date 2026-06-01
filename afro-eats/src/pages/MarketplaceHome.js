@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import { toast } from "react-toastify";
 import ProductCard from "../Components/ProductCard";
-import SEO from "../components/SEO";
+import SEO from "../Components/SEO";
 
 const MarketplaceHome = () => {
   const [products, setProducts] = useState([]);
