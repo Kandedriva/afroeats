@@ -3,48 +3,71 @@
   <head>
     <meta charset="utf-8" />
     <link rel="icon" href="%PUBLIC_URL%/Order.PNG" />
-    
-    <!-- Enhanced mobile viewport settings -->
+
+    <!-- Viewport -->
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes, viewport-fit=cover" />
-    
-    <!-- Theme and PWA settings -->
+
+    <!-- Theme and PWA -->
     <meta name="theme-color" content="#16a34a" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="OrderDabaly" />
-    
-    <!-- Better app description -->
-    <meta name="description" content="OrderDabaly - Order delicious food from local restaurants. Fast delivery, great prices!" />
-    <meta name="keywords" content="food delivery, restaurant, order online, food zone" />
-    
-    <!-- Touch icons for mobile -->
+
+    <!-- Primary SEO -->
+    <meta name="description" content="OrderDabaly — Order food from local African restaurants and shop fresh groceries online. Fast delivery to your door." />
+    <meta name="keywords" content="African food delivery, African restaurant, African grocery, order food online, fresh groceries delivery, OrderDabaly" />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://www.orderdabaly.com/" />
+
+    <!-- Open Graph (Facebook, WhatsApp, LinkedIn) -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="OrderDabaly" />
+    <meta property="og:title" content="OrderDabaly — African Food & Grocery Delivery" />
+    <meta property="og:description" content="Order food from local African restaurants and shop fresh groceries online. Fast delivery to your door." />
+    <meta property="og:url" content="https://www.orderdabaly.com/" />
+    <meta property="og:image" content="https://www.orderdabaly.com/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:locale" content="en_US" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="OrderDabaly — African Food & Grocery Delivery" />
+    <meta name="twitter:description" content="Order food from local African restaurants and shop fresh groceries online. Fast delivery to your door." />
+    <meta name="twitter:image" content="https://www.orderdabaly.com/og-image.png" />
+
+    <!-- JSON-LD structured data -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FoodEstablishment",
+      "name": "OrderDabaly",
+      "description": "Online marketplace for African food delivery and fresh grocery shopping.",
+      "url": "https://www.orderdabaly.com",
+      "logo": "https://www.orderdabaly.com/Order.PNG",
+      "contactPoint": {
+        "@type": "ContactPoint",
+        "email": "support@orderdabaly.com",
+        "contactType": "customer support"
+      },
+      "sameAs": []
+    }
+    </script>
+
+    <!-- Touch icons -->
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/Order.PNG" />
     <link rel="apple-touch-icon" sizes="180x180" href="%PUBLIC_URL%/Order.PNG" />
-    
-    <!-- Prevent phone number linking on iOS -->
+
+    <!-- Misc -->
     <meta name="format-detection" content="telephone=no" />
-    
-    <!-- PWA manifest -->
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
-    
-    <!-- Preconnect to improve performance -->
     <link rel="dns-prefetch" href="//fonts.googleapis.com" />
-    
-    <title>OrderDabaly - Fresh Food Delivery</title>
+
+    <title>OrderDabaly — African Food & Grocery Delivery</title>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
-    <!--
-      This HTML file is a template.
-      If you open it directly in the browser, you will see an empty page.
-
-      You can add webfonts, meta tags, or analytics to this file.
-      The build step will place the bundled scripts into the <body> tag.
-
-      To begin the development, run `npm start` or `yarn start`.
-      To create a production bundle, use `npm run build` or `yarn build`.
-    -->
   </body>
 </html>

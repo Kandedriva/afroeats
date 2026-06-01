@@ -1,4 +1,5 @@
 import { Routes, Route, useLocation } from "react-router-dom";
+import { HelmetProvider } from 'react-helmet-async';
 import Navbar from "./Components/Navbar";
 import OwnerNavbar from "./Components/OwnerNavbar";
 import GroceryOwnerNavbar from "./Components/GroceryOwnerNavbar";
@@ -393,6 +394,7 @@ function AppContent() {
 
 function App() {
   return (
+    <HelmetProvider>
     <AsyncErrorBoundary>
       <ErrorBoundary level="app">
         <div className="min-h-screen bg-gray-100">
@@ -437,6 +439,7 @@ function App() {
         </div>
       </ErrorBoundary>
     </AsyncErrorBoundary>
+    </HelmetProvider>
   );
 }
 

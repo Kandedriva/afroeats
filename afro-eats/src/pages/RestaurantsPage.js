@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import RestaurantCard from "../Components/RestaurantCard";
 import GroceryStoreCard from "../Components/GroceryStoreCard";
 import { toast } from 'react-toastify';
+import SEO from "../components/SEO";
 import { API_BASE_URL } from "../config/api";
 
 export default function RestaurantsPage() {
@@ -73,6 +74,11 @@ export default function RestaurantsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <SEO
+        title="African Restaurants Near You"
+        description="Browse local African restaurants on OrderDabaly. Order authentic African food online for fast delivery or pickup."
+        path="/restaurants"
+      />
       {/* Header */}
       <div className="bg-gradient-to-r from-green-600 to-green-700 text-white py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
