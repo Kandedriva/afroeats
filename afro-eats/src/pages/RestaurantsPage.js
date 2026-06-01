@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import RestaurantCard from "../Components/RestaurantCard";
 import GroceryStoreCard from "../Components/GroceryStoreCard";
 import { toast } from 'react-toastify';
-import SEO from "../components/SEO";
+import SEO from "../Components/SEO";
 import { API_BASE_URL } from "../config/api";
 
 export default function RestaurantsPage() {
