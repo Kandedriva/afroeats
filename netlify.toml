@@ -1,11 +1,6 @@
 [build]
-  # Build directory - where the React app is located
   base = "afro-eats"
-  
-  # Build command to run
   command = "npm run build"
-  
-  # Directory where build artifacts are output
   publish = "build"
 
 # Redirect all routes to index.html for React Router

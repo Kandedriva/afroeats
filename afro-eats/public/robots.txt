@@ -1,3 +1,14 @@
-# https://www.robotstxt.org/robotstxt.html
 User-agent: *
-Disallow:
+Allow: /
+Disallow: /owner/
+Disallow: /grocery-owner/
+Disallow: /admin/
+Disallow: /driver/
+Disallow: /cart
+Disallow: /checkout
+Disallow: /grocery-checkout
+Disallow: /my-orders
+Disallow: /my-profile
+Disallow: /my-notifications
+
+Sitemap: https://www.orderdabaly.com/sitemap.xml

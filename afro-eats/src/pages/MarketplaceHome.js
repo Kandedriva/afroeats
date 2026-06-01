@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import { toast } from "react-toastify";
 import ProductCard from "../Components/ProductCard";
+import SEO from "../components/SEO";
 
 const MarketplaceHome = () => {
   const [products, setProducts] = useState([]);
@@ -97,6 +98,11 @@ const MarketplaceHome = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <SEO
+        title="African Grocery Marketplace"
+        description="Shop fresh African groceries online — vegetables, fruits, spices, grains and more. Delivered straight to your door by local stores."
+        path="/marketplace"
+      />
       {/* Hero Section */}
       <div className="bg-gradient-to-r from-green-600 to-green-700 text-white py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
