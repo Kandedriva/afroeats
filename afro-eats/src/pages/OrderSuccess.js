@@ -149,16 +149,24 @@ function OrderSuccess() {
             setOrderDetails(orderData);
           }
         } else if (guestOrderInfo?.guestOrder || isGuestFromStripe) {
-          // Guest restaurant orders: set basic info
+          // Guest restaurant orders — use localStorage data when in demo mode
+          const storedTotal = localStorage.getItem('demo_order_total');
+          const storedItems = (() => {
+            try { return JSON.parse(localStorage.getItem('demo_order_items') || '[]'); }
+            catch { return []; }
+          })();
           setOrderDetails({
             id: finalOrderId,
-            total: 0,
-            subtotal: 0,
+            total: storedTotal ? parseFloat(storedTotal) : 0,
+            subtotal: storedTotal ? parseFloat(storedTotal) : 0,
             delivery_fee: 0,
             platform_fee: 0,
-            status: 'paid',
-            items: []
+            status: 'confirmed',
+            items: storedItems,
           });
+          // Clean up localStorage after reading
+          localStorage.removeItem('demo_order_total');
+          localStorage.removeItem('demo_order_items');
         }
 
         // Clear appropriate cart based on order type and user type
@@ -403,42 +411,46 @@ function OrderSuccess() {
       </div>
 
       {/* Action Buttons */}
-      <div className="flex space-x-4">
-        <button
-          onClick={async () => {
-            if (isGroceryOrder) {
-              if (clearGroceryCart) {
-                clearGroceryCart(); // Ensure grocery cart is cleared
-              }
-            } else {
-              if (clearCart) {
-                await clearCart(); // Ensure restaurant cart is cleared
-              }
-              if (forceRefreshCart) {
-                await forceRefreshCart(); // Ensure cart is refreshed
-              }
-            }
-            navigate('/');
-          }}
-          className="flex-1 bg-gray-200 text-gray-800 py-3 px-4 rounded-lg font-medium hover:bg-gray-300 transition-colors"
-        >
-          {isGroceryOrder ? 'Browse More Products' : 'Browse More Restaurants'}
-        </button>
-        {(guestOrderInfo?.guestOrder || isGuestFromStripe) ? (
+      <div className="flex flex-col space-y-3">
+        <div className="flex space-x-4">
           <button
-            onClick={() => navigate('/register')}
-            className="flex-1 bg-green-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-green-700 transition-colors"
+            onClick={async () => {
+              if (isGroceryOrder) {
+                if (clearGroceryCart) { clearGroceryCart(); }
+              } else {
+                if (clearCart) { await clearCart(); }
+                if (forceRefreshCart) { await forceRefreshCart(); }
+              }
+              navigate('/');
+            }}
+            className="flex-1 bg-gray-200 text-gray-800 py-3 px-4 rounded-lg font-medium hover:bg-gray-300 transition-colors"
           >
-            Create Account for Future Orders
+            {isGroceryOrder ? 'Browse More Products' : 'Browse More Restaurants'}
           </button>
-        ) : (
+          {(guestOrderInfo?.guestOrder || isGuestFromStripe) ? (
+            <button
+              onClick={() => navigate('/register')}
+              className="flex-1 bg-green-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-green-700 transition-colors"
+            >
+              Create Account for Future Orders
+            </button>
+          ) : (
+            <button
+              onClick={() => navigate('/my-orders')}
+              className="flex-1 bg-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+            >
+              View My Orders
+            </button>
+          )}
+        </div>
+        <div className="text-center">
           <button
-            onClick={() => navigate('/my-orders')}
-            className="flex-1 bg-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+            onClick={() => navigate('/cart')}
+            className="text-green-700 hover:text-green-900 font-medium underline text-sm"
           >
-            View My Orders
+            Go to your cart →
           </button>
-        )}
+        </div>
       </div>
     </div>
   );

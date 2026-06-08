@@ -40,9 +40,8 @@ function OwnerDashboard() {
   const [updatingDeliveryFee, setUpdatingDeliveryFee] = useState(false);
   const deliveryFeeInputRef = useRef(null);
   const [editingAddress, setEditingAddress] = useState(false);
-  const [addressForm, setAddressForm] = useState('');
+  const [addressForm, setAddressForm] = useState({ street: '', city: '', state: '', zip: '' });
   const [updatingAddress, setUpdatingAddress] = useState(false);
-  const addressInputRef = useRef(null);
   const [editingEmail, setEditingEmail] = useState(false);
   const [emailForm, setEmailForm] = useState('');
   const [updatingEmail, setUpdatingEmail] = useState(false);
@@ -163,13 +162,17 @@ function OwnerDashboard() {
         const res = await fetch(`${API_BASE_URL}/api/owners/orders`, {
           credentials: "include",
         });
-        
+
         if (res.ok) {
           const data = await res.json();
           setOrders(data.orders || []);
+        } else {
+          // eslint-disable-next-line no-console
+          console.error('Orders fetch failed:', res.status, await res.text().catch(() => ''));
         }
       } catch (err) {
-        // Orders fetch error - silently handle
+        // eslint-disable-next-line no-console
+        console.error('Orders fetch error:', err);
       }
     };
 
@@ -562,7 +565,9 @@ function OwnerDashboard() {
   };
 
   const getTotalEarnings = () => {
-    return orders.reduce((sum, order) => sum + (Number(order.total || 0) - Number(order.platform_fee || 0)), 0);
+    return orders
+      .filter(order => order.status === 'completed')
+      .reduce((sum, order) => sum + (Number(order.total || 0) - Number(order.platform_fee || 0)), 0);
   };
 
 
@@ -802,12 +807,6 @@ function OwnerDashboard() {
   }, [editingDeliveryFee]);
 
   useEffect(() => {
-    if (editingAddress && addressInputRef.current) {
-      addressInputRef.current.focus();
-    }
-  }, [editingAddress]);
-
-  useEffect(() => {
     if (editingEmail && emailInputRef.current) {
       emailInputRef.current.focus();
     }
@@ -915,23 +914,24 @@ function OwnerDashboard() {
 
   // Address Management Functions
   const handleEditAddress = () => {
-    setAddressForm(restaurant.address || '');
+    setAddressForm({
+      street: restaurant.address || '',
+      city: restaurant.city || '',
+      state: restaurant.state || '',
+      zip: restaurant.zip_code || '',
+    });
     setEditingAddress(true);
   };
 
   const handleCancelEditAddress = () => {
     setEditingAddress(false);
-    setAddressForm('');
+    setAddressForm({ street: '', city: '', state: '', zip: '' });
   };
 
   const handleUpdateAddress = async () => {
-    if (!addressForm.trim()) {
-      toast.warning("Please enter a valid restaurant address.");
-      return;
-    }
-
-    if (addressForm.trim() === restaurant.address) {
-      setEditingAddress(false);
+    const { street, city, state, zip } = addressForm;
+    if (!street.trim() || !city.trim() || !state.trim() || !zip.trim()) {
+      toast.warning("Please fill in street, city, state, and zip code.");
       return;
     }
 
@@ -941,12 +941,8 @@ function OwnerDashboard() {
       const res = await fetch(`${API_BASE_URL}/api/owners/restaurant/address`, {
         method: "PUT",
         credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          address: addressForm.trim(),
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ street: street.trim(), city: city.trim(), state: state.trim(), zip: zip.trim() }),
       });
 
       if (!res.ok) {
@@ -954,10 +950,13 @@ function OwnerDashboard() {
         throw new Error(errorData.error || "Failed to update restaurant address");
       }
 
-      // Update local state
+      const data = await res.json();
       setRestaurant(prev => ({
         ...prev,
-        address: addressForm.trim()
+        address: data.address,
+        city: data.city,
+        state: data.state,
+        zip_code: data.zip_code,
       }));
 
       toast.success("Restaurant address updated successfully!");
@@ -1223,24 +1222,44 @@ function OwnerDashboard() {
               <div className="mt-2">
                 {editingAddress ? (
                   <div className="space-y-3">
-                    <div className="flex items-center space-x-2">
-                      <span className="text-gray-600">📍</span>
-                      <input
-                        ref={addressInputRef}
-                        type="text"
-                        value={addressForm}
-                        onChange={(e) => setAddressForm(e.target.value)}
-                        onKeyPress={(e) => {
-                          if (e.key === 'Enter') {
-                            handleUpdateAddress();
-                          } else if (e.key === 'Escape') {
-                            handleCancelEditAddress();
-                          }
-                        }}
-                        className="text-sm bg-white border-2 border-blue-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent flex-1"
-                        placeholder="Enter restaurant address"
-                        maxLength={200}
-                      />
+                    <div className="flex items-start space-x-2">
+                      <span className="text-gray-600 mt-2">📍</span>
+                      <div className="flex-1 space-y-2">
+                        <input
+                          type="text"
+                          value={addressForm.street}
+                          onChange={(e) => setAddressForm(prev => ({ ...prev, street: e.target.value }))}
+                          className="w-full text-sm bg-white border-2 border-blue-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder="Street address"
+                          maxLength={200}
+                        />
+                        <input
+                          type="text"
+                          value={addressForm.city}
+                          onChange={(e) => setAddressForm(prev => ({ ...prev, city: e.target.value }))}
+                          className="w-full text-sm bg-white border-2 border-blue-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder="City"
+                          maxLength={100}
+                        />
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={addressForm.state}
+                            onChange={(e) => setAddressForm(prev => ({ ...prev, state: e.target.value }))}
+                            className="w-24 text-sm bg-white border-2 border-blue-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="State"
+                            maxLength={50}
+                          />
+                          <input
+                            type="text"
+                            value={addressForm.zip}
+                            onChange={(e) => setAddressForm(prev => ({ ...prev, zip: e.target.value }))}
+                            className="w-32 text-sm bg-white border-2 border-blue-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="Zip code"
+                            maxLength={10}
+                          />
+                        </div>
+                      </div>
                     </div>
                     <div className="flex items-center space-x-2">
                       <button
@@ -1262,16 +1281,17 @@ function OwnerDashboard() {
                         Cancel
                       </button>
                     </div>
-                    <p className="text-xs text-gray-500">
-                      {addressForm.length}/200 characters
-                    </p>
                   </div>
                 ) : (
-                  <div className="flex items-center space-x-2">
-                    <p className="text-gray-600 text-sm sm:text-base">📍 {restaurant.address}</p>
+                  <div className="flex items-start space-x-2">
+                    <div>
+                      <p className="text-gray-600 text-sm sm:text-base">
+                        📍 {restaurant.address || [restaurant.city, restaurant.state, restaurant.zip_code].filter(Boolean).join(', ') || 'No address set'}
+                      </p>
+                    </div>
                     <button
                       onClick={handleEditAddress}
-                      className="text-blue-600 hover:text-blue-800 transition-colors p-1"
+                      className="text-blue-600 hover:text-blue-800 transition-colors p-1 flex-shrink-0"
                       title="Edit restaurant address"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

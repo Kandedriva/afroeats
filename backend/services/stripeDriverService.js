@@ -213,6 +213,11 @@ export async function createDriverPayout(driverId, deliveryId, amount) {
  * @returns {object} - Summary of payouts processed
  */
 export async function processPendingDriverPayouts() {
+  if (!stripe) {
+    console.log('ℹ️ Stripe not configured — skipping driver payout batch');
+    return { success: true, total: 0, succeeded: 0, failed: 0, total_amount: 0 };
+  }
+
   try {
     // Ensure driver_earnings table exists
     await pool.query(`

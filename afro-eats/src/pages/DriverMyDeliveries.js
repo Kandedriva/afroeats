@@ -2,6 +2,9 @@ import { useEffect, useState, useCallback } from "react";
 import { API_BASE_URL } from "../config/api";
 import { toast } from 'react-toastify';
 
+const buildMapsUrl = (address) =>
+  `https://maps.google.com/maps?q=${encodeURIComponent(address)}`;
+
 function DriverMyDeliveries() {
   const [activeDeliveries, setActiveDeliveries] = useState([]);
   const [completedDeliveries, setCompletedDeliveries] = useState([]);
@@ -79,6 +82,9 @@ function DriverMyDeliveries() {
 
   const renderDeliveryCard = (delivery) => {
     const isActive = ['claimed', 'picked_up', 'in_transit'].includes(delivery.status);
+    const restaurants = typeof delivery.restaurants === 'string'
+      ? JSON.parse(delivery.restaurants)
+      : (delivery.restaurants || []);
 
     return (
       <div key={delivery.delivery_id} className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition">
@@ -99,14 +105,57 @@ function DriverMyDeliveries() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <div>
-            <h4 className="font-semibold text-gray-700 mb-2">📍 Pickup</h4>
-            <p className="text-sm text-gray-600">{delivery.pickup_location}</p>
+            <h4 className="font-semibold text-gray-700 mb-2">
+              📍 Pickup {restaurants.length > 1 ? `(${restaurants.length} stops)` : ''}
+            </h4>
+            {restaurants.length > 0 ? (
+              <div className="space-y-2">
+                {restaurants.map((r, idx) => (
+                  <div key={idx} className="text-sm">
+                    <p className="font-medium text-gray-800">{r.restaurant_name}</p>
+                    {r.restaurant_address ? (
+                      <a
+                        href={buildMapsUrl(r.restaurant_address)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:text-blue-800 hover:underline"
+                      >
+                        {r.restaurant_address}
+                      </a>
+                    ) : null}
+                    {r.restaurant_phone ? (
+                      <p className="text-gray-500 mt-0.5">
+                        📞 <a href={`tel:${r.restaurant_phone}`} className="hover:underline">{r.restaurant_phone}</a>
+                      </p>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <a
+                href={buildMapsUrl(delivery.pickup_location)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 hover:text-blue-800 hover:underline text-sm"
+              >
+                {delivery.pickup_location}
+              </a>
+            )}
           </div>
           <div>
             <h4 className="font-semibold text-gray-700 mb-2">🏠 Delivery</h4>
-            <p className="text-sm text-gray-600">{delivery.delivery_location}</p>
+            <a
+              href={buildMapsUrl(delivery.delivery_location)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:text-blue-800 hover:underline text-sm"
+            >
+              {delivery.delivery_location}
+            </a>
             {delivery.delivery_phone && (
-              <p className="text-sm text-gray-600 mt-1">📞 {delivery.delivery_phone}</p>
+              <p className="text-sm text-gray-600 mt-1">
+                📞 <a href={`tel:${delivery.delivery_phone}`} className="text-blue-600 hover:underline">{delivery.delivery_phone}</a>
+              </p>
             )}
           </div>
         </div>

@@ -6,6 +6,9 @@ import { useDriverAuth } from "../context/DriverAuthContext";
 import { useDriverSocket } from "../hooks/useDriverSocket";
 import ConfirmDialog from '../Components/ConfirmDialog';
 
+const buildMapsUrl = (address) =>
+  `https://maps.google.com/maps?q=${encodeURIComponent(address)}`;
+
 function DriverAvailableOrders() {
   const { driver } = useDriverAuth();
   const [orders, setOrders] = useState([]);
@@ -145,24 +148,57 @@ function DriverAvailableOrders() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                   <div>
-                    <h4 className="font-semibold text-gray-700 mb-2">📍 Pickup Location</h4>
-                    <p className="text-sm text-gray-600">{order.pickup_location}</p>
-                    {restaurants && restaurants.length > 0 && (
-                      <div className="mt-2">
-                        <p className="text-sm font-medium text-gray-700">Restaurants:</p>
+                    <h4 className="font-semibold text-gray-700 mb-2">
+                      📍 Pickup {restaurants && restaurants.length > 1 ? `(${restaurants.length} stops)` : ''}
+                    </h4>
+                    {restaurants && restaurants.length > 0 ? (
+                      <div className="space-y-2">
                         {restaurants.map((r, idx) => (
-                          <p key={idx} className="text-sm text-gray-600">• {r.restaurant_name}</p>
+                          <div key={idx} className="text-sm">
+                            <p className="font-medium text-gray-800">{r.restaurant_name}</p>
+                            {r.restaurant_address ? (
+                              <a
+                                href={buildMapsUrl(r.restaurant_address)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-600 hover:text-blue-800 hover:underline"
+                              >
+                                {r.restaurant_address}
+                              </a>
+                            ) : null}
+                            {r.restaurant_phone ? (
+                              <p className="text-gray-500 mt-0.5">
+                                📞 <a href={`tel:${r.restaurant_phone}`} className="hover:underline">{r.restaurant_phone}</a>
+                              </p>
+                            ) : null}
+                          </div>
                         ))}
                       </div>
+                    ) : (
+                      <a
+                        href={buildMapsUrl(order.pickup_location)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:text-blue-800 hover:underline text-sm"
+                      >
+                        {order.pickup_location}
+                      </a>
                     )}
                   </div>
 
                   <div>
                     <h4 className="font-semibold text-gray-700 mb-2">🏠 Delivery Location</h4>
-                    <p className="text-sm text-gray-600">{order.delivery_location}</p>
+                    <a
+                      href={buildMapsUrl(order.delivery_location)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:text-blue-800 hover:underline text-sm"
+                    >
+                      {order.delivery_location}
+                    </a>
                     {order.delivery_phone && (
                       <p className="text-sm text-gray-600 mt-2">
-                        📞 {order.delivery_phone}
+                        📞 <a href={`tel:${order.delivery_phone}`} className="text-blue-600 hover:underline">{order.delivery_phone}</a>
                       </p>
                     )}
                   </div>

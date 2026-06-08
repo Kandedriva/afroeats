@@ -43,7 +43,6 @@ router.post("/register", ...uploadToR2('driver_license', 'drivers_license', fals
   try {
     const {
       name,
-      email,
       phone,
       password,
       secret_word,
@@ -54,6 +53,8 @@ router.post("/register", ...uploadToR2('driver_license', 'drivers_license', fals
       vehicle_model,
       vehicle_year
     } = req.body;
+
+    const email = req.body.email?.trim().toLowerCase();
 
     // Validation
     if (!name || !email || !phone || !password || !vehicle_type || !vehicle_color || !license_plate) {
@@ -163,7 +164,8 @@ router.post("/register", ...uploadToR2('driver_license', 'drivers_license', fals
  */
 router.post("/login", async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { password } = req.body;
+    const email = req.body.email?.trim().toLowerCase();
 
     if (!email || !password) {
       return res.status(400).json({ error: "Email and password are required" });

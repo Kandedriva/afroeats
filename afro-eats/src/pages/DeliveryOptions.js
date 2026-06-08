@@ -203,7 +203,7 @@ export default function DeliveryOptions() {
           </div>
           <div className="flex justify-between">
             <span className="text-gray-600">Platform fee</span>
-            <span className="font-medium">$1.20</span>
+            <span className="font-medium">${Math.max(Number(total) * 0.10, 2.00).toFixed(2)}</span>
           </div>
           {deliveryType === "delivery" && deliveryFeeData && (
             <div className="flex justify-between">
@@ -236,7 +236,7 @@ export default function DeliveryOptions() {
             <span className="font-bold text-lg text-green-600">
               ${(
                 Number(total) +
-                1.20 +
+                Math.max(Number(total) * 0.10, 2.00) +
                 (deliveryType === "delivery" && deliveryFeeData ? deliveryFeeData.deliveryFee : 0)
               ).toFixed(2)}
             </span>

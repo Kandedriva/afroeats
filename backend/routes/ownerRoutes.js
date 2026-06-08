@@ -1,6 +1,7 @@
 import express from "express";
 import bcryptjs from "bcryptjs";
 import pool from "../db.js";
+import stripe from "../stripe.js";
 import { requireOwnerAuth } from "../middleware/ownerAuth.js";
 import {
   checkAccountLockout,
@@ -414,7 +415,7 @@ router.get("/dashboard", requireOwnerAuth, async (req, res) => {
 
   try {
     const restaurantRes = await pool.query(
-      "SELECT id, name, address, phone_number, image_url, delivery_fee FROM restaurants WHERE owner_id = $1",
+      "SELECT id, name, address, city, state, zip_code, phone_number, image_url, delivery_fee FROM restaurants WHERE owner_id = $1",
       [ownerId]
     );
 
@@ -436,22 +437,21 @@ router.get("/dashboard", requireOwnerAuth, async (req, res) => {
 
     const ordersRes = await pool.query(
       `
-      SELECT 
+      SELECT
         o.id AS order_id,
         o.created_at,
-        u.name AS customer_name,
-        d.name AS dish_name,
+        COALESCE(o.guest_name, u.name, 'Guest') AS customer_name,
+        oi.name AS dish_name,
         d.image_url,
-        d.price,
+        oi.price,
         oi.quantity,
         r.name AS restaurant_name
       FROM orders o
       JOIN order_items oi ON o.id = oi.order_id
-      JOIN dishes d ON oi.dish_id = d.id
-      JOIN restaurants r ON d.restaurant_id = r.id
-      JOIN restaurant_owners ro ON r.owner_id = ro.id
-      JOIN users u ON o.user_id = u.id
-      WHERE ro.id = $1
+      LEFT JOIN dishes d ON oi.dish_id = d.id
+      LEFT JOIN restaurants r ON COALESCE(oi.restaurant_id, d.restaurant_id) = r.id
+      LEFT JOIN users u ON o.user_id = u.id
+      WHERE r.owner_id = $1
       ORDER BY o.created_at DESC
       `,
       [ownerId]
@@ -783,7 +783,7 @@ router.get("/orders", requireOwnerAuth, async (req, res) => {
       // Column creation check - column might already exist
     }
 
-    // Ensure restaurant_order_status table exists
+    // Ensure restaurant_order_status table exists with all required columns
     try {
       await pool.query(`
         CREATE TABLE IF NOT EXISTS restaurant_order_status (
@@ -799,12 +799,9 @@ router.get("/orders", requireOwnerAuth, async (req, res) => {
           UNIQUE(order_id, restaurant_id)
         )
       `);
-      
-      // Add removed_at column if it doesn't exist (for existing tables)
-      await pool.query(`
-        ALTER TABLE restaurant_order_status 
-        ADD COLUMN IF NOT EXISTS removed_at TIMESTAMP
-      `);
+      await pool.query(`ALTER TABLE restaurant_order_status ADD COLUMN IF NOT EXISTS removed_at TIMESTAMP`);
+      await pool.query(`ALTER TABLE restaurant_order_status ADD COLUMN IF NOT EXISTS preparing_at TIMESTAMP`);
+      await pool.query(`ALTER TABLE restaurant_order_status ADD COLUMN IF NOT EXISTS ready_at TIMESTAMP`);
     } catch (err) {
       // Handle table creation/modification silently
     }
@@ -846,7 +843,7 @@ router.get("/orders", requireOwnerAuth, async (req, res) => {
       LEFT JOIN restaurant_order_status ros ON (o.id = ros.order_id AND r.id = ros.restaurant_id)
       LEFT JOIN users u ON o.user_id = u.id
       WHERE r.owner_id = $1 
-        AND (o.status IN ('paid', 'completed', 'received'))
+        AND (o.status IN ('paid', 'completed', 'received', 'delivered', 'preparing', 'ready', 'picked_up'))
         AND COALESCE(ros.status, 'active') NOT IN ('cancelled', 'removed')
       ORDER BY o.created_at DESC
     `, [ownerId]);
@@ -916,7 +913,8 @@ router.get("/orders", requireOwnerAuth, async (req, res) => {
     // Calculate restaurant-specific totals and platform fees
     Object.values(groupedOrders).forEach(order => {
       // Calculate proportional platform fee based on this restaurant's portion of the order
-      const proportion = order.restaurant_subtotal / (order.original_total - order.original_platform_fee);
+      const divisor = order.original_total - order.original_platform_fee;
+      const proportion = divisor > 0 ? order.restaurant_subtotal / divisor : 1;
       order.platform_fee = order.original_platform_fee * proportion;
       order.total = order.restaurant_subtotal + order.platform_fee;
     });
@@ -1474,6 +1472,10 @@ router.post("/refunds/:notificationId/process", requireOwnerAuth, async (req, re
     const ownerId = req.owner.id;
     const { action, notes } = req.body; // action: 'approve' or 'deny'
 
+    if (!['approve', 'deny'].includes(action)) {
+      return res.status(400).json({ error: "action must be 'approve' or 'deny'" });
+    }
+
     // Get the notification and verify ownership
     const notificationResult = await pool.query(
       "SELECT * FROM notifications WHERE id = $1 AND owner_id = $2 AND type = 'refund_request'",
@@ -1487,9 +1489,20 @@ router.post("/refunds/:notificationId/process", requireOwnerAuth, async (req, re
     const notification = notificationResult.rows[0];
     const notificationData = notification.data;
 
-    // Get order and customer information
+    // Prevent double-processing
+    if (notificationData.refundProcessed) {
+      return res.status(409).json({ error: "This refund request has already been processed" });
+    }
+
+    // Get order — LEFT JOIN so guest orders (null user_id) are included
     const orderResult = await pool.query(
-      "SELECT o.*, u.id as customer_id, u.name as customer_name, u.email as customer_email FROM orders o JOIN users u ON o.user_id = u.id WHERE o.id = $1",
+      `SELECT o.*,
+              u.id   AS customer_id,
+              u.name AS customer_name,
+              COALESCE(u.email, o.guest_email) AS customer_email
+       FROM orders o
+       LEFT JOIN users u ON o.user_id = u.id
+       WHERE o.id = $1`,
       [notification.order_id]
     );
 
@@ -1498,15 +1511,63 @@ router.post("/refunds/:notificationId/process", requireOwnerAuth, async (req, re
     }
 
     const order = orderResult.rows[0];
+    const restaurantName = notificationData.restaurantName || 'Restaurant';
+    const restaurantTotal = parseFloat(notificationData.restaurantTotal || 0);
+    const itemCount = notificationData.itemCount || 0;
 
-    // Update notification with refund decision
+    // --- Execute Stripe refund when approved ---
+    let stripeRefundId = null;
+
+    if (action === 'approve') {
+      if (restaurantTotal <= 0) {
+        return res.status(400).json({ error: "Invalid refund amount" });
+      }
+
+      if (!stripe) {
+        // Demo / test mode — record a synthetic refund ID
+        stripeRefundId = `demo_refund_${Date.now()}`;
+        console.log(`[Demo] Simulated refund of $${restaurantTotal} for order ${order.id}`);
+      } else if (!order.stripe_payment_intent) {
+        return res.status(400).json({
+          error: "Cannot refund this order — no Stripe payment found. Demo orders cannot be refunded."
+        });
+      } else {
+        try {
+          const amountCents = Math.round(restaurantTotal * 100);
+          const refund = await stripe.refunds.create({
+            payment_intent: order.stripe_payment_intent,
+            amount: amountCents,
+            reason: 'requested_by_customer',
+            metadata: {
+              order_id: order.id.toString(),
+              restaurant_owner_id: ownerId.toString(),
+              notification_id: notificationId.toString(),
+            }
+          });
+          stripeRefundId = refund.id;
+          console.log(`✅ Stripe refund ${refund.id} issued: $${restaurantTotal} for order ${order.id}`);
+        } catch (stripeErr) {
+          console.error('Stripe refund error:', stripeErr);
+          if (stripeErr.code === 'charge_already_refunded') {
+            return res.status(409).json({ error: "This payment has already been fully refunded" });
+          }
+          if (stripeErr.code === 'charge_disputed') {
+            return res.status(409).json({ error: "This payment is under dispute and cannot be refunded directly" });
+          }
+          return res.status(502).json({ error: `Stripe refund failed: ${stripeErr.message}` });
+        }
+      }
+    }
+
+    // Persist the decision (and refund ID) on the notification
     const updatedData = {
       ...notificationData,
       refundProcessed: true,
       refundAction: action,
       refundNotes: notes || '',
       processedAt: new Date().toISOString(),
-      processedBy: ownerId
+      processedBy: ownerId,
+      ...(stripeRefundId && { stripeRefundId })
     };
 
     await pool.query(
@@ -1514,71 +1575,58 @@ router.post("/refunds/:notificationId/process", requireOwnerAuth, async (req, re
       [JSON.stringify(updatedData), notificationId]
     );
 
-    // Ensure customer notifications table exists
-    try {
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS customer_notifications (
-          id SERIAL PRIMARY KEY,
-          user_id INTEGER REFERENCES users(id),
-          type VARCHAR(50) NOT NULL,
-          title VARCHAR(255) NOT NULL,
-          message TEXT NOT NULL,
-          data JSONB DEFAULT '{}',
-          read BOOLEAN DEFAULT FALSE,
-          created_at TIMESTAMP DEFAULT NOW()
-        )
-      `);
-    } catch (err) {
-      // Customer notifications table creation check
-    }
+    // Ensure customer_notifications table exists
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS customer_notifications (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id),
+        type VARCHAR(50) NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        message TEXT NOT NULL,
+        data JSONB DEFAULT '{}',
+        read BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
 
-    // Create notification for customer with restaurant-specific information
-    const restaurantName = notificationData.restaurantName || 'Restaurant';
-    const restaurantTotal = notificationData.restaurantTotal || 0;
-    const itemCount = notificationData.itemCount || 0;
-    
-    const customerNotificationTitle = action === 'approve' 
-      ? `Refund Approved - ${restaurantName}` 
-      : `Refund Request Denied - ${restaurantName}`;
-    
-    const customerNotificationMessage = action === 'approve'
-      ? `Your refund request for order #${order.id} has been approved by ${restaurantName}. Refund amount: $${Number(restaurantTotal).toFixed(2)} for ${itemCount} item${itemCount !== 1 ? 's' : ''}. The refund will be processed shortly.`
-      : `Your refund request for order #${order.id} has been denied by ${restaurantName}. Amount: $${Number(restaurantTotal).toFixed(2)} for ${itemCount} item${itemCount !== 1 ? 's' : ''}.`;
+    // Build customer-facing notification
+    const customerTitle = action === 'approve'
+      ? `Refund Processed — ${restaurantName}`
+      : `Refund Denied — ${restaurantName}`;
 
-    const customerNotificationData = {
+    const customerMessage = action === 'approve'
+      ? `Your refund of $${restaurantTotal.toFixed(2)} for order #${order.id} has been processed. It should appear on your statement within 5–10 business days.`
+      : `Your refund request for order #${order.id} was denied by ${restaurantName}.${notes ? ` Reason: ${notes}` : ''}`;
+
+    const customerData = {
       orderId: order.id,
-      orderTotal: order.total,
-      restaurantTotal: restaurantTotal,
-      restaurantName: restaurantName,
-      itemCount: itemCount,
+      restaurantTotal,
+      restaurantName,
+      itemCount,
       refundAction: action,
       refundNotes: notes || '',
-      processedAt: new Date().toISOString()
+      processedAt: new Date().toISOString(),
+      ...(stripeRefundId && { stripeRefundId })
     };
 
-    await pool.query(
-      "INSERT INTO customer_notifications (user_id, type, title, message, data) VALUES ($1, $2, $3, $4, $5)",
-      [
-        order.customer_id,
-        `refund_${action}`,
-        customerNotificationTitle,
-        customerNotificationMessage,
-        JSON.stringify(customerNotificationData)
-      ]
-    );
+    // Insert for authenticated customers; guest orders have no user_id so skip
+    if (order.customer_id) {
+      await pool.query(
+        "INSERT INTO customer_notifications (user_id, type, title, message, data) VALUES ($1, $2, $3, $4, $5)",
+        [order.customer_id, `refund_${action}`, customerTitle, customerMessage, JSON.stringify(customerData)]
+      );
+    }
 
-    // Log the refund decision
-    // Refund action processed for order by owner
-    // Notes provided for refund action
-    // Customer notification sent
-
-    res.json({ 
-      success: true, 
-      message: `Refund request ${action}d successfully. Customer has been notified.`,
-      action: action
+    res.json({
+      success: true,
+      message: action === 'approve'
+        ? `Refund of $${restaurantTotal.toFixed(2)} sent to customer. It will appear within 5–10 business days.`
+        : `Refund denied. Customer has been notified.`,
+      action,
+      ...(stripeRefundId && { stripeRefundId })
     });
   } catch (err) {
-    // Process refund error
+    console.error('Process refund error:', err);
     res.status(500).json({ error: "Failed to process refund request" });
   }
 });
@@ -1761,7 +1809,7 @@ router.get("/restaurant/details", requireOwnerAuth, async (req, res) => {
     }
 
     const restaurantRes = await pool.query(
-      "SELECT id, name, address, phone_number, image_url, delivery_fee FROM restaurants WHERE owner_id = $1",
+      "SELECT id, name, address, city, state, zip_code, phone_number, image_url, delivery_fee FROM restaurants WHERE owner_id = $1",
       [ownerId]
     );
 
@@ -1904,22 +1952,21 @@ router.post("/confirm-email-change", requireOwnerAuth, async (req, res) => {
 // ========= UPDATE RESTAURANT ADDRESS ==========
 router.put("/restaurant/address", requireOwnerAuth, async (req, res) => {
   try {
-    const { address } = req.body;
+    const { street, city, state, zip } = req.body;
     const ownerId = req.owner.id;
 
-    if (!address || !address.trim()) {
-      return res.status(400).json({ error: "Address is required" });
+    if (!street?.trim() || !city?.trim() || !state?.trim() || !zip?.trim()) {
+      return res.status(400).json({ error: "Street, city, state, and zip code are all required" });
     }
 
-    const trimmedAddress = address.trim();
-    
-    if (trimmedAddress.length > 255) {
-      return res.status(400).json({ error: "Address must be 255 characters or less" });
-    }
+    const trimmedStreet = street.trim();
+    const trimmedCity = city.trim();
+    const trimmedState = state.trim();
+    const trimmedZip = zip.trim();
 
     // Check if owner owns a restaurant
     const restaurantResult = await pool.query(
-      "SELECT id, address FROM restaurants WHERE owner_id = $1",
+      "SELECT id FROM restaurants WHERE owner_id = $1",
       [ownerId]
     );
 
@@ -1927,21 +1974,15 @@ router.put("/restaurant/address", requireOwnerAuth, async (req, res) => {
       return res.status(404).json({ error: "No restaurant found for this owner" });
     }
 
-    const restaurant = restaurantResult.rows[0];
+    // Compose full address for geocoding and display
+    const fullAddress = `${trimmedStreet}, ${trimmedCity}, ${trimmedState} ${trimmedZip}`;
 
-    // Check if address is actually changing
-    if (restaurant.address === trimmedAddress) {
-      return res.json({ 
-        success: true, 
-        message: "Address is already up to date",
-        address: trimmedAddress 
-      });
-    }
-
-    // Update restaurant address
     const updateResult = await pool.query(
-      "UPDATE restaurants SET address = $1, address_geocoded = FALSE WHERE owner_id = $2 RETURNING id",
-      [trimmedAddress, ownerId]
+      `UPDATE restaurants
+       SET address = $1, city = $2, state = $3, zip_code = $4, address_geocoded = FALSE
+       WHERE owner_id = $5
+       RETURNING id`,
+      [fullAddress, trimmedCity, trimmedState, trimmedZip, ownerId]
     );
 
     // Auto-geocode the updated address
@@ -1953,18 +1994,20 @@ router.put("/restaurant/address", requireOwnerAuth, async (req, res) => {
         if (geocoded) {
           console.log(`✅ Re-geocoded restaurant after address update: (${geocoded.latitude}, ${geocoded.longitude})`);
         } else {
-          console.warn(`⚠️ Could not geocode updated address: ${trimmedAddress}`);
+          console.warn(`⚠️ Could not geocode updated address: ${fullAddress}`);
         }
       } catch (geocodeError) {
         console.warn(`⚠️ Re-geocoding failed for updated address:`, geocodeError.message);
-        // Don't fail the address update if geocoding fails
       }
     }
 
     res.json({
       success: true,
       message: "Restaurant address updated successfully",
-      address: trimmedAddress
+      address: fullAddress,
+      city: trimmedCity,
+      state: trimmedState,
+      zip_code: trimmedZip
     });
 
   } catch (err) {
@@ -2149,5 +2192,151 @@ router.delete("/profile/close", requireOwnerAuth, async (req, res) => {
   }
 });
 
+
+/**
+ * GET /api/owners/reports
+ * Get reports and analytics for restaurant owner
+ */
+router.get('/reports', requireOwnerAuth, async (req, res) => {
+  try {
+    const ownerId = req.owner.id;
+    const range = req.query.range || 'week';
+
+    const now = new Date();
+    let startDate;
+
+    switch (range) {
+      case 'week':
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        break;
+      case 'month':
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        break;
+      case 'year':
+        startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+        break;
+      case 'all':
+        startDate = new Date('2020-01-01');
+        break;
+      default:
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    }
+
+    const restaurantResult = await pool.query(
+      "SELECT id FROM restaurants WHERE owner_id = $1",
+      [ownerId]
+    );
+
+    if (restaurantResult.rows.length === 0) {
+      return res.json({
+        totalRevenue: 0, totalOrders: 0, averageOrderValue: 0,
+        completedOrders: 0, cancelledOrders: 0, topDishes: [], recentActivity: []
+      });
+    }
+
+    const restaurantId = restaurantResult.rows[0].id;
+
+    const ordersResult = await pool.query(`
+      SELECT
+        o.id,
+        SUM(oi.price * oi.quantity) as restaurant_subtotal,
+        o.created_at,
+        COALESCE(ros.status, 'active') as restaurant_status,
+        ros.completed_at
+      FROM orders o
+      JOIN order_items oi ON o.id = oi.order_id
+      LEFT JOIN restaurant_order_status ros ON (o.id = ros.order_id AND ros.restaurant_id = $1)
+      WHERE oi.restaurant_id = $1
+        AND o.created_at >= $2
+      GROUP BY o.id, o.created_at, ros.status, ros.completed_at
+      ORDER BY o.created_at DESC
+    `, [restaurantId, startDate]);
+
+    const orders = ordersResult.rows;
+    const totalOrders = orders.length;
+    const completedOrders = orders.filter(o => o.restaurant_status === 'completed').length;
+    const cancelledOrders = orders.filter(o => o.restaurant_status === 'cancelled').length;
+    const totalRevenue = orders
+      .filter(o => o.restaurant_status === 'completed')
+      .reduce((sum, o) => sum + parseFloat(o.restaurant_subtotal || 0), 0);
+    const averageOrderValue = completedOrders > 0 ? totalRevenue / completedOrders : 0;
+
+    const topDishesResult = await pool.query(`
+      SELECT
+        d.name,
+        SUM(oi.quantity) as total_sold,
+        SUM(oi.price * oi.quantity) as revenue
+      FROM order_items oi
+      JOIN dishes d ON oi.dish_id = d.id
+      JOIN orders o ON oi.order_id = o.id
+      JOIN restaurant_order_status ros ON (o.id = ros.order_id AND ros.restaurant_id = $1)
+      WHERE d.restaurant_id = $1
+        AND ros.status = 'completed'
+        AND o.created_at >= $2
+      GROUP BY d.id, d.name
+      ORDER BY revenue DESC
+      LIMIT 5
+    `, [restaurantId, startDate]);
+
+    const topDishes = topDishesResult.rows.map(d => ({
+      name: d.name,
+      total_sold: parseInt(d.total_sold),
+      revenue: parseFloat(d.revenue)
+    }));
+
+    const activityResult = await pool.query(`
+      SELECT type, description, amount, created_at FROM (
+        SELECT
+          'new_order' as type,
+          CONCAT('New order #', o.id, ' placed') as description,
+          (SELECT SUM(oi2.price * oi2.quantity) FROM order_items oi2 WHERE oi2.order_id = o.id AND oi2.restaurant_id = $1) as amount,
+          o.created_at
+        FROM orders o
+        WHERE EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = o.id AND oi.restaurant_id = $1)
+          AND o.created_at >= $2
+        GROUP BY o.id
+
+        UNION ALL
+
+        SELECT
+          'order_completed' as type,
+          CONCAT('Order #', o.id, ' completed') as description,
+          (SELECT SUM(oi2.price * oi2.quantity) FROM order_items oi2 WHERE oi2.order_id = o.id AND oi2.restaurant_id = $1) as amount,
+          ros.completed_at as created_at
+        FROM orders o
+        JOIN restaurant_order_status ros ON (o.id = ros.order_id AND ros.restaurant_id = $1)
+        WHERE ros.status = 'completed'
+          AND ros.completed_at >= $2
+
+        UNION ALL
+
+        SELECT
+          'order_cancelled' as type,
+          CONCAT('Order #', o.id, ' cancelled') as description,
+          (SELECT SUM(oi2.price * oi2.quantity) FROM order_items oi2 WHERE oi2.order_id = o.id AND oi2.restaurant_id = $1) as amount,
+          o.created_at
+        FROM orders o
+        JOIN restaurant_order_status ros ON (o.id = ros.order_id AND ros.restaurant_id = $1)
+        WHERE ros.status = 'cancelled'
+          AND o.created_at >= $2
+      ) activity
+      ORDER BY created_at DESC
+      LIMIT 20
+    `, [restaurantId, startDate]);
+
+    res.json({
+      totalRevenue,
+      totalOrders,
+      averageOrderValue,
+      completedOrders,
+      cancelledOrders,
+      topDishes,
+      recentActivity: activityResult.rows
+    });
+  } catch (error) {
+    console.error('Get reports error:', error);
+    res.status(500).json({ error: 'Failed to fetch reports' });
+  }
+});
 
 export default router;

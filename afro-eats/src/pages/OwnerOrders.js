@@ -88,11 +88,17 @@ function OwnerOrders() {
         if (ordersRes.ok) {
           const data = await ordersRes.json();
           setOrders(data.orders || []);
+        } else {
+          // eslint-disable-next-line no-console
+          console.error('Orders fetch failed:', ordersRes.status);
+          toast.error('Failed to load orders');
         }
         if (restaurantRes.ok) {
           setRestaurant(await restaurantRes.json());
         }
-      } catch {
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('Orders fetch error:', err);
         toast.error('Failed to load orders');
       } finally {
         setLoading(false);
@@ -238,7 +244,9 @@ function OwnerOrders() {
   const completedOrders   = orders.filter(o => o.status === 'completed');
   const preparingOrders   = orders.filter(o => o.status === 'preparing');
   const readyOrders       = orders.filter(o => o.status === 'ready');
-  const totalEarnings = orders.reduce((s, o) => s + (Number(o.total || 0) - Number(o.platform_fee || 0)), 0);
+  const totalEarnings = orders
+    .filter(o => o.status === 'completed')
+    .reduce((s, o) => s + (Number(o.total || 0) - Number(o.platform_fee || 0)), 0);
 
   const filteredOrders = getFilteredAndSorted();
 
