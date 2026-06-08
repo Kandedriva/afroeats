@@ -4,8 +4,6 @@ import { Navigate, Link } from "react-router-dom";
 import { toast } from 'react-toastify';
 import { API_BASE_URL } from "../config/api";
 
-const STATUS_PIPELINE = ['active', 'preparing', 'ready', 'completed'];
-
 const STATUS_CONFIG = {
   active:    { label: 'New Order',   emoji: '🆕', color: 'orange' },
   preparing: { label: 'Preparing',   emoji: '👨‍🍳', color: 'blue'   },
