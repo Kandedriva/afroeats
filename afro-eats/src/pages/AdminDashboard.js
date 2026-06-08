@@ -554,7 +554,7 @@ const AdminDashboard = () => {
         )}
 
         {activeTab === 'restaurants' && (
-          <RestaurantsTab restaurants={restaurants} />
+          <RestaurantsTab restaurants={restaurants} onRestaurantUpdate={loadRestaurants} />
         )}
 
         {activeTab === 'drivers' && (
@@ -1598,13 +1598,312 @@ const UsersTab = ({ users }) => (
 );
 
 // Restaurants Tab Component (simplified)
-const RestaurantsTab = ({ restaurants }) => (
-  <div className="bg-white rounded-lg shadow p-6">
-    <h3 className="text-lg font-semibold mb-4">🏪 Restaurants Management</h3>
-    <p className="text-gray-600">Restaurant management interface would go here.</p>
-    <p className="text-sm text-gray-500 mt-2">Total restaurants: {restaurants.length}</p>
-  </div>
-);
+const RestaurantsTab = ({ restaurants, onRestaurantUpdate }) => {
+  const [filterStatus, setFilterStatus] = useState('pending');
+  const [selectedRestaurant, setSelectedRestaurant] = useState(null);
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [suspendReason, setSuspendReason] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const handleApprove = async (id) => {
+    setIsProcessing(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/admin/restaurants/${id}/approve`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (res.ok) {
+        showToast.success('Restaurant approved — now visible to the public');
+        setSelectedRestaurant(null);
+        onRestaurantUpdate();
+      } else {
+        const data = await res.json();
+        showToast.error(data.error || 'Failed to approve restaurant');
+      }
+    } catch {
+      showToast.error('An error occurred while approving the restaurant');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleReject = async (id) => {
+    if (!rejectionReason.trim()) { showToast.warning('Please provide a rejection reason'); return; }
+    setIsProcessing(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/admin/restaurants/${id}/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ reason: rejectionReason }),
+      });
+      if (res.ok) {
+        showToast.success('Restaurant rejected');
+        setSelectedRestaurant(null);
+        setRejectionReason('');
+        onRestaurantUpdate();
+      } else {
+        const data = await res.json();
+        showToast.error(data.error || 'Failed to reject restaurant');
+      }
+    } catch {
+      showToast.error('An error occurred while rejecting the restaurant');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleSuspend = async (id) => {
+    setIsProcessing(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/admin/restaurants/${id}/suspend`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ reason: suspendReason }),
+      });
+      if (res.ok) {
+        showToast.success('Restaurant suspended and hidden from public');
+        setSelectedRestaurant(null);
+        setSuspendReason('');
+        onRestaurantUpdate();
+      } else {
+        const data = await res.json();
+        showToast.error(data.error || 'Failed to suspend restaurant');
+      }
+    } catch {
+      showToast.error('An error occurred while suspending the restaurant');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleReactivate = async (id) => {
+    setIsProcessing(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/admin/restaurants/${id}/reactivate`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (res.ok) {
+        showToast.success('Restaurant reactivated and visible to the public');
+        setSelectedRestaurant(null);
+        onRestaurantUpdate();
+      } else {
+        const data = await res.json();
+        showToast.error(data.error || 'Failed to reactivate restaurant');
+      }
+    } catch {
+      showToast.error('An error occurred while reactivating the restaurant');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const statusBadge = (status) => {
+    const map = {
+      pending:   'bg-yellow-100 text-yellow-800',
+      approved:  'bg-green-100 text-green-800',
+      rejected:  'bg-red-100 text-red-800',
+      suspended: 'bg-gray-100 text-gray-800',
+    };
+    return (
+      <span className={`px-2 py-1 rounded-full text-xs font-semibold capitalize ${map[status] || 'bg-gray-100 text-gray-700'}`}>
+        {status}
+      </span>
+    );
+  };
+
+  const filtered = filterStatus === 'all'
+    ? restaurants
+    : restaurants.filter(r => r.approval_status === filterStatus);
+
+  const counts = {
+    pending:   restaurants.filter(r => r.approval_status === 'pending').length,
+    approved:  restaurants.filter(r => r.approval_status === 'approved').length,
+    rejected:  restaurants.filter(r => r.approval_status === 'rejected').length,
+    suspended: restaurants.filter(r => r.approval_status === 'suspended').length,
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Filter buttons */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
+        <div className="flex flex-wrap gap-2">
+          {[
+            { key: 'all',       label: `All (${restaurants.length})`,   color: 'blue' },
+            { key: 'pending',   label: `Pending (${counts.pending})`,   color: 'yellow' },
+            { key: 'approved',  label: `Approved (${counts.approved})`, color: 'green' },
+            { key: 'rejected',  label: `Rejected (${counts.rejected})`, color: 'red' },
+            { key: 'suspended', label: `Suspended (${counts.suspended})`, color: 'gray' },
+          ].map(({ key, label, color }) => (
+            <button
+              key={key}
+              onClick={() => setFilterStatus(key)}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                filterStatus === key
+                  ? `bg-${color}-600 text-white`
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Restaurant list */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+        {filtered.length === 0 ? (
+          <div className="p-12 text-center text-gray-500">
+            No restaurants with status &quot;{filterStatus}&quot;
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-100">
+            {filtered.map((r) => (
+              <button
+                key={r.id}
+                type="button"
+                className="w-full text-left p-4 hover:bg-gray-50 cursor-pointer transition-colors"
+                onClick={() => { setSelectedRestaurant(r); setRejectionReason(''); setSuspendReason(''); }}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    {r.image_url ? (
+                      <img src={r.image_url} alt={r.name} className="w-10 h-10 rounded-full object-cover" />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center text-lg">🍽️</div>
+                    )}
+                    <div>
+                      <p className="font-semibold text-gray-900">{r.name}</p>
+                      <p className="text-sm text-gray-500">{r.address}</p>
+                      <p className="text-xs text-gray-400">Owner: {r.owner_name} · {r.owner_email}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-gray-400">{r.dish_count} dishes</span>
+                    {statusBadge(r.approval_status)}
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Detail modal */}
+      {selectedRestaurant && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-start justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  {selectedRestaurant.image_url ? (
+                    <img src={selectedRestaurant.image_url} alt={selectedRestaurant.name} className="w-14 h-14 rounded-full object-cover" />
+                  ) : (
+                    <div className="w-14 h-14 rounded-full bg-orange-100 flex items-center justify-center text-2xl">🍽️</div>
+                  )}
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-900">{selectedRestaurant.name}</h2>
+                    {statusBadge(selectedRestaurant.approval_status)}
+                  </div>
+                </div>
+                <button onClick={() => setSelectedRestaurant(null)} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+              </div>
+
+              <div className="space-y-3 mb-6 text-sm text-gray-700">
+                <div><span className="font-medium">Address:</span> {selectedRestaurant.address}</div>
+                <div><span className="font-medium">Phone:</span> {selectedRestaurant.phone_number}</div>
+                <div><span className="font-medium">Owner:</span> {selectedRestaurant.owner_name} ({selectedRestaurant.owner_email})</div>
+                <div><span className="font-medium">Dishes:</span> {selectedRestaurant.dish_count}</div>
+                <div><span className="font-medium">Registered:</span> {new Date(selectedRestaurant.created_at).toLocaleDateString()}</div>
+                {selectedRestaurant.approved_at && (
+                  <div><span className="font-medium">Approved at:</span> {new Date(selectedRestaurant.approved_at).toLocaleDateString()}</div>
+                )}
+                {selectedRestaurant.rejection_reason && (
+                  <div className="p-3 bg-red-50 rounded-lg">
+                    <span className="font-medium text-red-700">Reason:</span>
+                    <p className="text-red-600 mt-1">{selectedRestaurant.rejection_reason}</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-4">
+                {selectedRestaurant.approval_status === 'pending' && (
+                  <>
+                    <button
+                      onClick={() => handleApprove(selectedRestaurant.id)}
+                      disabled={isProcessing}
+                      className="w-full py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+                    >
+                      {isProcessing ? 'Processing…' : '✓ Approve Restaurant'}
+                    </button>
+                    <div>
+                      <label htmlFor="rest-rejection-reason" className="block text-sm font-medium text-gray-700 mb-1">Rejection reason</label>
+                      <textarea
+                        id="rest-rejection-reason"
+                        value={rejectionReason}
+                        onChange={e => setRejectionReason(e.target.value)}
+                        placeholder="Explain why this restaurant is being rejected…"
+                        rows={3}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                      />
+                      <button
+                        onClick={() => handleReject(selectedRestaurant.id)}
+                        disabled={isProcessing || !rejectionReason.trim()}
+                        className="w-full mt-2 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+                      >
+                        {isProcessing ? 'Processing…' : '✗ Reject Restaurant'}
+                      </button>
+                    </div>
+                  </>
+                )}
+
+                {selectedRestaurant.approval_status === 'approved' && (
+                  <div>
+                    <label htmlFor="rest-suspend-reason" className="block text-sm font-medium text-gray-700 mb-1">Suspension reason (optional)</label>
+                    <textarea
+                      id="rest-suspend-reason"
+                      value={suspendReason}
+                      onChange={e => setSuspendReason(e.target.value)}
+                      placeholder="Reason for suspension…"
+                      rows={2}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-gray-500 focus:border-transparent"
+                    />
+                    <button
+                      onClick={() => handleSuspend(selectedRestaurant.id)}
+                      disabled={isProcessing}
+                      className="w-full mt-2 py-2.5 bg-gray-700 hover:bg-gray-800 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+                    >
+                      {isProcessing ? 'Processing…' : '⏸ Suspend Restaurant'}
+                    </button>
+                  </div>
+                )}
+
+                {(selectedRestaurant.approval_status === 'rejected' || selectedRestaurant.approval_status === 'suspended') && (
+                  <button
+                    onClick={() => handleReactivate(selectedRestaurant.id)}
+                    disabled={isProcessing}
+                    className="w-full py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+                  >
+                    {isProcessing ? 'Processing…' : '↺ Reactivate Restaurant'}
+                  </button>
+                )}
+
+                <button
+                  onClick={() => setSelectedRestaurant(null)}
+                  className="w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 // Orders Tab Component (simplified)
 const OrdersTab = ({ orders }) => (
@@ -3764,6 +4063,7 @@ UsersTab.propTypes = {
 
 RestaurantsTab.propTypes = {
   restaurants: PropTypes.arrayOf(PropTypes.object),
+  onRestaurantUpdate: PropTypes.func,
 };
 
 OrdersTab.propTypes = {
@@ -3803,6 +4103,7 @@ UsersTab.defaultProps = {
 
 RestaurantsTab.defaultProps = {
   restaurants: [],
+  onRestaurantUpdate: () => {},
 };
 
 OrdersTab.defaultProps = {

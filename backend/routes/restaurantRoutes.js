@@ -3,10 +3,16 @@ import pool from "../db.js";
 
 const router = express.Router();
 
-// GET all restaurants
+// GET all approved, active restaurants (public-facing)
 router.get("/restaurants", async (req, res) => {
   try {
-    const result = await pool.query("SELECT * FROM restaurants");
+    // Ensure approval columns exist before querying them
+    await pool.query(`ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE`);
+    await pool.query(`ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS approval_status VARCHAR(20) NOT NULL DEFAULT 'pending'`);
+
+    const result = await pool.query(
+      "SELECT * FROM restaurants WHERE active = true AND approval_status = 'approved'"
+    );
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: "Server error fetching restaurants" });

@@ -56,10 +56,14 @@ router.post("/register", ...uploadRestaurantLogo, async (req, res) => {
       return res.status(403).json({ error: 'Invalid invite code' });
     }
 
-    // Ensure address columns exist on restaurants
+    // Ensure address + approval columns exist on restaurants
     await pool.query(`ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS city VARCHAR(100)`);
     await pool.query(`ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS state VARCHAR(100)`);
     await pool.query(`ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS zip_code VARCHAR(20)`);
+    await pool.query(`ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE`);
+    await pool.query(`ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS approval_status VARCHAR(20) NOT NULL DEFAULT 'pending'`);
+    await pool.query(`ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ`);
+    await pool.query(`ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS rejection_reason TEXT`);
 
     // Ensure email verification columns exist (existing rows default to verified)
     await pool.query(`ALTER TABLE restaurant_owners ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT TRUE`);
@@ -112,10 +116,10 @@ router.post("/register", ...uploadRestaurantLogo, async (req, res) => {
 
     const fullAddress = `${address}, ${city}, ${state} ${zip_code}`;
 
-    // Create restaurant
+    // Create restaurant (pending approval by default)
     const restaurantResult = await pool.query(
-      `INSERT INTO restaurants (name, address, city, state, zip_code, phone_number, image_url, owner_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+      `INSERT INTO restaurants (name, address, city, state, zip_code, phone_number, image_url, owner_id, active, approval_status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, FALSE, 'pending') RETURNING *`,
       [restaurant_name, address, city, state, zip_code, phone_number, logoPath, ownerId]
     );
 
@@ -142,7 +146,7 @@ router.post("/register", ...uploadRestaurantLogo, async (req, res) => {
     res.status(201).json({
       needsVerification: true,
       email,
-      message: "Registration successful! Please check your email for a verification code.",
+      message: "Registration successful! Please check your email for a verification code. Your restaurant will be visible to customers once approved by our team.",
     });
   } catch (err) {
     console.error('Owner registration error:', err);

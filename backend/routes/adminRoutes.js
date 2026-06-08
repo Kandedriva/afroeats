@@ -311,70 +311,152 @@ router.get('/users', requireAdminAuth, async (req, res) => {
   }
 });
 
-// Get restaurants list with pagination
 router.get('/restaurants', requireAdminAuth, async (req, res) => {
   try {
-    const { page = 1, limit = 20, search = '', status = 'all' } = req.query;
-    const offset = (page - 1) * limit;
-    
-    let whereClause = 'WHERE 1=1';
+    const { page = 1, limit = 50, search = '', status = 'all' } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+
     const params = [];
-    let paramCount = 0;
-    
+    const conditions = [];
+
     if (search) {
-      paramCount++;
-      whereClause += ` AND (r.name ILIKE $${paramCount} OR ro.email ILIKE $${paramCount})`;
       params.push(`%${search}%`);
+      conditions.push(`(r.name ILIKE $${params.length} OR ro.email ILIKE $${params.length})`);
     }
-    
-    // Get restaurants with statistics (simplified for current schema)
+
+    if (status !== 'all') {
+      params.push(status);
+      conditions.push(`r.approval_status = $${params.length}`);
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
     const restaurantsResult = await pool.query(`
-      SELECT 
-        r.id,
-        r.name,
-        r.address,
-        r.phone_number,
-        r.image_url,
-        ro.name as owner_name,
-        ro.email as owner_email,
-        COALESCE(
-          (SELECT COUNT(*) FROM dishes d WHERE d.restaurant_id = r.id), 
-          0
-        ) as total_dishes,
-        COALESCE(
-          (SELECT COUNT(*) FROM orders o 
-           JOIN order_items oi ON o.id = oi.order_id 
-           JOIN dishes d ON oi.dish_id = d.id 
-           WHERE d.restaurant_id = r.id AND o.status IN ('paid', 'completed')), 
-          0
-        ) as total_orders
+      SELECT
+        r.id, r.name, r.address, r.phone_number, r.image_url,
+        r.active, r.approval_status, r.approved_at, r.rejection_reason,
+        r.created_at,
+        ro.id as owner_id, ro.name as owner_name, ro.email as owner_email,
+        (SELECT COUNT(*) FROM dishes d WHERE d.restaurant_id = r.id) as dish_count
       FROM restaurants r
       JOIN restaurant_owners ro ON r.owner_id = ro.id
       ${whereClause}
-      ORDER BY r.name
-      LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}
-    `, [...params, limit, offset]);
-    
-    // Get total count
+      ORDER BY
+        CASE r.approval_status WHEN 'pending' THEN 0 WHEN 'suspended' THEN 1 ELSE 2 END,
+        r.created_at DESC
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+    `, [...params, parseInt(limit), offset]);
+
     const countResult = await pool.query(`
       SELECT COUNT(DISTINCT r.id) as total
       FROM restaurants r
       JOIN restaurant_owners ro ON r.owner_id = ro.id
       ${whereClause}
     `, params);
-    
+
     res.json({
       restaurants: restaurantsResult.rows,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
         total: parseInt(countResult.rows[0].total),
-        pages: Math.ceil(countResult.rows[0].total / limit)
+        pages: Math.ceil(countResult.rows[0].total / parseInt(limit))
       }
     });
   } catch (error) {
     console.error('Restaurants list error:', error);
     res.status(500).json({ error: 'Failed to load restaurants' });
+  }
+});
+
+/**
+ * POST /api/admin/restaurants/:id/approve
+ */
+router.post('/restaurants/:id/approve', requireAdminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query(
+      `UPDATE restaurants
+       SET active = true, approval_status = 'approved', approved_at = NOW(), rejection_reason = NULL
+       WHERE id = $1
+       RETURNING id, name`,
+      [id]
+    );
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Restaurant not found' });
+    logger.info(`Admin ${req.admin.username} approved restaurant "${result.rows[0].name}" (ID: ${id})`);
+    res.json({ success: true, message: 'Restaurant approved and now visible to the public' });
+  } catch (error) {
+    console.error('Approve restaurant error:', error);
+    res.status(500).json({ error: 'Failed to approve restaurant' });
+  }
+});
+
+/**
+ * POST /api/admin/restaurants/:id/reject
+ */
+router.post('/restaurants/:id/reject', requireAdminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+    if (!reason || !reason.trim()) return res.status(400).json({ error: 'Rejection reason is required' });
+    const result = await pool.query(
+      `UPDATE restaurants
+       SET active = false, approval_status = 'rejected', rejection_reason = $1, approved_at = NULL
+       WHERE id = $2
+       RETURNING id, name`,
+      [reason.trim(), id]
+    );
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Restaurant not found' });
+    logger.info(`Admin ${req.admin.username} rejected restaurant "${result.rows[0].name}" (ID: ${id}): ${reason}`);
+    res.json({ success: true, message: 'Restaurant rejected' });
+  } catch (error) {
+    console.error('Reject restaurant error:', error);
+    res.status(500).json({ error: 'Failed to reject restaurant' });
+  }
+});
+
+/**
+ * POST /api/admin/restaurants/:id/suspend
+ */
+router.post('/restaurants/:id/suspend', requireAdminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+    const result = await pool.query(
+      `UPDATE restaurants
+       SET active = false, approval_status = 'suspended', rejection_reason = $1
+       WHERE id = $2
+       RETURNING id, name`,
+      [reason ? reason.trim() : null, id]
+    );
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Restaurant not found' });
+    logger.info(`Admin ${req.admin.username} suspended restaurant "${result.rows[0].name}" (ID: ${id})`);
+    res.json({ success: true, message: 'Restaurant suspended and hidden from public' });
+  } catch (error) {
+    console.error('Suspend restaurant error:', error);
+    res.status(500).json({ error: 'Failed to suspend restaurant' });
+  }
+});
+
+/**
+ * POST /api/admin/restaurants/:id/reactivate
+ */
+router.post('/restaurants/:id/reactivate', requireAdminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query(
+      `UPDATE restaurants
+       SET active = true, approval_status = 'approved', rejection_reason = NULL, approved_at = NOW()
+       WHERE id = $1
+       RETURNING id, name`,
+      [id]
+    );
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Restaurant not found' });
+    logger.info(`Admin ${req.admin.username} reactivated restaurant "${result.rows[0].name}" (ID: ${id})`);
+    res.json({ success: true, message: 'Restaurant reactivated and visible to the public' });
+  } catch (error) {
+    console.error('Reactivate restaurant error:', error);
+    res.status(500).json({ error: 'Failed to reactivate restaurant' });
   }
 });
 
@@ -1541,6 +1623,21 @@ router.get('/drivers/stats/summary', requireAdminAuth, async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch driver stats' });
   }
 });
+
+// ─── Restaurant Approval ──────────────────────────────────────────────────────
+
+// One-time migration: add approval columns to restaurants if they don't exist
+pool.query(`
+  ALTER TABLE restaurants
+    ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE,
+    ADD COLUMN IF NOT EXISTS approval_status VARCHAR(20) NOT NULL DEFAULT 'pending',
+    ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS rejection_reason TEXT;
+
+  UPDATE restaurants
+    SET approval_status = 'approved'
+    WHERE active = true AND approval_status = 'pending';
+`).catch(err => console.error('Restaurant approval migration error:', err));
 
 // ─── Grocery Store Approval ───────────────────────────────────────────────────
 
