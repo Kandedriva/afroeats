@@ -19,6 +19,7 @@ export default function DeliveryOptions() {
   const [loading, setLoading] = useState(true);
   const [deliveryFeeData, setDeliveryFeeData] = useState(null);
   const [calculatingFee, setCalculatingFee] = useState(false);
+  const [tooFarError, setTooFarError] = useState(null);
 
   // Get restaurant-specific instructions from cart page
   const restaurantInstructions = location.state?.restaurantInstructions || {};
@@ -82,11 +83,19 @@ export default function DeliveryOptions() {
         })
       });
 
+      if (res.status === 400) {
+        const errData = await res.json();
+        if (errData.code === 'DELIVERY_TOO_FAR') {
+          setTooFarError(errData.error);
+          setDeliveryFeeData(null);
+          return;
+        }
+      }
+      setTooFarError(null);
       if (res.ok) {
         const feeData = await res.json();
         setDeliveryFeeData(feeData);
       } else {
-        // Use fallback fee if calculation fails
         setDeliveryFeeData({
           deliveryFee: 5.00,
           estimated: true,
@@ -95,7 +104,7 @@ export default function DeliveryOptions() {
         });
       }
     } catch (err) {
-      // Use fallback fee on error
+      setTooFarError(null);
       setDeliveryFeeData({
         deliveryFee: 5.00,
         estimated: true,
@@ -115,7 +124,8 @@ export default function DeliveryOptions() {
         calculateDeliveryFee(address);
       }
     } else if (deliveryType === "pickup") {
-      setDeliveryFeeData(null); // No delivery fee for pickup
+      setDeliveryFeeData(null);
+      setTooFarError(null);
     }
   }, [deliveryType, useRegisteredAddress, customAddress, userProfile, cart, calculateDeliveryFee]);
 
@@ -232,6 +242,12 @@ export default function DeliveryOptions() {
             </span>
           </div>
         </div>
+
+        {tooFarError && (
+          <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+            <span className="font-semibold">Outside delivery range.</span> {tooFarError} Please use a closer address or select pickup.
+          </div>
+        )}
 
         {deliveryType === "delivery" && deliveryFeeData && deliveryFeeData.fallback && (
           <div className="mt-3 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-700">
@@ -460,8 +476,12 @@ export default function DeliveryOptions() {
         
         <button
           onClick={handleContinueToPayment}
-          className="px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700 font-semibold"
-          disabled={!deliveryType}
+          className={`px-6 py-2 rounded font-semibold text-white transition-colors ${
+            !deliveryType || tooFarError
+              ? "bg-gray-400 cursor-not-allowed"
+              : "bg-green-600 hover:bg-green-700"
+          }`}
+          disabled={!deliveryType || !!tooFarError}
         >
           Continue to Payment →
         </button>
