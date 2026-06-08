@@ -292,6 +292,86 @@ export const handleStripeWebhook = async (req, res) => {
 
           console.log(`✅ Inserted ${items.length} order items`);
 
+          // ✅ Create driver_deliveries record so drivers can claim this order
+          const effectiveDeliveryAddress = deliveryAddress || orderData.guestInfo?.address;
+          if (deliveryType === 'delivery' && effectiveDeliveryAddress) {
+            try {
+              // Resolve pickup address from restaurantTotals (auth) or DB (guest)
+              let pickupAddress = null;
+              let firstRestaurantName = 'Restaurant';
+
+              if (restaurantTotals && Object.keys(restaurantTotals).length > 0) {
+                const firstRestaurant = Object.values(restaurantTotals)[0]?.restaurant;
+                if (firstRestaurant?.address) {
+                  pickupAddress = firstRestaurant.address;
+                  firstRestaurantName = firstRestaurant.name || firstRestaurantName;
+                }
+              }
+
+              if (!pickupAddress && items.length > 0) {
+                const firstRestaurantId = items[0].restaurantId || items[0].restaurant_id;
+                if (firstRestaurantId) {
+                  const rRes = await pool.query(
+                    'SELECT name, address FROM restaurants WHERE id = $1',
+                    [firstRestaurantId]
+                  );
+                  if (rRes.rows.length > 0) {
+                    pickupAddress = rRes.rows[0].address;
+                    firstRestaurantName = rRes.rows[0].name || firstRestaurantName;
+                  }
+                }
+              }
+
+              if (pickupAddress) {
+                const { calculateDistanceAndFee } = await import('../services/googleMapsService.js');
+                const deliveryData = await calculateDistanceAndFee(pickupAddress, effectiveDeliveryAddress);
+
+                await pool.query(`
+                  INSERT INTO driver_deliveries (
+                    order_id, status, pickup_location, delivery_location,
+                    pickup_latitude, pickup_longitude, delivery_latitude, delivery_longitude,
+                    distance_miles, base_delivery_fee, distance_delivery_fee, total_delivery_fee,
+                    driver_payout, platform_commission
+                  ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+                `, [
+                  orderId, 'available',
+                  pickupAddress, effectiveDeliveryAddress,
+                  deliveryData.origin_coordinates.latitude,
+                  deliveryData.origin_coordinates.longitude,
+                  deliveryData.destination_coordinates.latitude,
+                  deliveryData.destination_coordinates.longitude,
+                  deliveryData.distance_miles,
+                  deliveryData.base_fee,
+                  deliveryData.distance_fee,
+                  deliveryData.total_delivery_fee,
+                  deliveryData.driver_payout,
+                  deliveryData.platform_commission,
+                ]);
+
+                await pool.query(
+                  `UPDATE orders SET delivery_distance_miles = $1, pickup_location = $2 WHERE id = $3`,
+                  [deliveryData.distance_miles, pickupAddress, orderId]
+                );
+
+                socketService.emitToAllDrivers('new_delivery_order', {
+                  orderId,
+                  restaurantName: firstRestaurantName,
+                  pickupAddress,
+                  deliveryAddress: effectiveDeliveryAddress,
+                  distanceMiles: deliveryData.distance_miles,
+                  driverPayout: deliveryData.driver_payout,
+                  totalDeliveryFee: deliveryData.total_delivery_fee,
+                  timestamp: new Date().toISOString(),
+                });
+
+                console.log(`✅ Driver delivery record created for Stripe order ${orderId}: ${deliveryData.distance_miles} miles, payout: $${deliveryData.driver_payout}`);
+              }
+            } catch (deliveryError) {
+              console.error(`❌ Failed to create driver_deliveries for order ${orderId}:`, deliveryError.message);
+              // Don't fail the webhook — the order and payment are already recorded
+            }
+          }
+
           // ✅ Create customer notification for order confirmation
           console.log(`🔔 Checking if should create customer notification. userId: ${userId}, type: ${typeof userId}`);
 
