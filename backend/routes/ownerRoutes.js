@@ -825,7 +825,9 @@ router.get("/orders", requireOwnerAuth, async (req, res) => {
         r.id as restaurant_id,
         COALESCE(ros.status, 'active') as restaurant_status,
         ros.cancelled_at as restaurant_cancelled_at,
-        ros.completed_at as restaurant_completed_at
+        ros.completed_at as restaurant_completed_at,
+        ros.preparing_at as restaurant_preparing_at,
+        ros.ready_at as restaurant_ready_at
       FROM orders o
       JOIN order_items oi ON o.id = oi.order_id
       LEFT JOIN dishes d ON oi.dish_id = d.id
@@ -862,6 +864,8 @@ router.get("/orders", requireOwnerAuth, async (req, res) => {
           created_at: row.created_at,
           paid_at: row.paid_at,
           completed_at: row.restaurant_completed_at,
+          preparing_at: row.restaurant_preparing_at,
+          ready_at: row.restaurant_ready_at,
           cancelled_at: row.restaurant_cancelled_at,
           order_details: restaurantSpecificInstructions, // Use restaurant-specific instructions
           delivery_address: row.delivery_address,
@@ -973,6 +977,100 @@ router.post("/update-password", async (req, res) => {
   } catch (err) {
     // Password update error
     res.status(500).json({ error: "Server error during password update" });
+  }
+});
+
+// PATCH /api/owners/orders/:id/status - Advance order to preparing or ready
+router.patch("/orders/:id/status", requireOwnerAuth, async (req, res) => {
+  try {
+    const orderId = req.params.id;
+    const ownerId = req.owner.id;
+    const { status } = req.body;
+
+    if (!['preparing', 'ready'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid status. Allowed: preparing, ready' });
+    }
+
+    const restaurantResult = await pool.query(
+      "SELECT id, name FROM restaurants WHERE owner_id = $1",
+      [ownerId]
+    );
+    if (restaurantResult.rows.length === 0) {
+      return res.status(404).json({ error: "Restaurant not found for this owner" });
+    }
+    const { id: restaurantId, name: restaurantName } = restaurantResult.rows[0];
+
+    const verifyResult = await pool.query(`
+      SELECT DISTINCT o.id, o.user_id, o.delivery_phone
+      FROM orders o
+      JOIN order_items oi ON o.id = oi.order_id
+      LEFT JOIN dishes d ON oi.dish_id = d.id
+      LEFT JOIN restaurants r ON COALESCE(oi.restaurant_id, d.restaurant_id) = r.id
+      WHERE o.id = $1 AND r.owner_id = $2
+      LIMIT 1
+    `, [orderId, ownerId]);
+
+    if (verifyResult.rows.length === 0) {
+      return res.status(404).json({ error: "Order not found or not accessible" });
+    }
+
+    // Ensure schema columns exist
+    await pool.query(`ALTER TABLE restaurant_order_status ADD COLUMN IF NOT EXISTS preparing_at TIMESTAMP`);
+    await pool.query(`ALTER TABLE restaurant_order_status ADD COLUMN IF NOT EXISTS ready_at TIMESTAMP`);
+
+    const timestampField = status === 'preparing' ? 'preparing_at' : 'ready_at';
+
+    await pool.query(`
+      INSERT INTO restaurant_order_status (order_id, restaurant_id, status, ${timestampField})
+      VALUES ($1, $2, $3, NOW())
+      ON CONFLICT (order_id, restaurant_id)
+      DO UPDATE SET status = $3, ${timestampField} = NOW()
+    `, [orderId, restaurantId, status]);
+
+    await pool.query("UPDATE orders SET status = $1 WHERE id = $2", [status, orderId]);
+
+    const { user_id: userId, delivery_phone: customerPhone } = verifyResult.rows[0];
+
+    const notifConfig = {
+      preparing: {
+        type: 'order_preparing',
+        title: 'Your order is being prepared! 👨‍🍳',
+        message: `Your order #${orderId} from ${restaurantName} is now being prepared.`,
+      },
+      ready: {
+        type: 'order_ready',
+        title: 'Your order is ready! 🍽️',
+        message: `Your order #${orderId} from ${restaurantName} is ready for pickup/delivery!`,
+      },
+    };
+    const { type, title, message } = notifConfig[status];
+
+    if (userId) {
+      try {
+        await pool.query(
+          `INSERT INTO customer_notifications (user_id, order_id, type, title, message, data)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [userId, orderId, type, title, message,
+           JSON.stringify({ orderId, restaurantId, restaurantName, status })]
+        );
+      } catch (notifError) {
+        console.error('Failed to create customer notification:', notifError.message);
+      }
+    }
+
+    if (customerPhone) {
+      try {
+        const { sendSMS } = await import('../services/smsService.js');
+        await sendSMS(customerPhone, message);
+      } catch (smsError) {
+        console.error('Failed to send order status SMS:', smsError.message);
+      }
+    }
+
+    res.json({ success: true, status, message: `Order marked as ${status}` });
+  } catch (err) {
+    console.error('Update order status error:', err);
+    res.status(500).json({ error: "Failed to update order status" });
   }
 });
 
