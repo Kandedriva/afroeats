@@ -41,6 +41,19 @@ export const handleStripeWebhook = async (req, res) => {
             const orderId = parseInt(session.metadata.orderId);
             console.log(`🥬 Processing grocery order payment: ${orderId}`);
 
+            // Reconcile Stripe charge vs stored order total
+            const groceryStripeCharged = session.amount_total / 100;
+            const groceryOrderRes = await pool.query('SELECT total FROM grocery_orders WHERE id = $1', [orderId]);
+            if (groceryOrderRes.rows.length > 0) {
+              const groceryTotal = parseFloat(groceryOrderRes.rows[0].total);
+              if (Math.abs(groceryStripeCharged - groceryTotal) > 0.01) {
+                console.error(
+                  `⚠️ AMOUNT MISMATCH — grocery session ${session.id}: ` +
+                  `Stripe charged $${groceryStripeCharged.toFixed(2)}, order total $${groceryTotal.toFixed(2)}.`
+                );
+              }
+            }
+
             await pool.query(
               `UPDATE grocery_orders
                SET status = 'paid', paid_at = NOW(), stripe_payment_intent = $1
@@ -256,6 +269,18 @@ export const handleStripeWebhook = async (req, res) => {
           console.log(`📦 Creating order with ${items.length} items from ${Object.keys(restaurantTotals || {}).length} restaurant(s)`);
           console.log(`👤 User ID from order data: ${userId} (type: ${typeof userId})`);
 
+          // Reconcile: verify what Stripe charged matches what we computed
+          const stripeCharged = session.amount_total / 100;
+          if (Math.abs(stripeCharged - total) > 0.01) {
+            console.error(
+              `⚠️ AMOUNT MISMATCH — session ${session.id}: ` +
+              `Stripe charged $${stripeCharged.toFixed(2)}, temp_order_data total $${Number(total).toFixed(2)}. ` +
+              `Storing Stripe amount as authoritative.`
+            );
+          }
+          // Use the Stripe-collected amount as the authoritative total
+          const authorativeTotal = stripeCharged;
+
           // Ensure actual_delivery_fee column exists
           await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS actual_delivery_fee DECIMAL(10,2) DEFAULT 0");
 
@@ -268,7 +293,7 @@ export const handleStripeWebhook = async (req, res) => {
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW()) RETURNING id`,
             [
               userId,
-              total,
+              authorativeTotal,
               orderDetails || '',
               deliveryAddress,
               deliveryPhone,
