@@ -223,6 +223,9 @@ export const handleStripeWebhook = async (req, res) => {
             break;
           }
 
+          // Opportunistic cleanup: remove temp records older than 24 hours
+          pool.query("DELETE FROM temp_order_data WHERE created_at < NOW() - INTERVAL '24 hours'").catch(() => {});
+
           // Regular restaurant order handling
           // ✅ FIXED: Retrieve FULL order data from temp_order_data table
           const tempDataResult = await pool.query(
