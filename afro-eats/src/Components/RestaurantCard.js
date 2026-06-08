@@ -30,6 +30,7 @@ RestaurantCard.propTypes = {
     name: PropTypes.string.isRequired,
     address: PropTypes.string.isRequired,
     image_url: PropTypes.string,
+    slug: PropTypes.string,
   }).isRequired,
 };
 

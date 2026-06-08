@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import PropTypes from "prop-types";
 import { API_BASE_URL } from "../config/api";
 import { toast } from "react-toastify";
 import { slugify } from "../utils/slugify";
@@ -40,7 +41,6 @@ const HomePage = () => {
         setRestaurants(rests.slice(0, 6)); // Show first 6 restaurants
       }
     } catch (err) {
-      console.error("Load homepage data error:", err);
       toast.error("Failed to load page content");
     } finally {
       setLoading(false);
@@ -398,6 +398,17 @@ const ProductCard = ({ product }) => {
   );
 };
 
+ProductCard.propTypes = {
+  product: PropTypes.shape({
+    name: PropTypes.string.isRequired,
+    image_url: PropTypes.string,
+    category: PropTypes.string,
+    origin: PropTypes.string,
+    price: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+    unit: PropTypes.string,
+  }).isRequired,
+};
+
 // Restaurant Card Component
 const RestaurantCard = ({ restaurant }) => {
   return (
@@ -436,6 +447,17 @@ const RestaurantCard = ({ restaurant }) => {
       </div>
     </Link>
   );
+};
+
+RestaurantCard.propTypes = {
+  restaurant: PropTypes.shape({
+    id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+    slug: PropTypes.string,
+    name: PropTypes.string.isRequired,
+    address: PropTypes.string,
+    phone: PropTypes.string,
+    image_url: PropTypes.string,
+  }).isRequired,
 };
 
 export default HomePage;

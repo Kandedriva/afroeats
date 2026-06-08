@@ -1,4 +1,5 @@
 import { useEffect, useState, useContext } from "react";
+import PropTypes from 'prop-types';
 import { OwnerAuthContext } from "../context/OwnerAuthContext";
 import { Navigate, Link } from "react-router-dom";
 import { toast } from 'react-toastify';
@@ -62,6 +63,9 @@ function StatusProgress({ status }) {
     </div>
   );
 }
+
+StatusBadge.propTypes = { status: PropTypes.string.isRequired };
+StatusProgress.propTypes = { status: PropTypes.string.isRequired };
 
 function OwnerOrders() {
   const { owner, loading: authLoading } = useContext(OwnerAuthContext);
