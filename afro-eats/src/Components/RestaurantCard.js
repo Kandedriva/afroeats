@@ -7,7 +7,7 @@ function RestaurantCard({ restaurant }) {
   const imageUrl = getImageUrl(restaurant.image_url, "No Restaurant Image");
 
   return (
-    <Link to={`/restaurants/${restaurant.id}`}>
+    <Link to={`/restaurants/${restaurant.slug || restaurant.id}`}>
       <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-shadow duration-300 cursor-pointer">
         <img
           className="w-full h-40 object-cover"

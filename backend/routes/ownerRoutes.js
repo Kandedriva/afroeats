@@ -125,6 +125,17 @@ router.post("/register", ...uploadRestaurantLogo, async (req, res) => {
 
     const restaurantId = restaurantResult.rows[0].id;
 
+    // Generate and store URL slug for the new restaurant
+    try {
+      const { toSlug } = await import('./restaurantRoutes.js');
+      const baseSlug = toSlug(restaurant_name);
+      const conflict = await pool.query(`SELECT id FROM restaurants WHERE slug = $1 AND id != $2`, [baseSlug, restaurantId]);
+      const slug = conflict.rows.length > 0 ? `${baseSlug}-${restaurantId}` : baseSlug;
+      await pool.query(`UPDATE restaurants SET slug = $1 WHERE id = $2`, [slug, restaurantId]);
+    } catch (slugErr) {
+      console.warn('Could not generate restaurant slug:', slugErr.message);
+    }
+
     // Auto-geocode the new restaurant address
     try {
       const { geocodeRestaurant } = await import('../services/googleMapsService.js');

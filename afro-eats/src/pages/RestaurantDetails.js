@@ -8,7 +8,7 @@ import { getImageUrl, handleImageError } from "../utils/imageUtils";
 import { setupImageRefreshInterval, enhanceExistingImages } from "../utils/imageRefresh";
 
 export default function RestaurantDetails() {
-  const { id } = useParams();
+  const { id: identifier } = useParams();
   const navigate = useNavigate();
   const [restaurant, setRestaurant] = useState(null);
   const [dishes, setDishes] = useState([]);
@@ -20,7 +20,7 @@ export default function RestaurantDetails() {
   useEffect(() => {
     const fetchRestaurantDetails = async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/restaurants/${id}`);
+        const res = await fetch(`${API_BASE_URL}/api/restaurants/${identifier}`);
         if (!res.ok) {
           throw new Error("Restaurant not found");
         }
@@ -48,7 +48,7 @@ export default function RestaurantDetails() {
         clearInterval(imageRefreshInterval);
       }
     };
-  }, [id]);
+  }, [identifier]);
 
   async function handleAddToCart(dish) {
     if (!dish.is_available) {

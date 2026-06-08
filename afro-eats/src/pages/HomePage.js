@@ -402,7 +402,7 @@ const ProductCard = ({ product }) => {
 const RestaurantCard = ({ restaurant }) => {
   return (
     <Link
-      to={`/restaurants/${restaurant.id}`}
+      to={`/restaurants/${restaurant.slug || restaurant.id}`}
       className="bg-white rounded-lg shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden group"
     >
       <div className="relative h-48 bg-gray-100 overflow-hidden">
