@@ -7,6 +7,43 @@ import socketService from "../services/socketService.js";
 
 const router = express.Router();
 
+/**
+ * Calculate delivery fee for an order using distance-based pricing.
+ * Falls back to the restaurant's flat fee, then to $5.00 if unavailable.
+ */
+async function computeDeliveryFee(restaurantId, deliveryAddress) {
+  if (!deliveryAddress || !restaurantId) return 0;
+
+  try {
+    const rRes = await pool.query(
+      'SELECT address, city, state, zip_code FROM restaurants WHERE id = $1',
+      [restaurantId]
+    );
+    if (rRes.rows.length > 0) {
+      const r = rRes.rows[0];
+      const restaurantAddress = [r.address, r.city, r.state, r.zip_code].filter(Boolean).join(', ');
+      try {
+        const { calculateDistanceAndFee } = await import('../services/googleMapsService.js');
+        const feeData = await calculateDistanceAndFee(restaurantAddress, deliveryAddress);
+        if (feeData && feeData.total_delivery_fee > 0) {
+          return parseFloat(feeData.total_delivery_fee);
+        }
+      } catch {
+        // Google Maps unavailable — fall through to flat fee
+      }
+    }
+
+    // Flat fee fallback (restaurant-set)
+    await pool.query('ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS delivery_fee DECIMAL(10,2) DEFAULT 0.00');
+    const flatRes = await pool.query('SELECT delivery_fee FROM restaurants WHERE id = $1', [restaurantId]);
+    const flat = parseFloat(flatRes.rows[0]?.delivery_fee) || 0;
+    return flat > 0 ? flat : 5.00;
+  } catch (err) {
+    console.warn('[delivery fee] computeDeliveryFee error:', err.message);
+    return 5.00;
+  }
+}
+
 // Helper function to send order notifications in demo mode
 async function sendDemoOrderNotifications(orderId, items, customerInfo, isGuestOrder = false) {
   try {
@@ -337,19 +374,11 @@ router.post("/checkout-session", requireAuth, async (req, res) => {
         const finalDeliveryAddress = deliveryPreferences?.address || deliveryAddress;
         const finalDeliveryPhone = deliveryPreferences?.phone || deliveryPhone;
 
-        // Calculate delivery fee server-side (delivery orders only)
+        // Calculate delivery fee server-side using distance-based pricing
         let deliveryFee = 0;
-        if (finalDeliveryType === 'delivery' && items.length > 0) {
+        if (finalDeliveryType === 'delivery' && finalDeliveryAddress && items.length > 0) {
           const restaurantId = items[0].restaurantId || items[0].restaurant_id;
-          if (restaurantId) {
-            try {
-              await pool.query("ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS delivery_fee DECIMAL(10,2) DEFAULT 0.00");
-              const feeRes = await pool.query("SELECT delivery_fee FROM restaurants WHERE id = $1", [restaurantId]);
-              deliveryFee = parseFloat(feeRes.rows[0]?.delivery_fee) || 0;
-            } catch (feeErr) {
-              console.warn("Could not fetch delivery fee for demo auth order:", feeErr.message);
-            }
-          }
+          deliveryFee = await computeDeliveryFee(restaurantId, finalDeliveryAddress);
         }
 
         const total = subtotal + platformFee + deliveryFee;
@@ -489,19 +518,11 @@ router.post("/checkout-session", requireAuth, async (req, res) => {
     const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
     const platformFee = 1.20; // Flat $1.20 platform fee per order
 
-    // Calculate delivery fee server-side (delivery orders only)
+    // Calculate delivery fee server-side using distance-based pricing
     let deliveryFee = 0;
-    if (finalDeliveryType === 'delivery' && items.length > 0) {
+    if (finalDeliveryType === 'delivery' && finalDeliveryAddress && items.length > 0) {
       const restaurantId = items[0].restaurantId || items[0].restaurant_id;
-      if (restaurantId) {
-        try {
-          await pool.query("ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS delivery_fee DECIMAL(10,2) DEFAULT 0.00");
-          const feeRes = await pool.query("SELECT delivery_fee FROM restaurants WHERE id = $1", [restaurantId]);
-          deliveryFee = parseFloat(feeRes.rows[0]?.delivery_fee) || 0;
-        } catch (feeErr) {
-          console.warn("Could not fetch delivery fee for auth Stripe order:", feeErr.message);
-        }
-      }
+      deliveryFee = await computeDeliveryFee(restaurantId, finalDeliveryAddress);
     }
 
     const total = subtotal + platformFee + deliveryFee;
@@ -1063,32 +1084,16 @@ router.post("/guest-checkout-session", async (req, res) => {
       console.log("Entering demo mode for guest order (Stripe not configured)");
       
       try {
-        // Calculate totals with delivery fee
+        // Calculate totals with distance-based delivery fee
         const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
         const platformFee = 1.20;
-        
-        // Get delivery fee from restaurant (for delivery orders only)
+
         let deliveryFee = 0;
-        if (deliveryType === "delivery" && items.length > 0) {
-          // Get restaurant ID from first item (assuming all items are from same restaurant)
+        if (deliveryType === "delivery" && guestInfo.address && items.length > 0) {
           const restaurantId = items[0].restaurantId || items[0].restaurant_id;
-          if (restaurantId) {
-            try {
-              await pool.query("ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS delivery_fee DECIMAL(10, 2) DEFAULT 0.00");
-              const deliveryFeeRes = await pool.query(
-                "SELECT delivery_fee FROM restaurants WHERE id = $1",
-                [restaurantId]
-              );
-              if (deliveryFeeRes.rows.length > 0) {
-                deliveryFee = parseFloat(deliveryFeeRes.rows[0].delivery_fee) || 0;
-              }
-            } catch (err) {
-              console.warn("Could not fetch delivery fee:", err);
-              // Continue without delivery fee
-            }
-          }
+          deliveryFee = await computeDeliveryFee(restaurantId, guestInfo.address);
         }
-        
+
         const total = subtotal + platformFee + deliveryFee;
 
         // Ensure necessary columns exist
@@ -1100,6 +1105,8 @@ router.post("/guest-checkout-session", async (req, res) => {
           await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS guest_email VARCHAR(255)");
           await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS is_guest_order BOOLEAN DEFAULT FALSE");
           await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_type VARCHAR(20) DEFAULT 'delivery'");
+          await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS platform_fee DECIMAL(10,2) DEFAULT 0");
+          await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS actual_delivery_fee DECIMAL(10,2) DEFAULT 0");
         } catch (err) {
           console.error("ERROR: Database column creation failed:", err);
           throw err;
@@ -1108,20 +1115,23 @@ router.post("/guest-checkout-session", async (req, res) => {
         // Insert guest order (mark as paid immediately for demo mode)
         const result = await pool.query(
           `INSERT INTO orders (
-            user_id, total, order_details, delivery_address, delivery_phone, 
-            guest_name, guest_email, is_guest_order, delivery_type, status, paid_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW()) RETURNING id`,
+            user_id, total, order_details, delivery_address, delivery_phone,
+            guest_name, guest_email, is_guest_order, delivery_type, status,
+            platform_fee, actual_delivery_fee, paid_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW()) RETURNING id`,
           [
-            null, // No user_id for guest orders
-            total, 
-            orderDetails, 
-            deliveryType === "delivery" ? guestInfo.address : null, 
+            null,
+            total,
+            orderDetails,
+            deliveryType === "delivery" ? guestInfo.address : null,
             guestInfo.phone,
             guestInfo.name,
             guestInfo.email,
-            true, // is_guest_order = true
+            true,
             deliveryType,
-            'received' // Demo mode - order received by restaurant
+            'received',
+            platformFee,
+            deliveryFee
           ]
         );
         const orderId = result.rows[0].id;
@@ -1162,26 +1172,11 @@ router.post("/guest-checkout-session", async (req, res) => {
     const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
     const platformFee = 1.20;
     
-    // Get delivery fee from restaurant (for delivery orders only)
+    // Get delivery fee using distance-based pricing with fallback to flat fee
     let deliveryFee = 0;
-    if (deliveryType === "delivery" && items.length > 0) {
-      // Get restaurant ID from first item (assuming all items are from same restaurant)
+    if (deliveryType === "delivery" && guestInfo.address && items.length > 0) {
       const restaurantId = items[0].restaurantId || items[0].restaurant_id;
-      if (restaurantId) {
-        try {
-          await pool.query("ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS delivery_fee DECIMAL(10, 2) DEFAULT 0.00");
-          const deliveryFeeRes = await pool.query(
-            "SELECT delivery_fee FROM restaurants WHERE id = $1",
-            [restaurantId]
-          );
-          if (deliveryFeeRes.rows.length > 0) {
-            deliveryFee = parseFloat(deliveryFeeRes.rows[0].delivery_fee) || 0;
-          }
-        } catch (err) {
-          console.warn("Could not fetch delivery fee:", err);
-          // Continue without delivery fee
-        }
-      }
+      deliveryFee = await computeDeliveryFee(restaurantId, guestInfo.address);
     }
     
     const total = subtotal + platformFee + deliveryFee;
@@ -1244,6 +1239,7 @@ router.post("/guest-checkout-session", async (req, res) => {
       deliveryType,
       total,
       platformFee,
+      deliveryFee,
       isGuestOrder: true
     };
 
