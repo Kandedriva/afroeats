@@ -10,6 +10,7 @@ const RegisterOwner = () => {
     name: "",
     email: "",
     password: "",
+    confirm_password: "",
     secret_word: "",
     restaurant_name: "",
     address: "",
@@ -56,6 +57,11 @@ const RegisterOwner = () => {
       return;
     }
 
+    if (formData.password !== formData.confirm_password) {
+      setError("Passwords do not match.");
+      return;
+    }
+
     const pwCheck = validatePassword(formData.password);
     if (!pwCheck.valid) {
       setError(pwCheck.error);
@@ -64,6 +70,7 @@ const RegisterOwner = () => {
 
     const data = new FormData();
     for (const key in formData) {
+      if (key === "confirm_password") continue;
       data.append(key, formData[key]);
     }
     if (logo) {
@@ -147,6 +154,23 @@ const RegisterOwner = () => {
           required
         />
         <p className="text-xs text-gray-500 -mt-2 mb-3">{PASSWORD_HINT}</p>
+
+        <input
+          type="password"
+          name="confirm_password"
+          placeholder="Confirm Password"
+          value={formData.confirm_password}
+          onChange={handleChange}
+          className={`block w-full mb-3 border p-2 rounded ${
+            formData.confirm_password && formData.password !== formData.confirm_password
+              ? "border-red-400"
+              : ""
+          }`}
+          required
+        />
+        {formData.confirm_password && formData.password !== formData.confirm_password && (
+          <p className="text-xs text-red-500 -mt-2 mb-3">Passwords do not match</p>
+        )}
 
         <input
           type="text"
