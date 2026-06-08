@@ -11,33 +11,55 @@ const router = express.Router();
  * Calculate delivery fee for an order using distance-based pricing.
  * Falls back to the restaurant's flat fee, then to $5.00 if unavailable.
  */
-async function computeDeliveryFee(restaurantId, deliveryAddress) {
-  if (!deliveryAddress || !restaurantId) return 0;
+/**
+ * Calculate the delivery fee for an order.
+ *
+ * For multi-restaurant orders a single driver makes all pickups before
+ * delivering, so we charge the fee of the farthest restaurant (highest
+ * individual fee). Accepts a single ID or an array of IDs.
+ *
+ * Falls back to the restaurant's flat delivery_fee column, then to $5.00
+ * when Google Maps is unavailable.
+ */
+async function computeDeliveryFee(restaurantIds, deliveryAddress) {
+  if (!deliveryAddress || !restaurantIds) return 0;
+
+  const ids = [...new Set(Array.isArray(restaurantIds) ? restaurantIds : [restaurantIds])].filter(Boolean);
+  if (ids.length === 0) return 0;
 
   try {
+    await pool.query('ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS delivery_fee DECIMAL(10,2) DEFAULT 0.00');
     const rRes = await pool.query(
-      'SELECT address, city, state, zip_code FROM restaurants WHERE id = $1',
-      [restaurantId]
+      'SELECT id, address, city, state, zip_code, delivery_fee FROM restaurants WHERE id = ANY($1)',
+      [ids]
     );
-    if (rRes.rows.length > 0) {
-      const r = rRes.rows[0];
-      const restaurantAddress = [r.address, r.city, r.state, r.zip_code].filter(Boolean).join(', ');
-      try {
-        const { calculateDistanceAndFee } = await import('../services/googleMapsService.js');
-        const feeData = await calculateDistanceAndFee(restaurantAddress, deliveryAddress);
-        if (feeData && feeData.total_delivery_fee > 0) {
-          return parseFloat(feeData.total_delivery_fee);
-        }
-      } catch {
-        // Google Maps unavailable — fall through to flat fee
-      }
+    if (rRes.rows.length === 0) return 5.00;
+
+    let calculateDistanceAndFee;
+    try {
+      ({ calculateDistanceAndFee } = await import('../services/googleMapsService.js'));
+    } catch {
+      // Maps service unavailable — will use flat fees below
     }
 
-    // Flat fee fallback (restaurant-set)
-    await pool.query('ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS delivery_fee DECIMAL(10,2) DEFAULT 0.00');
-    const flatRes = await pool.query('SELECT delivery_fee FROM restaurants WHERE id = $1', [restaurantId]);
-    const flat = parseFloat(flatRes.rows[0]?.delivery_fee) || 0;
-    return flat > 0 ? flat : 5.00;
+    const fees = await Promise.all(rRes.rows.map(async (r) => {
+      const restaurantAddress = [r.address, r.city, r.state, r.zip_code].filter(Boolean).join(', ');
+      if (calculateDistanceAndFee && restaurantAddress) {
+        try {
+          const feeData = await calculateDistanceAndFee(restaurantAddress, deliveryAddress);
+          if (feeData && feeData.total_delivery_fee > 0) {
+            return parseFloat(feeData.total_delivery_fee);
+          }
+        } catch {
+          // Google Maps failed for this restaurant — fall through to flat fee
+        }
+      }
+      const flat = parseFloat(r.delivery_fee) || 0;
+      return flat > 0 ? flat : 5.00;
+    }));
+
+    // One driver covers all pickups — charge the highest individual fee
+    return Math.max(...fees);
   } catch (err) {
     console.warn('[delivery fee] computeDeliveryFee error:', err.message);
     return 5.00;
@@ -411,8 +433,8 @@ router.post("/checkout-session", requireAuth, async (req, res) => {
         // Calculate delivery fee server-side using distance-based pricing
         let deliveryFee = 0;
         if (finalDeliveryType === 'delivery' && finalDeliveryAddress && items.length > 0) {
-          const restaurantId = items[0].restaurantId || items[0].restaurant_id;
-          deliveryFee = await computeDeliveryFee(restaurantId, finalDeliveryAddress);
+          const restaurantIds = [...new Set(items.map(i => i.restaurantId || i.restaurant_id).filter(Boolean))];
+          deliveryFee = await computeDeliveryFee(restaurantIds, finalDeliveryAddress);
         }
 
         const total = subtotal + platformFee + deliveryFee;
@@ -555,8 +577,8 @@ router.post("/checkout-session", requireAuth, async (req, res) => {
     // Calculate delivery fee server-side using distance-based pricing
     let deliveryFee = 0;
     if (finalDeliveryType === 'delivery' && finalDeliveryAddress && items.length > 0) {
-      const restaurantId = items[0].restaurantId || items[0].restaurant_id;
-      deliveryFee = await computeDeliveryFee(restaurantId, finalDeliveryAddress);
+      const restaurantIds = [...new Set(items.map(i => i.restaurantId || i.restaurant_id).filter(Boolean))];
+      deliveryFee = await computeDeliveryFee(restaurantIds, finalDeliveryAddress);
     }
 
     const total = subtotal + platformFee + deliveryFee;
@@ -1139,8 +1161,8 @@ router.post("/guest-checkout-session", async (req, res) => {
 
         let deliveryFee = 0;
         if (deliveryType === "delivery" && guestInfo.address && items.length > 0) {
-          const restaurantId = items[0].restaurantId || items[0].restaurant_id;
-          deliveryFee = await computeDeliveryFee(restaurantId, guestInfo.address);
+          const restaurantIds = [...new Set(items.map(i => i.restaurantId || i.restaurant_id).filter(Boolean))];
+          deliveryFee = await computeDeliveryFee(restaurantIds, guestInfo.address);
         }
 
         const total = subtotal + platformFee + deliveryFee;
@@ -1224,8 +1246,8 @@ router.post("/guest-checkout-session", async (req, res) => {
     // Get delivery fee using distance-based pricing with fallback to flat fee
     let deliveryFee = 0;
     if (deliveryType === "delivery" && guestInfo.address && items.length > 0) {
-      const restaurantId = items[0].restaurantId || items[0].restaurant_id;
-      deliveryFee = await computeDeliveryFee(restaurantId, guestInfo.address);
+      const restaurantIds = [...new Set(items.map(i => i.restaurantId || i.restaurant_id).filter(Boolean))];
+      deliveryFee = await computeDeliveryFee(restaurantIds, guestInfo.address);
     }
     
     const total = subtotal + platformFee + deliveryFee;
@@ -1374,24 +1396,11 @@ router.post("/guest-checkout-session", async (req, res) => {
         const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
         const platformFee = 1.20;
         
-        // Get delivery fee from restaurant (for delivery orders only)
+        // Get delivery fee using distance-based pricing with fallback to flat fee
         let deliveryFee = 0;
-        if (deliveryType === "delivery" && items.length > 0) {
-          const restaurantId = items[0].restaurantId || items[0].restaurant_id;
-          if (restaurantId) {
-            try {
-              await pool.query("ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS delivery_fee DECIMAL(10, 2) DEFAULT 0.00");
-              const deliveryFeeRes = await pool.query(
-                "SELECT delivery_fee FROM restaurants WHERE id = $1",
-                [restaurantId]
-              );
-              if (deliveryFeeRes.rows.length > 0) {
-                deliveryFee = parseFloat(deliveryFeeRes.rows[0].delivery_fee) || 0;
-              }
-            } catch (err) {
-              console.warn("Could not fetch delivery fee:", err);
-            }
-          }
+        if (deliveryType === "delivery" && guestInfo?.address && items.length > 0) {
+          const restaurantIds = [...new Set(items.map(i => i.restaurantId || i.restaurant_id).filter(Boolean))];
+          deliveryFee = await computeDeliveryFee(restaurantIds, guestInfo.address);
         }
         
         const total = subtotal + platformFee + deliveryFee;
