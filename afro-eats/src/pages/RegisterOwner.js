@@ -70,7 +70,7 @@ const RegisterOwner = () => {
 
     const data = new FormData();
     for (const key in formData) {
-      if (key === "confirm_password") continue;
+      if (key === "confirm_password") { continue; }
       data.append(key, formData[key]);
     }
     if (logo) {
