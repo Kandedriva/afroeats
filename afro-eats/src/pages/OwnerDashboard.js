@@ -1109,6 +1109,53 @@ function OwnerDashboard() {
       </div>
 
 
+      {restaurant && restaurant.approval_status === 'pending' && (
+        <div className="mb-6 bg-yellow-50 border-l-4 border-yellow-400 p-5 rounded-lg shadow-sm">
+          <div className="flex items-start gap-3">
+            <span className="text-3xl">⏳</span>
+            <div>
+              <h3 className="font-bold text-yellow-800 mb-1">Restaurant Pending Approval</h3>
+              <p className="text-yellow-700 text-sm">
+                Your restaurant is under review by our team. It will be visible to customers once approved.
+                This usually takes 1–2 business days.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {restaurant && restaurant.approval_status === 'rejected' && (
+        <div className="mb-6 bg-red-50 border-l-4 border-red-400 p-5 rounded-lg shadow-sm">
+          <div className="flex items-start gap-3">
+            <span className="text-3xl">❌</span>
+            <div>
+              <h3 className="font-bold text-red-800 mb-1">Restaurant Not Approved</h3>
+              <p className="text-red-700 text-sm">
+                Your restaurant was not approved.
+                {restaurant.rejection_reason && ` Reason: ${restaurant.rejection_reason}`}
+                {' '}Please contact support for more information.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {restaurant && restaurant.approval_status === 'suspended' && (
+        <div className="mb-6 bg-gray-50 border-l-4 border-gray-400 p-5 rounded-lg shadow-sm">
+          <div className="flex items-start gap-3">
+            <span className="text-3xl">⏸</span>
+            <div>
+              <h3 className="font-bold text-gray-800 mb-1">Restaurant Suspended</h3>
+              <p className="text-gray-600 text-sm">
+                Your restaurant has been suspended and is not visible to customers.
+                {restaurant.rejection_reason && ` Reason: ${restaurant.rejection_reason}`}
+                {' '}Please contact support for more information.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {restaurant && (
         <div className="mb-6 p-4 sm:p-6 border rounded-lg bg-white shadow-sm">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4">
