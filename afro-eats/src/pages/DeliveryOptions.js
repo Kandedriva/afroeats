@@ -139,11 +139,12 @@ export default function DeliveryOptions() {
       // Prepare delivery preferences
       const deliveryPreferences = {
         type: deliveryType,
-        address: deliveryType === "delivery" ? 
+        address: deliveryType === "delivery" ?
           (useRegisteredAddress ? userProfile?.address : customAddress) : null,
-        phone: deliveryType === "delivery" ? 
+        phone: deliveryType === "delivery" ?
           (useRegisteredAddress ? userProfile?.phone : customPhone) : null,
-        useRegisteredAddress: deliveryType === "delivery" ? useRegisteredAddress : false
+        useRegisteredAddress: deliveryType === "delivery" ? useRegisteredAddress : false,
+        deliveryFee: deliveryType === "delivery" ? (deliveryFeeData?.deliveryFee || 0) : 0,
       };
 
       // Create Stripe checkout session with delivery preferences
