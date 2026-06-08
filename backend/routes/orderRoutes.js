@@ -331,7 +331,28 @@ router.post("/checkout-session", requireAuth, async (req, res) => {
         // Calculate totals
         const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
         const platformFee = 1.20;
-        const total = subtotal + platformFee;
+
+        // Extract delivery information first (needed for fee calculation)
+        const finalDeliveryType = deliveryPreferences?.type || 'delivery';
+        const finalDeliveryAddress = deliveryPreferences?.address || deliveryAddress;
+        const finalDeliveryPhone = deliveryPreferences?.phone || deliveryPhone;
+
+        // Calculate delivery fee server-side (delivery orders only)
+        let deliveryFee = 0;
+        if (finalDeliveryType === 'delivery' && items.length > 0) {
+          const restaurantId = items[0].restaurantId || items[0].restaurant_id;
+          if (restaurantId) {
+            try {
+              await pool.query("ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS delivery_fee DECIMAL(10,2) DEFAULT 0.00");
+              const feeRes = await pool.query("SELECT delivery_fee FROM restaurants WHERE id = $1", [restaurantId]);
+              deliveryFee = parseFloat(feeRes.rows[0]?.delivery_fee) || 0;
+            } catch (feeErr) {
+              console.warn("Could not fetch delivery fee for demo auth order:", feeErr.message);
+            }
+          }
+        }
+
+        const total = subtotal + platformFee + deliveryFee;
 
         // Ensure necessary columns exist
         try {
@@ -341,16 +362,12 @@ router.post("/checkout-session", requireAuth, async (req, res) => {
           await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_type VARCHAR(20) DEFAULT 'delivery'");
           await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS restaurant_instructions JSONB");
           await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS platform_fee DECIMAL(10,2) DEFAULT 0");
+          await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS actual_delivery_fee DECIMAL(10,2) DEFAULT 0");
           await pool.query("ALTER TABLE order_items ADD COLUMN IF NOT EXISTS restaurant_id INTEGER REFERENCES restaurants(id)");
         } catch (err) {
           console.error("ERROR: Database column creation failed:", err);
           throw err;
         }
-
-        // Extract delivery information
-        const finalDeliveryType = deliveryPreferences?.type || 'delivery';
-        const finalDeliveryAddress = deliveryPreferences?.address || deliveryAddress;
-        const finalDeliveryPhone = deliveryPreferences?.phone || deliveryPhone;
 
         // Combine restaurant instructions into a single string for legacy support
         let combinedOrderDetails = orderDetails || '';
@@ -359,7 +376,7 @@ router.post("/checkout-session", requireAuth, async (req, res) => {
             const instructionEntries = Object.entries(restaurantInstructions)
               .filter(([restaurant, instructions]) => instructions && typeof instructions === 'string' && instructions.trim())
               .map(([restaurant, instructions]) => `${restaurant}: ${instructions.trim()}`);
-            
+
             if (instructionEntries.length > 0) {
               combinedOrderDetails = instructionEntries.join(' | ');
             }
@@ -371,7 +388,7 @@ router.post("/checkout-session", requireAuth, async (req, res) => {
 
         // Create order in database (mark as paid immediately for demo mode)
         const orderResult = await pool.query(
-          "INSERT INTO orders (user_id, total, order_details, delivery_address, delivery_phone, delivery_type, restaurant_instructions, status, platform_fee, paid_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW()) RETURNING id",
+          "INSERT INTO orders (user_id, total, order_details, delivery_address, delivery_phone, delivery_type, restaurant_instructions, status, platform_fee, actual_delivery_fee, paid_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW()) RETURNING id",
           [
             userId,
             total,
@@ -381,7 +398,8 @@ router.post("/checkout-session", requireAuth, async (req, res) => {
             finalDeliveryType,
             JSON.stringify(restaurantInstructions),
             'received', // Demo mode - order received by restaurant
-            platformFee
+            platformFee,
+            deliveryFee
           ]
         );
         const orderId = orderResult.rows[0].id;
@@ -466,12 +484,28 @@ router.post("/checkout-session", requireAuth, async (req, res) => {
 
     // Stripe Connect mode - create checkout session with payment splitting
     console.log("19. Starting Stripe checkout session creation");
-    
+
     // Calculate totals
     const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
     const platformFee = 1.20; // Flat $1.20 platform fee per order
-    const total = subtotal + platformFee;
-    console.log("20. Totals calculated:", { subtotal, platformFee, total });
+
+    // Calculate delivery fee server-side (delivery orders only)
+    let deliveryFee = 0;
+    if (finalDeliveryType === 'delivery' && items.length > 0) {
+      const restaurantId = items[0].restaurantId || items[0].restaurant_id;
+      if (restaurantId) {
+        try {
+          await pool.query("ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS delivery_fee DECIMAL(10,2) DEFAULT 0.00");
+          const feeRes = await pool.query("SELECT delivery_fee FROM restaurants WHERE id = $1", [restaurantId]);
+          deliveryFee = parseFloat(feeRes.rows[0]?.delivery_fee) || 0;
+        } catch (feeErr) {
+          console.warn("Could not fetch delivery fee for auth Stripe order:", feeErr.message);
+        }
+      }
+    }
+
+    const total = subtotal + platformFee + deliveryFee;
+    console.log("20. Totals calculated:", { subtotal, platformFee, deliveryFee, total });
 
     // Ensure necessary columns and tables exist
     try {
@@ -534,6 +568,7 @@ router.post("/checkout-session", requireAuth, async (req, res) => {
       deliveryType: finalDeliveryType,
       restaurantInstructions: restaurantInstructions || null,
       platformFee,
+      deliveryFee,
       items: items.map(item => ({
         dishId: item.id,
         name: item.name,
@@ -594,9 +629,24 @@ router.post("/checkout-session", requireAuth, async (req, res) => {
       quantity: 1,
     });
 
+    // Add delivery fee as a line item (delivery orders only)
+    if (deliveryFee > 0) {
+      lineItems.push({
+        price_data: {
+          currency: 'usd',
+          product_data: {
+            name: 'Delivery Fee',
+            description: 'Delivery to your address',
+          },
+          unit_amount: Math.round(deliveryFee * 100),
+        },
+        quantity: 1,
+      });
+    }
+
     // Get the frontend URL dynamically
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    
+
     // Create Stripe checkout session (customer pays the full amount)
     // Store only essential info in metadata to avoid 500-character limit
     const essentialOrderData = {
@@ -604,8 +654,9 @@ router.post("/checkout-session", requireAuth, async (req, res) => {
       itemCount: items.length,
       deliveryType: finalDeliveryType,
       platformFee,
+      deliveryFee,
       restaurantCount: Object.keys(restaurantTotals).length,
-      total: subtotal + platformFee
+      total
     };
 
     let session;

@@ -246,19 +246,23 @@ export const handleStripeWebhook = async (req, res) => {
             deliveryType,
             restaurantInstructions,
             platformFee,
+            deliveryFee,
             restaurantTotals,
           } = orderData;
 
           console.log(`📦 Creating order with ${items.length} items from ${Object.keys(restaurantTotals || {}).length} restaurant(s)`);
           console.log(`👤 User ID from order data: ${userId} (type: ${typeof userId})`);
 
+          // Ensure actual_delivery_fee column exists
+          await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS actual_delivery_fee DECIMAL(10,2) DEFAULT 0");
+
           // Create the order in database
           const orderResult = await pool.query(
             `INSERT INTO orders (
               user_id, total, order_details, delivery_address, delivery_phone,
               delivery_type, restaurant_instructions, status, platform_fee,
-              stripe_session_id, paid_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW()) RETURNING id`,
+              actual_delivery_fee, stripe_session_id, paid_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW()) RETURNING id`,
             [
               userId,
               total,
@@ -269,6 +273,7 @@ export const handleStripeWebhook = async (req, res) => {
               JSON.stringify(restaurantInstructions || {}),
               'received', // Order is paid and ready for restaurant to process
               platformFee || 0,
+              deliveryFee || 0,
               session.id,
             ]
           );
