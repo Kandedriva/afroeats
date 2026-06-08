@@ -50,8 +50,9 @@ async function computeDeliveryFee(restaurantIds, deliveryAddress) {
           if (feeData && feeData.total_delivery_fee > 0) {
             return parseFloat(feeData.total_delivery_fee);
           }
-        } catch {
-          // Google Maps failed for this restaurant — fall through to flat fee
+        } catch (err) {
+          if (err.code === 'DELIVERY_TOO_FAR') throw err; // propagate — don't fall back silently
+          // Other Maps errors → fall through to flat fee
         }
       }
       const flat = parseFloat(r.delivery_fee) || 0;
@@ -61,6 +62,7 @@ async function computeDeliveryFee(restaurantIds, deliveryAddress) {
     // One driver covers all pickups — charge the highest individual fee
     return Math.max(...fees);
   } catch (err) {
+    if (err.code === 'DELIVERY_TOO_FAR') throw err; // let checkout handler return 400
     console.warn('[delivery fee] computeDeliveryFee error:', err.message);
     return 5.00;
   }
@@ -434,7 +436,14 @@ router.post("/checkout-session", requireAuth, async (req, res) => {
         let deliveryFee = 0;
         if (finalDeliveryType === 'delivery' && finalDeliveryAddress && items.length > 0) {
           const restaurantIds = [...new Set(items.map(i => i.restaurantId || i.restaurant_id).filter(Boolean))];
-          deliveryFee = await computeDeliveryFee(restaurantIds, finalDeliveryAddress);
+          try {
+            deliveryFee = await computeDeliveryFee(restaurantIds, finalDeliveryAddress);
+          } catch (feeErr) {
+            if (feeErr.code === 'DELIVERY_TOO_FAR') {
+              return res.status(400).json({ error: feeErr.message, code: 'DELIVERY_TOO_FAR' });
+            }
+            throw feeErr;
+          }
         }
 
         const total = subtotal + platformFee + deliveryFee;
@@ -578,7 +587,14 @@ router.post("/checkout-session", requireAuth, async (req, res) => {
     let deliveryFee = 0;
     if (finalDeliveryType === 'delivery' && finalDeliveryAddress && items.length > 0) {
       const restaurantIds = [...new Set(items.map(i => i.restaurantId || i.restaurant_id).filter(Boolean))];
-      deliveryFee = await computeDeliveryFee(restaurantIds, finalDeliveryAddress);
+      try {
+        deliveryFee = await computeDeliveryFee(restaurantIds, finalDeliveryAddress);
+      } catch (feeErr) {
+        if (feeErr.code === 'DELIVERY_TOO_FAR') {
+          return res.status(400).json({ error: feeErr.message, code: 'DELIVERY_TOO_FAR' });
+        }
+        throw feeErr;
+      }
     }
 
     const total = subtotal + platformFee + deliveryFee;
@@ -1162,7 +1178,14 @@ router.post("/guest-checkout-session", async (req, res) => {
         let deliveryFee = 0;
         if (deliveryType === "delivery" && guestInfo.address && items.length > 0) {
           const restaurantIds = [...new Set(items.map(i => i.restaurantId || i.restaurant_id).filter(Boolean))];
-          deliveryFee = await computeDeliveryFee(restaurantIds, guestInfo.address);
+          try {
+            deliveryFee = await computeDeliveryFee(restaurantIds, guestInfo.address);
+          } catch (feeErr) {
+            if (feeErr.code === 'DELIVERY_TOO_FAR') {
+              return res.status(400).json({ error: feeErr.message, code: 'DELIVERY_TOO_FAR' });
+            }
+            throw feeErr;
+          }
         }
 
         const total = subtotal + platformFee + deliveryFee;
@@ -1247,7 +1270,14 @@ router.post("/guest-checkout-session", async (req, res) => {
     let deliveryFee = 0;
     if (deliveryType === "delivery" && guestInfo.address && items.length > 0) {
       const restaurantIds = [...new Set(items.map(i => i.restaurantId || i.restaurant_id).filter(Boolean))];
-      deliveryFee = await computeDeliveryFee(restaurantIds, guestInfo.address);
+      try {
+        deliveryFee = await computeDeliveryFee(restaurantIds, guestInfo.address);
+      } catch (feeErr) {
+        if (feeErr.code === 'DELIVERY_TOO_FAR') {
+          return res.status(400).json({ error: feeErr.message, code: 'DELIVERY_TOO_FAR' });
+        }
+        throw feeErr;
+      }
     }
     
     const total = subtotal + platformFee + deliveryFee;
@@ -1400,7 +1430,14 @@ router.post("/guest-checkout-session", async (req, res) => {
         let deliveryFee = 0;
         if (deliveryType === "delivery" && guestInfo?.address && items.length > 0) {
           const restaurantIds = [...new Set(items.map(i => i.restaurantId || i.restaurant_id).filter(Boolean))];
-          deliveryFee = await computeDeliveryFee(restaurantIds, guestInfo.address);
+          try {
+            deliveryFee = await computeDeliveryFee(restaurantIds, guestInfo.address);
+          } catch (feeErr) {
+            if (feeErr.code === 'DELIVERY_TOO_FAR') {
+              return res.status(400).json({ error: feeErr.message, code: 'DELIVERY_TOO_FAR' });
+            }
+            throw feeErr;
+          }
         }
         
         const total = subtotal + platformFee + deliveryFee;
@@ -1652,9 +1689,17 @@ router.post("/calculate-delivery-fee", async (req, res) => {
       });
 
     } catch (calculationError) {
-      // Fallback to default fee if calculation fails
-      console.error("Delivery fee calculation error:", calculationError.message);
+      if (calculationError.code === 'DELIVERY_TOO_FAR') {
+        return res.status(400).json({
+          error: calculationError.message,
+          code: 'DELIVERY_TOO_FAR',
+          distanceMiles: calculationError.distanceMiles,
+          maxMiles: calculationError.maxMiles,
+        });
+      }
 
+      // Fallback to default fee for other Maps errors
+      console.error("Delivery fee calculation error:", calculationError.message);
       const fallbackFee = getFallbackDeliveryFee();
       return res.json({
         deliveryFee: fallbackFee.total_delivery_fee,

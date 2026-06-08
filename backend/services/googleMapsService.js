@@ -7,6 +7,7 @@ const PRICE_PER_MILE = 1.00;
 const DRIVER_COMMISSION_RATE = 0.85;
 const PLATFORM_COMMISSION_RATE = 0.15;
 const FALLBACK_DELIVERY_FEE = 5.00;
+export const MAX_DELIVERY_MILES = parseFloat(process.env.MAX_DELIVERY_MILES) || 30;
 
 /**
  * Geocode an address to latitude/longitude
@@ -166,6 +167,18 @@ export async function calculateDistanceAndFee(restaurantAddress, customerAddress
 
     if (!distanceData) {
       throw new Error('Failed to calculate distance');
+    }
+
+    const distanceMiles = parseFloat(distanceData.distance_miles);
+    if (distanceMiles > MAX_DELIVERY_MILES) {
+      const err = new Error(
+        `Delivery address is ${distanceMiles.toFixed(1)} miles away. ` +
+        `Maximum delivery radius is ${MAX_DELIVERY_MILES} miles.`
+      );
+      err.code = 'DELIVERY_TOO_FAR';
+      err.distanceMiles = distanceMiles;
+      err.maxMiles = MAX_DELIVERY_MILES;
+      throw err;
     }
 
     // Calculate fees
