@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import PropTypes from 'prop-types';
 import { useCart } from "../context/CartContext";
 import { toast } from 'react-toastify';

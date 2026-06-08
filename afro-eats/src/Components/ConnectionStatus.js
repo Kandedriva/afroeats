@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { API_BASE_URL } from '../config/api';
 
 const ConnectionStatus = () => {
@@ -17,7 +17,7 @@ const ConnectionStatus = () => {
         });
 
         if (response.ok) {
-          const data = await response.json();
+          await response.json();
           setStatus('connected');
           // console.log('Backend connection successful:', data);
         } else {

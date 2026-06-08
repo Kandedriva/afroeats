@@ -5,6 +5,7 @@ import { requireAuth } from '../middleware/authMiddleware.js';
 import { calculateDistanceAndFee, getFallbackDeliveryFee } from '../services/googleMapsService.js';
 import { sendOrderDeliveredEmail, sendGroceryRefundRequestEmail } from '../services/emailService.js';
 import { ensureGroceryNotification } from '../services/groceryNotificationService.js';
+import socketService from '../services/socketService.js';
 
 const router = express.Router();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
@@ -738,6 +739,28 @@ router.patch('/orders/:id/status', requireGroceryOwnerAuth, async (req, res) => 
     }
 
     const order = updateResult.rows[0];
+
+    // When order is ready for pickup, notify all online drivers
+    if (status === 'ready') {
+      try {
+        const storeResult = await pool.query(
+          `SELECT gs.name, gs.address FROM grocery_stores gs
+           JOIN grocery_orders go ON go.store_id = gs.id
+           WHERE go.id = $1`,
+          [orderId]
+        );
+        const store = storeResult.rows[0];
+        socketService.emitToAllDrivers('new_delivery_order', {
+          orderId,
+          orderType: 'grocery',
+          restaurantName: store?.name || 'Grocery Store',
+          pickupAddress: store?.address || '',
+          timestamp: new Date().toISOString(),
+        });
+      } catch (socketError) {
+        console.error('Failed to notify drivers about ready grocery order:', socketError.message);
+      }
+    }
 
     // If order is delivered, send completion email
     if (status === 'delivered') {

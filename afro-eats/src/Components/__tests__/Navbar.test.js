@@ -167,9 +167,9 @@ describe('Navbar Component', () => {
 
     test('cart link navigates to cart page', () => {
       renderNavbar();
-      
-      const cartLinks = screen.getAllByText(/Cart/);
-      expect(cartLinks[0].closest('a')).toHaveAttribute('href', '/cart');
+
+      const cartLink = screen.getByRole('link', { name: /cart/i });
+      expect(cartLink).toHaveAttribute('href', '/cart');
     });
   });
 
@@ -225,9 +225,9 @@ describe('Navbar Component', () => {
 
       renderNavbar({}, cartWithItems);
       
-      // Should have mobile cart icon
-      const cartSvg = document.querySelector('svg');
-      expect(cartSvg).toBeInTheDocument();
+      // Should have cart link (which contains the SVG icon)
+      const cartLink = screen.getByRole('link', { name: /cart/i });
+      expect(cartLink).toBeInTheDocument();
       
       // Should show item count badge
       expect(screen.getByText('3')).toBeInTheDocument(); // 2+1=3
@@ -237,9 +237,9 @@ describe('Navbar Component', () => {
   describe('Brand link', () => {
     test('brand name links to home page', () => {
       renderNavbar();
-      
-      const brandLink = screen.getByText('A Food Zone');
-      expect(brandLink.closest('a')).toHaveAttribute('href', '/');
+
+      const brandLink = screen.getByRole('link', { name: /A Food Zone/i });
+      expect(brandLink).toHaveAttribute('href', '/');
     });
   });
 
