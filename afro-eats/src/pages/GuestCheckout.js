@@ -12,7 +12,10 @@ export default function GuestCheckout() {
     name: "",
     email: "",
     phone: "",
-    address: ""
+    street: "",
+    city: "",
+    state: "",
+    zip: ""
   });
   const [deliveryType, setDeliveryType] = useState("delivery"); // "delivery" or "pickup"
   const [orderDetails, setOrderDetails] = useState("");
@@ -28,7 +31,8 @@ export default function GuestCheckout() {
 
   // Calculate delivery fee function wrapped in useCallback
   const calculateDeliveryFee = useCallback(async () => {
-    if (!guestInfo.address || !guestCart.length) {
+    const fullAddress = [guestInfo.street, guestInfo.city, guestInfo.state, guestInfo.zip].filter(Boolean).join(', ');
+    if (!fullAddress || !guestCart.length) {
       return;
     }
 
@@ -47,7 +51,7 @@ export default function GuestCheckout() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           restaurantId,
-          deliveryAddress: guestInfo.address
+          deliveryAddress: fullAddress
         })
       });
 
@@ -72,16 +76,17 @@ export default function GuestCheckout() {
     } finally {
       setCalculatingFee(false);
     }
-  }, [guestInfo.address, guestCart]);
+  }, [guestInfo.street, guestInfo.city, guestInfo.state, guestInfo.zip, guestCart]);
 
   // Calculate delivery fee when delivery type or address changes
   useEffect(() => {
-    if (deliveryType === "delivery" && guestInfo.address && guestInfo.address.trim()) {
+    const fullAddress = [guestInfo.street, guestInfo.city, guestInfo.state, guestInfo.zip].filter(Boolean).join(', ');
+    if (deliveryType === "delivery" && fullAddress.trim()) {
       calculateDeliveryFee();
     } else if (deliveryType === "pickup") {
-      setDeliveryFeeData(null); // No delivery fee for pickup
+      setDeliveryFeeData(null);
     }
-  }, [deliveryType, guestInfo.address, guestCart, calculateDeliveryFee]);
+  }, [deliveryType, guestInfo.street, guestInfo.city, guestInfo.state, guestInfo.zip, guestCart, calculateDeliveryFee]);
 
   const handleInputChange = (field, value) => {
     setGuestInfo(prev => ({
@@ -112,18 +117,22 @@ export default function GuestCheckout() {
       return;
     }
     
-    if (deliveryType === "delivery" && !guestInfo.address.trim()) {
-      toast.warning("Please enter your delivery address.");
-      return;
+    if (deliveryType === "delivery") {
+      if (!guestInfo.street.trim() || !guestInfo.city.trim() || !guestInfo.state.trim() || !guestInfo.zip.trim()) {
+        toast.warning("Please fill in your full delivery address (street, city, state, zip code).");
+        return;
+      }
     }
 
     setLoading(true);
-    
+
     try {
       const cartWithRestaurantId = guestCart.map(item => ({
         ...item,
         restaurant_id: item.restaurantId
       }));
+
+      const fullAddress = [guestInfo.street, guestInfo.city, guestInfo.state, guestInfo.zip].filter(Boolean).join(', ');
 
       const res = await fetch(`${API_BASE_URL}/api/orders/guest-checkout-session`, {
         method: "POST",
@@ -131,7 +140,7 @@ export default function GuestCheckout() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          guestInfo,
+          guestInfo: { ...guestInfo, address: fullAddress },
           items: cartWithRestaurantId,
           orderDetails: orderDetails.trim() || null,
           deliveryType,
@@ -142,12 +151,11 @@ export default function GuestCheckout() {
       
       if (res.ok) {
         if (data.demo_mode) {
-          // Store order info for demo checkout
+          // Store order info so OrderSuccess can display it
           localStorage.setItem('demo_order_total', guestTotal.toFixed(2));
           localStorage.setItem('demo_order_items', JSON.stringify(guestCart));
-          
-          // Demo mode - redirect to demo checkout
-          navigate(`/demo-order-checkout?order_id=${data.order_id}`);
+
+          navigate(`/order-success?demo=true&order_id=${data.order_id}`, { state: { guestOrder: true } });
         } else {
           // Stripe test mode checkout - redirect to Stripe
           // Don't clear cart here - it will be cleared after successful payment
@@ -165,7 +173,7 @@ export default function GuestCheckout() {
 
   // Calculate totals with distance-based delivery fee
   const subtotal = guestTotal;
-  const platformFee = 1.20;
+  const platformFee = parseFloat(Math.max(subtotal * 0.10, 2.00).toFixed(2));
   const deliveryFee = (deliveryType === "delivery" && deliveryFeeData)
     ? deliveryFeeData.deliveryFee
     : 0;
@@ -302,21 +310,45 @@ export default function GuestCheckout() {
         {/* Delivery Address - Only show if delivery is selected */}
         {deliveryType === "delivery" && (
           <div className="mb-6">
-            <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="guest-street" className="block text-sm font-medium text-gray-700 mb-2">
               Delivery Address *
             </label>
-            <textarea
-              id="address"
-              value={guestInfo.address}
-              onChange={(e) => handleInputChange('address', e.target.value)}
-              className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
-              rows="3"
-              placeholder="Enter your full delivery address (street, city, state, zip code)"
-              required
-              maxLength={300}
-            />
-            <div className="text-right text-xs text-gray-500 mt-1">
-              {guestInfo.address.length}/300 characters
+            <div className="space-y-2">
+              <input
+                id="guest-street"
+                type="text"
+                value={guestInfo.street}
+                onChange={(e) => handleInputChange('street', e.target.value)}
+                className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                placeholder="Street address"
+                required
+              />
+              <input
+                type="text"
+                value={guestInfo.city}
+                onChange={(e) => handleInputChange('city', e.target.value)}
+                className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                placeholder="City"
+                required
+              />
+              <div className="flex gap-3">
+                <input
+                  type="text"
+                  value={guestInfo.state}
+                  onChange={(e) => handleInputChange('state', e.target.value)}
+                  className="w-28 p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="State"
+                  required
+                />
+                <input
+                  type="text"
+                  value={guestInfo.zip}
+                  onChange={(e) => handleInputChange('zip', e.target.value)}
+                  className="flex-1 p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="Zip code"
+                  required
+                />
+              </div>
             </div>
           </div>
         )}

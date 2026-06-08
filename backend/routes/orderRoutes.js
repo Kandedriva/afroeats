@@ -102,6 +102,65 @@ async function findOpenStripeSession(userIdentifier, fingerprint) {
   }
 }
 
+/**
+ * Validate cart items against the database and replace frontend-supplied
+ * prices/names with server-authoritative values.
+ * Throws a plain Error (with a .status property) on any problem so callers
+ * can return the message directly to the client.
+ */
+async function validateAndPriceItems(items) {
+  const dishIds = items.map(item => {
+    const id = parseInt(item.dishId || item.id, 10);
+    return isNaN(id) ? null : id;
+  });
+
+  if (dishIds.some(id => id === null)) {
+    throw Object.assign(new Error('One or more cart items are missing a valid dish ID'), { status: 400 });
+  }
+
+  const { rows: dishes } = await pool.query(
+    `SELECT id, name, price, restaurant_id, COALESCE(is_available, true) AS is_available
+     FROM dishes WHERE id = ANY($1)`,
+    [dishIds]
+  );
+
+  const dishMap = Object.fromEntries(dishes.map(d => [d.id, d]));
+
+  return items.map(item => {
+    const dishId = parseInt(item.dishId || item.id, 10);
+    const dish = dishMap[dishId];
+
+    if (!dish) {
+      const err = new Error(`"${item.name || dishId}" is no longer available — please remove it from your cart`);
+      err.status = 400;
+      throw err;
+    }
+    if (!dish.is_available) {
+      const err = new Error(`"${dish.name}" is currently unavailable`);
+      err.status = 400;
+      throw err;
+    }
+
+    const quantity = parseInt(item.quantity, 10);
+    if (!quantity || quantity < 1) {
+      const err = new Error(`Invalid quantity for "${dish.name}"`);
+      err.status = 400;
+      throw err;
+    }
+
+    return {
+      ...item,
+      dishId: dish.id,
+      id: dish.id,
+      name: dish.name,
+      price: parseFloat(dish.price),
+      restaurantId: dish.restaurant_id,
+      restaurant_id: dish.restaurant_id,
+      quantity,
+    };
+  });
+}
+
 // Helper function to send order notifications in demo mode
 async function sendDemoOrderNotifications(orderId, items, customerInfo, isGuestOrder = false) {
   try {
@@ -299,10 +358,15 @@ async function sendDemoOrderNotifications(orderId, items, customerInfo, isGuestO
 
           // Notify all online drivers about new delivery order
           try {
+            const allPickups = Object.values(restaurantOrders)
+              .filter(ro => ro.restaurant?.address)
+              .map(ro => ({ name: ro.restaurant.name, address: ro.restaurant.address }));
+
             socketService.emitToAllDrivers('new_delivery_order', {
               orderId,
               restaurantName: firstRestaurant.name,
               pickupAddress,
+              allPickups,
               deliveryAddress,
               distanceMiles: deliveryData.distance_miles,
               driverPayout: deliveryData.driver_payout,
@@ -376,7 +440,7 @@ router.post("/checkout-session", requireAuth, async (req, res) => {
   console.log("=== CHECKOUT SESSION START ===");
   
   try {
-    const { items, orderDetails, deliveryAddress, deliveryPhone, deliveryPreferences, restaurantInstructions } = req.body;
+    let { items, orderDetails, deliveryAddress, deliveryPhone, deliveryPreferences, restaurantInstructions } = req.body;
     const userId = req.session.userId;
 
     console.log("1. Request parsing successful");
@@ -398,6 +462,13 @@ router.post("/checkout-session", requireAuth, async (req, res) => {
     if (!items || items.length === 0) {
       console.log("ERROR: No items in cart");
       return res.status(400).json({ error: "Cart is empty" });
+    }
+
+    // Validate items against DB — overrides any frontend-tampered prices/names
+    try {
+      items = await validateAndPriceItems(items);
+    } catch (validationErr) {
+      return res.status(validationErr.status || 400).json({ error: validationErr.message });
     }
 
     console.log("2. Basic validation passed");
@@ -425,7 +496,7 @@ router.post("/checkout-session", requireAuth, async (req, res) => {
       try {
         // Calculate totals
         const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-        const platformFee = 1.20;
+        const platformFee = parseFloat(Math.max(subtotal * 0.10, 2.00).toFixed(2));
 
         // Extract delivery information first (needed for fee calculation)
         const finalDeliveryType = deliveryPreferences?.type || 'delivery';
@@ -581,7 +652,7 @@ router.post("/checkout-session", requireAuth, async (req, res) => {
 
     // Calculate totals
     const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-    const platformFee = 1.20; // Flat $1.20 platform fee per order
+    const platformFee = parseFloat(Math.max(subtotal * 0.10, 2.00).toFixed(2));
 
     // Calculate delivery fee server-side using distance-based pricing
     let deliveryFee = 0;
@@ -1123,7 +1194,7 @@ router.post("/guest-checkout-session", async (req, res) => {
   console.log("=== GUEST CHECKOUT SESSION START ===");
   
   // Extract variables outside try block so they're accessible in catch block
-  const { guestInfo, items, orderDetails, deliveryType = "delivery" } = req.body;
+  let { guestInfo, items, orderDetails, deliveryType = "delivery" } = req.body;
   
   try {
 
@@ -1146,6 +1217,13 @@ router.post("/guest-checkout-session", async (req, res) => {
 
     if (!items || items.length === 0) {
       return res.status(400).json({ error: "Cart is empty" });
+    }
+
+    // Validate items against DB — overrides any frontend-tampered prices/names
+    try {
+      items = await validateAndPriceItems(items);
+    } catch (validationErr) {
+      return res.status(validationErr.status || 400).json({ error: validationErr.message });
     }
 
     // Basic email validation
@@ -1173,7 +1251,7 @@ router.post("/guest-checkout-session", async (req, res) => {
       try {
         // Calculate totals with distance-based delivery fee
         const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-        const platformFee = 1.20;
+        const platformFee = parseFloat(Math.max(subtotal * 0.10, 2.00).toFixed(2));
 
         let deliveryFee = 0;
         if (deliveryType === "delivery" && guestInfo.address && items.length > 0) {
@@ -1264,14 +1342,15 @@ router.post("/guest-checkout-session", async (req, res) => {
 
     // Calculate totals with delivery fee
     const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-    const platformFee = 1.20;
-    
+    const platformFee = parseFloat(Math.max(subtotal * 0.10, 2.00).toFixed(2));
+
+    const guestRestaurantIds = [...new Set(items.map(i => i.restaurantId || i.restaurant_id).filter(Boolean))];
+
     // Get delivery fee using distance-based pricing with fallback to flat fee
     let deliveryFee = 0;
-    if (deliveryType === "delivery" && guestInfo.address && items.length > 0) {
-      const restaurantIds = [...new Set(items.map(i => i.restaurantId || i.restaurant_id).filter(Boolean))];
+    if (deliveryType === "delivery" && guestInfo.address && guestRestaurantIds.length > 0) {
       try {
-        deliveryFee = await computeDeliveryFee(restaurantIds, guestInfo.address);
+        deliveryFee = await computeDeliveryFee(guestRestaurantIds, guestInfo.address);
       } catch (feeErr) {
         if (feeErr.code === 'DELIVERY_TOO_FAR') {
           return res.status(400).json({ error: feeErr.message, code: 'DELIVERY_TOO_FAR' });
@@ -1279,8 +1358,36 @@ router.post("/guest-checkout-session", async (req, res) => {
         throw feeErr;
       }
     }
-    
+
     const total = subtotal + platformFee + deliveryFee;
+
+    // Fetch restaurant info so the webhook can notify owners and transfer payments
+    const guestRestaurantResults = await pool.query(
+      `SELECT r.id, r.name, ro.stripe_account_id, ro.email as owner_email
+       FROM restaurants r
+       JOIN restaurant_owners ro ON r.owner_id = ro.id
+       WHERE r.id = ANY($1)`,
+      [guestRestaurantIds]
+    );
+    const guestRestaurants = guestRestaurantResults.rows;
+
+    // Group items by restaurant (mirrors auth checkout logic)
+    const restaurantTotals = {};
+    items.forEach(item => {
+      const restaurantId = item.restaurantId || item.restaurant_id;
+      if (!restaurantId) return;
+      const itemTotal = item.price * item.quantity;
+      if (!restaurantTotals[restaurantId]) {
+        const restaurant = guestRestaurants.find(r => r.id == restaurantId);
+        restaurantTotals[restaurantId] = {
+          total: 0,
+          items: [],
+          restaurant: restaurant || { id: restaurantId, name: 'Unknown Restaurant', stripe_account_id: null }
+        };
+      }
+      restaurantTotals[restaurantId].total += itemTotal;
+      restaurantTotals[restaurantId].items.push(item);
+    });
 
     // Create line items for Stripe
     const lineItems = items.map(item => ({
@@ -1290,7 +1397,7 @@ router.post("/guest-checkout-session", async (req, res) => {
           name: item.name,
           description: `From ${item.restaurantName || item.restaurant_name}`,
         },
-        unit_amount: Math.round(item.price * 100), // Convert to cents
+        unit_amount: Math.round(item.price * 100),
       },
       quantity: item.quantity,
     }));
@@ -1303,7 +1410,7 @@ router.post("/guest-checkout-session", async (req, res) => {
           name: 'Platform Fee',
           description: 'Service fee for using our platform',
         },
-        unit_amount: Math.round(platformFee * 100), // $1.20 in cents
+        unit_amount: Math.round(platformFee * 100),
       },
       quantity: 1,
     });
@@ -1317,7 +1424,7 @@ router.post("/guest-checkout-session", async (req, res) => {
             name: 'Delivery Fee',
             description: 'Delivery charge by the restaurant',
           },
-          unit_amount: Math.round(deliveryFee * 100), // Convert to cents
+          unit_amount: Math.round(deliveryFee * 100),
         },
         quantity: 1,
       });
@@ -1326,7 +1433,8 @@ router.post("/guest-checkout-session", async (req, res) => {
     // Get the frontend URL dynamically
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
 
-    // Prepare order data for metadata
+    // Prepare order data for temp storage — restaurantTotals is required by the
+    // webhook to send owner notifications and execute Stripe Connect transfers.
     const orderData = {
       guestInfo,
       items: items.map(item => ({
@@ -1341,6 +1449,7 @@ router.post("/guest-checkout-session", async (req, res) => {
       total,
       platformFee,
       deliveryFee,
+      restaurantTotals,
       isGuestOrder: true
     };
 
@@ -1424,7 +1533,7 @@ router.post("/guest-checkout-session", async (req, res) => {
       try {
         // Recalculate totals for fallback demo mode
         const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-        const platformFee = 1.20;
+        const platformFee = parseFloat(Math.max(subtotal * 0.10, 2.00).toFixed(2));
         
         // Get delivery fee using distance-based pricing with fallback to flat fee
         let deliveryFee = 0;

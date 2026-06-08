@@ -79,6 +79,7 @@ import GroceryOwnerAddProduct from "./pages/GroceryOwnerAddProduct";
 import GroceryOwnerEditProduct from "./pages/GroceryOwnerEditProduct";
 import GroceryOwnerNotifications from "./pages/GroceryOwnerNotifications";
 import GroceryOwnerReports from "./pages/GroceryOwnerReports";
+import OwnerReports from "./pages/OwnerReports";
 import OwnerVerifyEmail from "./pages/OwnerVerifyEmail";
 import GroceryOwnerVerifyEmail from "./pages/GroceryOwnerVerifyEmail";
 import SellWithUs from "./pages/SellWithUs";
@@ -262,6 +263,14 @@ function AppContent() {
           element={
             <ProtectedOwnerRoute>
               <OwnerChat />
+            </ProtectedOwnerRoute>
+          }
+        />
+        <Route
+          path="/owner/reports"
+          element={
+            <ProtectedOwnerRoute>
+              <OwnerReports />
             </ProtectedOwnerRoute>
           }
         />

@@ -82,9 +82,13 @@ export function useDriverSocket(driverId, isAvailable) {
       if (isAvailable) {
         setNewOrderNotification(orderData);
 
+        const pickupSummary = orderData.allPickups?.length > 1
+          ? `${orderData.allPickups.length} restaurants`
+          : orderData.restaurantName;
+
         // Show toast notification
         toast.info(
-          `🚗 New Delivery Order!\n${orderData.restaurantName}\nPayout: $${orderData.driverPayout.toFixed(2)}`,
+          `🚗 New Delivery Order!\n${pickupSummary}\nPayout: $${parseFloat(orderData.driverPayout).toFixed(2)}`,
           {
             position: 'top-center',
             autoClose: 10000,

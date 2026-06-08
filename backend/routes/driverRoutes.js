@@ -5,6 +5,7 @@ import {
   sendOrderDeliveredEmail,
   sendRestaurantOrderCompletedEmail
 } from "../services/emailService.js";
+import { createDriverPayout } from "../services/stripeDriverService.js";
 
 const router = express.Router();
 
@@ -204,7 +205,14 @@ router.get("/my-deliveries", requireApprovedDriver, async (req, res) => {
   const { status } = req.query; // 'active', 'completed', or 'all'
 
   try {
-    let query = `
+    let statusFilter = '';
+    if (status === 'active') {
+      statusFilter = `AND dd.status IN ('claimed', 'picked_up', 'in_transit')`;
+    } else if (status === 'completed') {
+      statusFilter = `AND dd.status IN ('delivered', 'cancelled')`;
+    }
+
+    const query = `
       SELECT
         dd.id as delivery_id,
         dd.status,
@@ -222,19 +230,26 @@ router.get("/my-deliveries", requireApprovedDriver, async (req, res) => {
         o.total as order_total,
         o.delivery_phone,
         o.order_details,
-        o.created_at as order_created_at
+        o.created_at as order_created_at,
+        COALESCE(
+          json_agg(
+            json_build_object(
+              'restaurant_id', r.id,
+              'restaurant_name', r.name,
+              'restaurant_address', r.address,
+              'restaurant_phone', r.phone_number
+            )
+          ) FILTER (WHERE r.id IS NOT NULL),
+          '[]'
+        ) as restaurants
       FROM driver_deliveries dd
       INNER JOIN orders o ON dd.order_id = o.id
-      WHERE dd.driver_id = $1
+      LEFT JOIN order_items oi ON o.id = oi.order_id
+      LEFT JOIN restaurants r ON oi.restaurant_id = r.id
+      WHERE dd.driver_id = $1 ${statusFilter}
+      GROUP BY dd.id, o.id
+      ORDER BY dd.created_at DESC LIMIT 50
     `;
-
-    if (status === 'active') {
-      query += ` AND dd.status IN ('claimed', 'picked_up', 'in_transit')`;
-    } else if (status === 'completed') {
-      query += ` AND dd.status IN ('delivered', 'cancelled')`;
-    }
-
-    query += ` ORDER BY dd.created_at DESC LIMIT 50`;
 
     const result = await pool.query(query, [driverId]);
 
@@ -370,6 +385,17 @@ router.post("/update-delivery-status", requireApprovedDriver, async (req, res) =
          WHERE id = $1`,
         [driverId, driver_payout]
       );
+
+      // Attempt immediate Stripe payout if driver has a connected account
+      const driverStripeResult = await client.query(
+        'SELECT stripe_payouts_enabled FROM drivers WHERE id = $1',
+        [driverId]
+      );
+      if (driverStripeResult.rows[0]?.stripe_payouts_enabled) {
+        createDriverPayout(driverId, deliveryId, driver_payout).catch(err =>
+          console.error(`❌ Stripe payout failed for driver ${driverId}, delivery ${deliveryId}:`, err.message)
+        );
+      }
 
       // Send delivery completion emails (non-blocking)
       try {

@@ -28,6 +28,7 @@ import socketService from "./services/socketService.js";
 import driverAuthRoutes from "./routes/driverAuthRoutes.js";
 import driverRoutes from "./routes/driverRoutes.js";
 import driverStripeRoutes from "./routes/driverStripeRoutes.js";
+import { processPendingDriverPayouts } from "./services/stripeDriverService.js";
 import refundRoutes from "./routes/refundRoutes.js";
 import productRoutes from "./routes/productRoutes.js";
 import groceryRoutes from "./routes/groceryRoutes.js";
@@ -785,12 +786,55 @@ const startServer = async () => {
     // Initialize session store
     await initializeSessionStore();
     
-    // Run database migrations (you would implement this)
+    // Ensure all columns exist at startup (safe to run repeatedly via IF NOT EXISTS)
+    await pool.query(`ALTER TABLE IF EXISTS orders ADD COLUMN IF NOT EXISTS stripe_payment_intent VARCHAR(255)`);
+    await pool.query(`ALTER TABLE IF EXISTS orders ADD COLUMN IF NOT EXISTS platform_fee DECIMAL(10,2) DEFAULT 0`);
+    await pool.query(`ALTER TABLE IF EXISTS orders ADD COLUMN IF NOT EXISTS delivery_type VARCHAR(20) DEFAULT 'delivery'`);
+    await pool.query(`ALTER TABLE IF EXISTS orders ADD COLUMN IF NOT EXISTS delivery_fee DECIMAL(10,2) DEFAULT 0`);
+    await pool.query(`ALTER TABLE IF EXISTS orders ADD COLUMN IF NOT EXISTS guest_name VARCHAR(255)`);
+    await pool.query(`ALTER TABLE IF EXISTS orders ADD COLUMN IF NOT EXISTS guest_email VARCHAR(255)`);
+    await pool.query(`ALTER TABLE IF EXISTS orders ADD COLUMN IF NOT EXISTS is_guest_order BOOLEAN DEFAULT FALSE`);
+    await pool.query(`ALTER TABLE IF EXISTS orders ADD COLUMN IF NOT EXISTS restaurant_instructions JSONB`);
+    await pool.query(`ALTER TABLE IF EXISTS orders ADD COLUMN IF NOT EXISTS delivery_phone VARCHAR(20)`);
+    await pool.query(`ALTER TABLE IF EXISTS order_items ADD COLUMN IF NOT EXISTS restaurant_id INTEGER REFERENCES restaurants(id)`);
+    await pool.query(`ALTER TABLE IF EXISTS restaurants ADD COLUMN IF NOT EXISTS city VARCHAR(100)`);
+    await pool.query(`ALTER TABLE IF EXISTS restaurants ADD COLUMN IF NOT EXISTS state VARCHAR(100)`);
+    await pool.query(`ALTER TABLE IF EXISTS restaurants ADD COLUMN IF NOT EXISTS zip_code VARCHAR(20)`);
+    await pool.query(`ALTER TABLE IF EXISTS restaurant_order_status ADD COLUMN IF NOT EXISTS removed_at TIMESTAMP`);
+    await pool.query(`ALTER TABLE IF EXISTS restaurant_order_status ADD COLUMN IF NOT EXISTS preparing_at TIMESTAMP`);
+    await pool.query(`ALTER TABLE IF EXISTS restaurant_order_status ADD COLUMN IF NOT EXISTS ready_at TIMESTAMP`);
+    await pool.query(`ALTER TABLE IF EXISTS drivers ADD COLUMN IF NOT EXISTS stripe_account_id VARCHAR(255)`);
+    await pool.query(`ALTER TABLE IF EXISTS drivers ADD COLUMN IF NOT EXISTS stripe_onboarding_complete BOOLEAN DEFAULT FALSE`);
+    await pool.query(`ALTER TABLE IF EXISTS drivers ADD COLUMN IF NOT EXISTS stripe_charges_enabled BOOLEAN DEFAULT FALSE`);
+    await pool.query(`ALTER TABLE IF EXISTS drivers ADD COLUMN IF NOT EXISTS stripe_payouts_enabled BOOLEAN DEFAULT FALSE`);
+    await pool.query(`ALTER TABLE IF EXISTS driver_deliveries ADD COLUMN IF NOT EXISTS driver_paid BOOLEAN DEFAULT FALSE`);
+    await pool.query(`ALTER TABLE IF EXISTS driver_deliveries ADD COLUMN IF NOT EXISTS driver_payout_date TIMESTAMP`);
+    await pool.query(`ALTER TABLE IF EXISTS driver_deliveries ADD COLUMN IF NOT EXISTS stripe_transfer_id VARCHAR(255)`);
+    // Normalize any existing driver emails to lowercase
+    await pool.query(`UPDATE drivers SET email = LOWER(email) WHERE email != LOWER(email)`);
     console.log('📊 Database schema ready');
     
     // Schedule recurring jobs
     if (process.env.NODE_ENV !== 'test') {
       scheduleRecurringJobs();
+
+      // Retry pending driver payouts every 6 hours
+      const runDriverPayouts = async () => {
+        try {
+          const result = await processPendingDriverPayouts();
+          if (result.total > 0) {
+            console.log(`💰 Driver payout batch: ${result.succeeded}/${result.total} paid ($${result.total_amount.toFixed(2)})`);
+          }
+        } catch (err) {
+          console.error('❌ Driver payout batch error:', err.message);
+        }
+      };
+
+      // First run 5 minutes after startup to catch any payouts missed during downtime
+      setTimeout(runDriverPayouts, 5 * 60 * 1000);
+      // Then every 6 hours
+      setInterval(runDriverPayouts, 6 * 60 * 60 * 1000);
+
       console.log('⏰ Background jobs scheduled');
     }
     

@@ -14,7 +14,7 @@ const OwnerAccount = () => {
   // Form states
   const [email, setEmail] = useState('');
   const [restaurantName, setRestaurantName] = useState('');
-  const [restaurantAddress, setRestaurantAddress] = useState('');
+  const [restaurantAddress, setRestaurantAddress] = useState({ street: '', city: '', state: '', zip: '' });
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -59,7 +59,12 @@ const OwnerAccount = () => {
         const restaurantData = await res.json();
         setRestaurant(restaurantData);
         setRestaurantName(restaurantData.name || '');
-        setRestaurantAddress(restaurantData.address || '');
+        setRestaurantAddress({
+          street: restaurantData.address || '',
+          city: restaurantData.city || '',
+          state: restaurantData.state || '',
+          zip: restaurantData.zip_code || '',
+        });
       }
     } catch (error) {
       // Failed to fetch restaurant details
@@ -164,24 +169,27 @@ const OwnerAccount = () => {
 
   const handleRestaurantAddressUpdate = async (e) => {
     e.preventDefault();
+    const { street, city, state, zip } = restaurantAddress;
+    if (!street.trim() || !city.trim() || !state.trim() || !zip.trim()) {
+      setAddressMessage('Please fill in street, city, state, and zip code.');
+      return;
+    }
     setAddressLoading(true);
     setAddressMessage('');
 
     try {
       const res = await fetch(`${API_BASE_URL}/api/owners/restaurant/address`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ address: restaurantAddress })
+        body: JSON.stringify({ street: street.trim(), city: city.trim(), state: state.trim(), zip: zip.trim() })
       });
 
       const data = await res.json();
-      
+
       if (res.ok) {
         setAddressMessage('Restaurant address updated successfully!');
-        setRestaurant(prev => ({ ...prev, address: restaurantAddress }));
+        setRestaurant(prev => ({ ...prev, address: data.address, city: data.city, state: data.state, zip_code: data.zip_code }));
         setTimeout(() => setAddressMessage(''), 3000);
       } else {
         setAddressMessage(`Error: ${data.error}`);
@@ -394,17 +402,44 @@ const OwnerAccount = () => {
             {/* Restaurant Address */}
             <form onSubmit={handleRestaurantAddressUpdate} className="space-y-4">
               <div>
-                <label htmlFor="restaurant-address" className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="restaurant-street" className="block text-sm font-medium text-gray-700 mb-2">
                   Restaurant Address
                 </label>
-                <textarea
-                  id="restaurant-address"
-                  value={restaurantAddress}
-                  onChange={(e) => setRestaurantAddress(e.target.value)}
-                  rows={3}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                <input
+                  id="restaurant-street"
+                  type="text"
+                  value={restaurantAddress.street}
+                  onChange={(e) => setRestaurantAddress(prev => ({ ...prev, street: e.target.value }))}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 mb-2"
+                  placeholder="Street address"
                   required
                 />
+                <input
+                  type="text"
+                  value={restaurantAddress.city}
+                  onChange={(e) => setRestaurantAddress(prev => ({ ...prev, city: e.target.value }))}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 mb-2"
+                  placeholder="City"
+                  required
+                />
+                <div className="flex gap-3">
+                  <input
+                    type="text"
+                    value={restaurantAddress.state}
+                    onChange={(e) => setRestaurantAddress(prev => ({ ...prev, state: e.target.value }))}
+                    className="w-28 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="State"
+                    required
+                  />
+                  <input
+                    type="text"
+                    value={restaurantAddress.zip}
+                    onChange={(e) => setRestaurantAddress(prev => ({ ...prev, zip: e.target.value }))}
+                    className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Zip code"
+                    required
+                  />
+                </div>
               </div>
               <button
                 type="submit"
@@ -414,7 +449,7 @@ const OwnerAccount = () => {
                 {addressLoading ? 'Updating...' : 'Update Address'}
               </button>
               {addressMessage && (
-                <p className={`text-sm mt-2 ${addressMessage.includes('Error') ? 'text-red-600' : 'text-green-600'}`}>
+                <p className={`text-sm mt-2 ${addressMessage.includes('Error') || addressMessage.includes('Please') ? 'text-red-600' : 'text-green-600'}`}>
                   {addressMessage}
                 </p>
               )}

@@ -7,10 +7,10 @@ import { toast } from 'react-toastify';
 import { API_BASE_URL } from "../config/api";
 
 export default function Checkout({ user }) {
-  const { cart, clearCart } = useCart();
+  const { cart } = useCart();
   const navigate = useNavigate();
   const [orderDetails, setOrderDetails] = useState("");
-  const [currentAddress, setCurrentAddress] = useState("");
+  const [currentAddress, setCurrentAddress] = useState({ street: "", city: "", state: "", zip: "" });
   const [currentPhone, setCurrentPhone] = useState("");
   const [useRegisteredAddress, setUseRegisteredAddress] = useState(false);
   const [useRegisteredPhone, setUseRegisteredPhone] = useState(false);
@@ -58,9 +58,11 @@ export default function Checkout({ user }) {
     }
 
     // Validate address if not using registered address
-    if (!useRegisteredAddress && !currentAddress.trim()) {
-      toast.warning("Please enter your current address or use your registered address.");
-      return;
+    if (!useRegisteredAddress) {
+      if (!currentAddress.street.trim() || !currentAddress.city.trim() || !currentAddress.state.trim() || !currentAddress.zip.trim()) {
+        toast.warning("Please fill in your full delivery address (street, city, state, zip code).");
+        return;
+      }
     }
 
     // Validate phone if not using registered phone  
@@ -85,7 +87,7 @@ export default function Checkout({ user }) {
         body: JSON.stringify({
           items: cartWithRestaurantId,
           orderDetails: orderDetails.trim() || null,
-          deliveryAddress: useRegisteredAddress ? null : currentAddress.trim(),
+          deliveryAddress: useRegisteredAddress ? null : [currentAddress.street, currentAddress.city, currentAddress.state, currentAddress.zip].filter(Boolean).join(', '),
           deliveryPhone: useRegisteredPhone ? null : currentPhone.trim(),
         }),
       });
@@ -93,12 +95,11 @@ export default function Checkout({ user }) {
       const data = await res.json();
       if (res.ok) {
         if (data.demo_mode) {
-          // Store order info for demo checkout
+          // Store order info so OrderSuccess can display it
           localStorage.setItem('demo_order_total', total.toFixed(2));
           localStorage.setItem('demo_order_items', JSON.stringify(cart));
-          
-          // Demo mode - redirect to demo checkout (cart will be cleared after payment)
-          navigate(`/demo-order-checkout?order_id=${data.order_id}`);
+
+          navigate(`/order-success?demo=true&order_id=${data.order_id}`);
         } else {
           // Stripe test mode checkout - redirect to Stripe (cart will be cleared after payment)
           window.location.href = data.url;
@@ -107,7 +108,7 @@ export default function Checkout({ user }) {
         if (data.fallback_to_demo && data.missing_connect_accounts) {
           const restaurantNames = data.missing_connect_accounts.map(r => r.name).join(', ');
           toast.error(`Payment failed: ${restaurantNames} haven't connected their Stripe accounts yet. Using demo mode instead.`);
-          
+
           // Fall back to demo mode
           const demoRes = await fetch(`${API_BASE_URL}/api/orders`, {
             method: "POST",
@@ -119,16 +120,16 @@ export default function Checkout({ user }) {
               userId: user.id,
               items: cart,
               orderDetails: orderDetails.trim() || null,
-              deliveryAddress: useRegisteredAddress ? null : currentAddress.trim(),
+              deliveryAddress: useRegisteredAddress ? null : [currentAddress.street, currentAddress.city, currentAddress.state, currentAddress.zip].filter(Boolean).join(', '),
               deliveryPhone: useRegisteredPhone ? null : currentPhone.trim(),
             }),
           });
           
           if (demoRes.ok) {
-            await demoRes.json();
-            clearCart();
-            toast.success("Order placed successfully in demo mode!");
-            navigate("/");
+            const demoData = await demoRes.json();
+            localStorage.setItem('demo_order_total', total.toFixed(2));
+            localStorage.setItem('demo_order_items', JSON.stringify(cart));
+            navigate(`/order-success?demo=true&order_id=${demoData.orderId || demoData.order_id}`);
           }
         } else {
           toast.error(`Checkout failed: ${data.error}`);
@@ -193,18 +194,37 @@ export default function Checkout({ user }) {
                     {userInfo && userInfo.address ? "Use different address for this order" : "Enter delivery address"}
                   </span>
                   {!useRegisteredAddress && (
-                    <textarea
-                      value={currentAddress}
-                      onChange={(e) => setCurrentAddress(e.target.value)}
-                      className="w-full mt-2 p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
-                      rows="3"
-                      placeholder="Enter your current delivery address (street, city, state, zip code)"
-                      maxLength={300}
-                    />
-                  )}
-                  {!useRegisteredAddress && (
-                    <div className="text-right text-xs text-gray-500 mt-1">
-                      {currentAddress.length}/300 characters
+                    <div className="mt-2 space-y-2">
+                      <input
+                        type="text"
+                        value={currentAddress.street}
+                        onChange={(e) => setCurrentAddress(prev => ({ ...prev, street: e.target.value }))}
+                        className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        placeholder="Street address"
+                      />
+                      <input
+                        type="text"
+                        value={currentAddress.city}
+                        onChange={(e) => setCurrentAddress(prev => ({ ...prev, city: e.target.value }))}
+                        className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        placeholder="City"
+                      />
+                      <div className="flex gap-3">
+                        <input
+                          type="text"
+                          value={currentAddress.state}
+                          onChange={(e) => setCurrentAddress(prev => ({ ...prev, state: e.target.value }))}
+                          className="w-28 p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                          placeholder="State"
+                        />
+                        <input
+                          type="text"
+                          value={currentAddress.zip}
+                          onChange={(e) => setCurrentAddress(prev => ({ ...prev, zip: e.target.value }))}
+                          className="flex-1 p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                          placeholder="Zip code"
+                        />
+                      </div>
                     </div>
                   )}
                 </div>
