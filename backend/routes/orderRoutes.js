@@ -44,6 +44,40 @@ async function computeDeliveryFee(restaurantId, deliveryAddress) {
   }
 }
 
+/**
+ * Deterministic fingerprint of a cart so duplicate checkout requests
+ * can be identified without a cryptographic hash.
+ */
+function buildCartFingerprint(userIdentifier, items, deliveryAddress, deliveryType) {
+  const sortedItems = [...items]
+    .sort((a, b) => String(a.id || a.dishId).localeCompare(String(b.id || b.dishId)))
+    .map(i => `${i.id || i.dishId}:${i.quantity}`);
+  return JSON.stringify({ u: userIdentifier, i: sortedItems, a: deliveryAddress || '', t: deliveryType || '' });
+}
+
+/**
+ * Return the URL of an existing open Stripe session for the same user+cart
+ * if one was created within the last 30 minutes, otherwise return null.
+ * Errors are swallowed so a lookup failure never blocks checkout.
+ */
+async function findOpenStripeSession(userIdentifier, fingerprint) {
+  if (!stripe) return null;
+  try {
+    const result = await pool.query(
+      `SELECT session_id FROM temp_order_data
+       WHERE user_identifier = $1 AND cart_fingerprint = $2
+         AND created_at > NOW() - INTERVAL '30 minutes'
+       ORDER BY created_at DESC LIMIT 1`,
+      [userIdentifier, fingerprint]
+    );
+    if (!result.rows.length) return null;
+    const existing = await stripe.checkout.sessions.retrieve(result.rows[0].session_id);
+    return existing.status === 'open' ? existing.url : null;
+  } catch {
+    return null;
+  }
+}
+
 // Helper function to send order notifications in demo mode
 async function sendDemoOrderNotifications(orderId, items, customerInfo, isGuestOrder = false) {
   try {
@@ -680,6 +714,15 @@ router.post("/checkout-session", requireAuth, async (req, res) => {
       total
     };
 
+    // Idempotency: return existing open session if the same user+cart hits this
+    // endpoint again within 30 minutes (e.g. double-tap, network retry).
+    const authFingerprint = buildCartFingerprint(userId.toString(), items, finalDeliveryAddress, finalDeliveryType);
+    const existingUrl = await findOpenStripeSession(userId.toString(), authFingerprint);
+    if (existingUrl) {
+      console.log(`↩️  Returning existing Stripe session for user ${userId}`);
+      return res.json({ url: existingUrl });
+    }
+
     let session;
     try {
       session = await stripe.checkout.sessions.create({
@@ -763,9 +806,13 @@ router.post("/checkout-session", requireAuth, async (req, res) => {
         CREATE TABLE IF NOT EXISTS temp_order_data (
           session_id VARCHAR(255) PRIMARY KEY,
           order_data JSONB NOT NULL,
+          user_identifier VARCHAR(255),
+          cart_fingerprint TEXT,
           created_at TIMESTAMP DEFAULT NOW()
         )
       `);
+      await pool.query('ALTER TABLE temp_order_data ADD COLUMN IF NOT EXISTS user_identifier VARCHAR(255)');
+      await pool.query('ALTER TABLE temp_order_data ADD COLUMN IF NOT EXISTS cart_fingerprint TEXT');
 
       // ✅ FIXED: Include restaurantTotals in stored data for webhook
       const completeOrderData = {
@@ -774,8 +821,10 @@ router.post("/checkout-session", requireAuth, async (req, res) => {
       };
 
       await pool.query(
-        "INSERT INTO temp_order_data (session_id, order_data, created_at) VALUES ($1, $2, NOW()) ON CONFLICT (session_id) DO UPDATE SET order_data = $2",
-        [session.id, JSON.stringify(completeOrderData)]
+        `INSERT INTO temp_order_data (session_id, order_data, user_identifier, cart_fingerprint, created_at)
+         VALUES ($1, $2, $3, $4, NOW())
+         ON CONFLICT (session_id) DO UPDATE SET order_data = $2`,
+        [session.id, JSON.stringify(completeOrderData), userId.toString(), authFingerprint]
       );
 
       console.log(`✅ Stored complete order data for session: ${session.id}`);
@@ -1256,6 +1305,14 @@ router.post("/guest-checkout-session", async (req, res) => {
       isGuestOrder: true
     };
 
+    // Idempotency: return existing open session for the same guest+cart
+    const guestFingerprint = buildCartFingerprint(guestInfo.email, items, guestInfo.address, deliveryType);
+    const existingGuestUrl = await findOpenStripeSession(guestInfo.email, guestFingerprint);
+    if (existingGuestUrl) {
+      console.log(`↩️  Returning existing Stripe session for guest ${guestInfo.email}`);
+      return res.json({ url: existingGuestUrl });
+    }
+
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       mode: 'payment',
@@ -1275,13 +1332,19 @@ router.post("/guest-checkout-session", async (req, res) => {
         CREATE TABLE IF NOT EXISTS temp_order_data (
           session_id VARCHAR(255) PRIMARY KEY,
           order_data JSONB NOT NULL,
+          user_identifier VARCHAR(255),
+          cart_fingerprint TEXT,
           created_at TIMESTAMP DEFAULT NOW()
         )
       `);
-      
+      await pool.query('ALTER TABLE temp_order_data ADD COLUMN IF NOT EXISTS user_identifier VARCHAR(255)');
+      await pool.query('ALTER TABLE temp_order_data ADD COLUMN IF NOT EXISTS cart_fingerprint TEXT');
+
       await pool.query(
-        "INSERT INTO temp_order_data (session_id, order_data, created_at) VALUES ($1, $2, NOW()) ON CONFLICT (session_id) DO UPDATE SET order_data = $2",
-        [session.id, JSON.stringify(orderData)]
+        `INSERT INTO temp_order_data (session_id, order_data, user_identifier, cart_fingerprint, created_at)
+         VALUES ($1, $2, $3, $4, NOW())
+         ON CONFLICT (session_id) DO UPDATE SET order_data = $2`,
+        [session.id, JSON.stringify(orderData), guestInfo.email, guestFingerprint]
       );
     } catch (tempStorageError) {
       console.warn("Failed to store temporary order data:", tempStorageError.message);
