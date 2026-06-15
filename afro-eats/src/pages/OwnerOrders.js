@@ -1,6 +1,7 @@
-import { useEffect, useState, useContext } from "react";
+import { useEffect, useState, useContext, useCallback } from "react";
 import PropTypes from 'prop-types';
 import { OwnerAuthContext } from "../context/OwnerAuthContext";
+import { ChatContext } from "../context/ChatContext";
 import { Navigate, Link } from "react-router-dom";
 import { toast } from 'react-toastify';
 import { API_BASE_URL } from "../config/api";
@@ -69,6 +70,7 @@ StatusProgress.propTypes = { status: PropTypes.string.isRequired };
 
 function OwnerOrders() {
   const { owner, loading: authLoading } = useContext(OwnerAuthContext);
+  const { latestOrderEvent } = useContext(ChatContext);
   const [orders, setOrders] = useState([]);
   const [restaurant, setRestaurant] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -78,34 +80,54 @@ function OwnerOrders() {
   const [confirmAction, setConfirmAction] = useState(null); // { orderId, nextStatus, label }
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(null);
 
-  useEffect(() => {
-    const fetchAll = async () => {
-      try {
-        const [ordersRes, restaurantRes] = await Promise.all([
-          fetch(`${API_BASE_URL}/api/owners/orders`, { credentials: 'include' }),
-          fetch(`${API_BASE_URL}/api/owners/restaurant`, { credentials: 'include' }),
-        ]);
-        if (ordersRes.ok) {
-          const data = await ordersRes.json();
-          setOrders(data.orders || []);
-        } else {
-          // eslint-disable-next-line no-console
-          console.error('Orders fetch failed:', ordersRes.status);
-          toast.error('Failed to load orders');
-        }
-        if (restaurantRes.ok) {
-          setRestaurant(await restaurantRes.json());
-        }
-      } catch (err) {
+  const fetchAll = useCallback(async () => {
+    try {
+      const [ordersRes, restaurantRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/api/owners/orders`, { credentials: 'include' }),
+        fetch(`${API_BASE_URL}/api/owners/restaurant`, { credentials: 'include' }),
+      ]);
+      if (ordersRes.ok) {
+        const data = await ordersRes.json();
+        setOrders(data.orders || []);
+      } else {
         // eslint-disable-next-line no-console
-        console.error('Orders fetch error:', err);
+        console.error('Orders fetch failed:', ordersRes.status);
         toast.error('Failed to load orders');
-      } finally {
-        setLoading(false);
       }
-    };
-    fetchAll();
+      if (restaurantRes.ok) {
+        setRestaurant(await restaurantRes.json());
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('Orders fetch error:', err);
+      toast.error('Failed to load orders');
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  // Silent refresh used by socket — no loading spinner
+  const refreshOrders = useCallback(async () => {
+    try {
+      const ordersRes = await fetch(`${API_BASE_URL}/api/owners/orders`, { credentials: 'include' });
+      if (ordersRes.ok) {
+        const data = await ordersRes.json();
+        setOrders(data.orders || []);
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('Orders silent refresh error:', err);
+    }
+  }, []);
+
+  useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  // Auto-refresh orders list when a new order arrives via socket
+  useEffect(() => {
+    if (latestOrderEvent?.type === 'new_order') {
+      refreshOrders();
+    }
+  }, [latestOrderEvent, refreshOrders]);
 
   const advanceStatus = async (orderId, nextStatus) => {
     setProcessingId(orderId);

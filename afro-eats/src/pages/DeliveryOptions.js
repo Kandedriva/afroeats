@@ -13,7 +13,7 @@ export default function DeliveryOptions() {
   const { cart, total } = useCart();
   const [deliveryType, setDeliveryType] = useState(""); // "delivery" or "pickup"
   const [useRegisteredAddress, setUseRegisteredAddress] = useState(true);
-  const [customAddress, setCustomAddress] = useState("");
+  const [customAddress, setCustomAddress] = useState({ street: "", city: "", state: "", zip: "" });
   const [customPhone, setCustomPhone] = useState("");
   const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -48,7 +48,6 @@ export default function DeliveryOptions() {
       if (res.ok) {
         const data = await res.json();
         setUserProfile(data.user);
-        setCustomAddress(data.user.address || "");
         setCustomPhone(data.user.phone || "");
       }
     } catch (err) {
@@ -119,7 +118,8 @@ export default function DeliveryOptions() {
   // Calculate delivery fee when delivery type or address changes
   useEffect(() => {
     if (deliveryType === "delivery" && cart.length > 0) {
-      const address = useRegisteredAddress ? userProfile?.address : customAddress;
+      const composedCustom = [customAddress.street, customAddress.city, customAddress.state, customAddress.zip].filter(Boolean).join(', ');
+      const address = useRegisteredAddress ? userProfile?.address : composedCustom;
       if (address && address.trim()) {
         calculateDeliveryFee(address);
       }
@@ -127,7 +127,7 @@ export default function DeliveryOptions() {
       setDeliveryFeeData(null);
       setTooFarError(null);
     }
-  }, [deliveryType, useRegisteredAddress, customAddress, userProfile, cart, calculateDeliveryFee]);
+  }, [deliveryType, useRegisteredAddress, customAddress.street, customAddress.city, customAddress.state, customAddress.zip, userProfile, cart, calculateDeliveryFee]);
 
   const handleContinueToPayment = async () => {
     if (!deliveryType) {
@@ -136,8 +136,14 @@ export default function DeliveryOptions() {
     }
 
     if (deliveryType === "delivery") {
-      const finalAddress = useRegisteredAddress ? userProfile?.address : customAddress;
+      const composedCustomAddress = [customAddress.street, customAddress.city, customAddress.state, customAddress.zip].filter(Boolean).join(', ');
+      const finalAddress = useRegisteredAddress ? userProfile?.address : composedCustomAddress;
       const finalPhone = useRegisteredAddress ? userProfile?.phone : customPhone;
+
+      if (!useRegisteredAddress && (!customAddress.street.trim() || !customAddress.city.trim() || !customAddress.state.trim() || !customAddress.zip.trim())) {
+        toast.error("Please fill in your complete delivery address (street, city, state, zip).");
+        return;
+      }
 
       if (!finalAddress || !finalPhone) {
         toast.error("Please provide delivery address and phone number");
@@ -145,12 +151,14 @@ export default function DeliveryOptions() {
       }
     }
 
+    const composedCustomAddress = [customAddress.street, customAddress.city, customAddress.state, customAddress.zip].filter(Boolean).join(', ');
+
     try {
       // Prepare delivery preferences
       const deliveryPreferences = {
         type: deliveryType,
         address: deliveryType === "delivery" ?
-          (useRegisteredAddress ? userProfile?.address : customAddress) : null,
+          (useRegisteredAddress ? userProfile?.address : composedCustomAddress) : null,
         phone: deliveryType === "delivery" ?
           (useRegisteredAddress ? userProfile?.phone : customPhone) : null,
         useRegisteredAddress: deliveryType === "delivery" ? useRegisteredAddress : false,
@@ -428,18 +436,42 @@ export default function DeliveryOptions() {
                   {!useRegisteredAddress && (
                     <div className="mt-3 space-y-3">
                       <div>
-                        <label htmlFor="delivery-address" className="block text-sm font-medium text-gray-700 mb-1">
+                        <label htmlFor="delivery-street" className="block text-sm font-medium text-gray-700 mb-1">
                           Delivery Address
                         </label>
-                        <textarea
-                          id="delivery-address"
-                          value={customAddress}
-                          onChange={(e) => setCustomAddress(e.target.value)}
-                          className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                          rows="2"
-                          placeholder="Enter complete delivery address..."
-                          required
-                        />
+                        <div className="space-y-2">
+                          <input
+                            id="delivery-street"
+                            type="text"
+                            value={customAddress.street}
+                            onChange={(e) => setCustomAddress(prev => ({ ...prev, street: e.target.value }))}
+                            className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="Street address"
+                          />
+                          <input
+                            type="text"
+                            value={customAddress.city}
+                            onChange={(e) => setCustomAddress(prev => ({ ...prev, city: e.target.value }))}
+                            className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="City"
+                          />
+                          <div className="flex gap-3">
+                            <input
+                              type="text"
+                              value={customAddress.state}
+                              onChange={(e) => setCustomAddress(prev => ({ ...prev, state: e.target.value }))}
+                              className="w-28 p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              placeholder="State"
+                            />
+                            <input
+                              type="text"
+                              value={customAddress.zip}
+                              onChange={(e) => setCustomAddress(prev => ({ ...prev, zip: e.target.value }))}
+                              className="flex-1 p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              placeholder="Zip code"
+                            />
+                          </div>
+                        </div>
                       </div>
                       
                       <div>

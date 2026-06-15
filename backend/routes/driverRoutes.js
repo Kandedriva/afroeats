@@ -6,6 +6,7 @@ import {
   sendRestaurantOrderCompletedEmail
 } from "../services/emailService.js";
 import { createDriverPayout } from "../services/stripeDriverService.js";
+import socketService from "../services/socketService.js";
 
 const router = express.Router();
 
@@ -303,6 +304,10 @@ router.post("/update-delivery-status", requireApprovedDriver, async (req, res) =
 
     const orderId = deliveryCheck.rows[0].order_id;
 
+    // Pre-fetch user_id for socket notification (null for guest orders)
+    const orderUserResult = await client.query('SELECT user_id FROM orders WHERE id = $1', [orderId]);
+    const socketCustomerId = orderUserResult.rows[0]?.user_id;
+
     // Update delivery status with timestamp
     const timestampField = status === 'picked_up' ? 'picked_up_at' :
                           status === 'in_transit' ? 'in_transit_at' :
@@ -417,7 +422,7 @@ router.post("/update-delivery-status", requireApprovedDriver, async (req, res) =
 
         // Get restaurant owners' emails
         const restaurantOwnersResult = await client.query(
-          `SELECT DISTINCT ro.email, ro.name, r.name as restaurant_name, o.total
+          `SELECT DISTINCT ro.id as owner_id, ro.email, ro.name, r.name as restaurant_name, o.total
            FROM orders o
            JOIN order_items oi ON o.id = oi.order_id
            JOIN restaurants r ON oi.restaurant_id = r.id
@@ -431,6 +436,17 @@ router.post("/update-delivery-status", requireApprovedDriver, async (req, res) =
             orderId,
             total: parseFloat(owner.total)
           }).catch(err => console.error(`Failed to send completion email to restaurant ${owner.restaurant_name}:`, err));
+        }
+
+        for (const owner of restaurantOwnersResult.rows) {
+          try {
+            socketService.emitToOwner(owner.owner_id, 'order_delivered', {
+              orderId: parseInt(orderId),
+              restaurantName: owner.restaurant_name,
+            });
+          } catch (socketError) {
+            console.error('Failed to emit order_delivered to owner:', socketError.message);
+          }
         }
       } catch (emailError) {
         console.error('Error sending delivery emails:', emailError);
@@ -459,6 +475,19 @@ router.post("/update-delivery-status", requireApprovedDriver, async (req, res) =
           notification.message
         ]
       );
+
+      if (socketCustomerId) {
+        try {
+          socketService.emitToUser(socketCustomerId, 'order_status_update', {
+            orderId: parseInt(orderId),
+            status,
+            title: notification.title,
+            message: notification.message,
+          });
+        } catch (socketError) {
+          console.error('Failed to emit order_status_update to customer:', socketError.message);
+        }
+      }
     }
 
     await client.query('COMMIT');

@@ -4,6 +4,7 @@ import { AuthContext } from './AuthContext';
 import { OwnerAuthContext } from './OwnerAuthContext';
 import { API_BASE_URL } from '../config/api';
 import { io } from 'socket.io-client';
+import { toast } from 'react-toastify';
 
 export const ChatContext = createContext();
 
@@ -18,6 +19,11 @@ export function ChatProvider({ children }) {
   const [messages, setMessages] = useState([]);
   const [isConnected, setIsConnected] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
+
+  // Order notification state (for real-time order events)
+  const [orderNotifications, setOrderNotifications] = useState([]);
+  const [unreadOrderCount, setUnreadOrderCount] = useState(0);
+  const [latestOrderEvent, setLatestOrderEvent] = useState(null);
 
   // Fetch conversations
   const fetchConversations = useCallback(async () => {
@@ -142,6 +148,33 @@ export function ChatProvider({ children }) {
 
     newSocket.on('error', () => {
       // Socket error occurred
+    });
+
+    // Order status update — sent to authenticated customers when their order progresses
+    newSocket.on('order_status_update', (data) => {
+      const event = { ...data, type: 'order_status_update', timestamp: Date.now() };
+      setLatestOrderEvent(event);
+      setOrderNotifications(prev => [{ ...event, read: false }, ...prev]);
+      setUnreadOrderCount(prev => prev + 1);
+      toast.info(data.title || 'Order Update', { position: 'top-right', autoClose: 5000 });
+    });
+
+    // New order — sent to restaurant owner when a customer places an order
+    newSocket.on('new_order', (data) => {
+      const event = { ...data, type: 'new_order', timestamp: Date.now() };
+      setLatestOrderEvent(event);
+      setOrderNotifications(prev => [{ ...event, read: false }, ...prev]);
+      setUnreadOrderCount(prev => prev + 1);
+      toast.success(`New order #${data.orderId} — $${data.total}`, { position: 'top-right', autoClose: 8000 });
+    });
+
+    // Order delivered — sent to restaurant owner when driver marks delivery complete
+    newSocket.on('order_delivered', (data) => {
+      const event = { ...data, type: 'order_delivered', timestamp: Date.now() };
+      setLatestOrderEvent(event);
+      setOrderNotifications(prev => [{ ...event, read: false }, ...prev]);
+      setUnreadOrderCount(prev => prev + 1);
+      toast.success(`Order #${data.orderId} delivered from ${data.restaurantName}!`, { position: 'top-right', autoClose: 5000 });
     });
 
     setSocket(newSocket);
@@ -284,6 +317,10 @@ export function ChatProvider({ children }) {
     }
   }, [user, owner, fetchConversations, fetchUnreadCount]);
 
+  const clearOrderNotifications = useCallback(() => {
+    setUnreadOrderCount(0);
+  }, []);
+
   const value = {
     socket,
     isConnected,
@@ -302,6 +339,10 @@ export function ChatProvider({ children }) {
     closeConversation,
     sendTyping,
     sendStopTyping,
+    orderNotifications,
+    unreadOrderCount,
+    latestOrderEvent,
+    clearOrderNotifications,
   };
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
