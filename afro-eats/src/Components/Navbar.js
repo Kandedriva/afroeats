@@ -1,39 +1,28 @@
 import { Link } from "react-router-dom";
-import { useContext, useState, useEffect } from "react";
+import { useContext, useState, useEffect, useRef, useCallback } from "react";
 import { AuthContext } from "../context/AuthContext";
 import { CartContext } from "../context/CartContext";
 import { useGroceryCart } from "../context/GroceryCartContext";
+import { ChatContext } from "../context/ChatContext";
 import { API_BASE_URL } from "../config/api";
 
 function Navbar() {
   const { user, logout } = useContext(AuthContext);
   const { cart } = useContext(CartContext);
   const { getGroceryItemCount } = useGroceryCart();
+  const { latestOrderEvent } = useContext(ChatContext);
   const [notificationCount, setNotificationCount] = useState(0);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const audioRef = useRef(null);
 
   const cartItemCount = cart.reduce((total, item) => total + item.quantity, 0);
   const groceryItemCount = getGroceryItemCount();
 
-  // Fetch notification count for logged-in users
-  useEffect(() => {
-    if (user) {
-      fetchNotificationCount();
-      // Refresh notification count every 30 seconds
-      const interval = setInterval(fetchNotificationCount, 30000);
-      return () => clearInterval(interval);
-    } else {
-      setNotificationCount(0);
-      return undefined;
-    }
-  }, [user]);
-
-  const fetchNotificationCount = async () => {
+  const fetchNotificationCount = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE_URL}/api/auth/notifications`, {
         credentials: "include",
       });
-
       if (res.ok) {
         const data = await res.json();
         setNotificationCount(data.unreadCount || 0);
@@ -41,7 +30,59 @@ function Navbar() {
     } catch (err) {
       // Silent fail for notification count fetch
     }
-  };
+  }, []);
+
+  // Poll for updates every 30 seconds
+  useEffect(() => {
+    if (user) {
+      fetchNotificationCount();
+      const interval = setInterval(fetchNotificationCount, 30000);
+      return () => clearInterval(interval);
+    } else {
+      setNotificationCount(0);
+      return undefined;
+    }
+  }, [user, fetchNotificationCount]);
+
+  // Initialise notification sound
+  useEffect(() => {
+    audioRef.current = new Audio('/notification.mp3');
+    audioRef.current.volume = 0.7;
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, []);
+
+  // React to real-time socket events — play sound once and refresh badge instantly
+  useEffect(() => {
+    if (!latestOrderEvent) { return; }
+    if (latestOrderEvent.type === 'order_status_update') {
+      fetchNotificationCount();
+      if (audioRef.current) {
+        audioRef.current.currentTime = 0;
+        audioRef.current.play().catch(() => {});
+      }
+    }
+  }, [latestOrderEvent, fetchNotificationCount]);
+
+  const bellSVG = (
+    <svg
+      className={`w-5 h-5 transition-colors ${notificationCount > 0 ? 'animate-bounce text-green-600' : 'text-gray-500'}`}
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
+      />
+    </svg>
+  );
 
   return (
     <nav className="bg-white shadow-md sticky top-0 z-50">
@@ -94,8 +135,9 @@ function Navbar() {
                 <Link to="/my-orders" className="text-gray-700 hover:text-green-600 transition-colors duration-200">
                   Orders
                 </Link>
-                <Link to="/my-notifications" className="text-gray-700 hover:text-green-600 transition-colors duration-200 relative">
-                  Notifications
+                <Link to="/my-notifications" className="text-gray-700 hover:text-green-600 transition-colors duration-200 relative flex items-center gap-1">
+                  {bellSVG}
+                  <span>Notifications</span>
                   {notificationCount > 0 && (
                     <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
                       {notificationCount > 9 ? '9+' : notificationCount}
@@ -141,6 +183,21 @@ function Navbar() {
                 </span>
               )}
             </Link>
+
+            {/* Mobile Bell Icon — only for logged-in users */}
+            {user && (
+              <Link
+                to="/my-notifications"
+                className="text-gray-700 hover:text-green-600 transition-colors duration-200 relative p-2"
+              >
+                {bellSVG}
+                {notificationCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold text-[10px]">
+                    {notificationCount > 9 ? '9+' : notificationCount}
+                  </span>
+                )}
+              </Link>
+            )}
 
             {/* Hamburger menu button */}
             <button
@@ -197,12 +254,13 @@ function Navbar() {
                   </Link>
                   <Link
                     to="/my-notifications"
-                    className="block px-3 py-2 text-gray-700 hover:text-green-600 hover:bg-gray-50 rounded-md transition-colors duration-200 relative"
+                    className="flex items-center gap-2 px-3 py-2 text-gray-700 hover:text-green-600 hover:bg-gray-50 rounded-md transition-colors duration-200"
                     onClick={() => setIsMenuOpen(false)}
                   >
-                    🔔 Notifications
+                    {bellSVG}
+                    <span>Notifications</span>
                     {notificationCount > 0 && (
-                      <span className="ml-2 bg-red-500 text-white text-xs rounded-full w-5 h-5 inline-flex items-center justify-center">
+                      <span className="ml-auto bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
                         {notificationCount > 9 ? '9+' : notificationCount}
                       </span>
                     )}

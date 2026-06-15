@@ -1,15 +1,20 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useContext, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useOwnerAuth } from "../context/OwnerAuthContext";
+import { ChatContext } from "../context/ChatContext";
 import { API_BASE_URL } from "../config/api";
 import { getImageUrl, handleImageError } from "../utils/imageUtils";
 
 const OwnerNavbar = () => {
   const { owner, logout } = useOwnerAuth();
+  const { latestOrderEvent } = useContext(ChatContext);
   const [restaurant, setRestaurant] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [activeOrderCount, setActiveOrderCount] = useState(0);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const audioRef = useRef(null);
+  const soundIntervalRef = useRef(null);
+  const [hasNewAlert, setHasNewAlert] = useState(false);
   const navigate = useNavigate();
 
   const fetchRestaurant = useCallback(async () => {
@@ -91,6 +96,61 @@ const OwnerNavbar = () => {
     };
   }, [owner, fetchRestaurant, fetchNotificationCount, fetchActiveOrderCount]);
 
+  const stopRepeatingSound = useCallback(() => {
+    if (soundIntervalRef.current) {
+      clearInterval(soundIntervalRef.current);
+      soundIntervalRef.current = null;
+    }
+    setHasNewAlert(false);
+  }, []);
+
+  const startRepeatingSound = useCallback(() => {
+    // Clear any existing loop first
+    if (soundIntervalRef.current) {
+      clearInterval(soundIntervalRef.current);
+    }
+    // Play immediately
+    if (audioRef.current) {
+      audioRef.current.currentTime = 0;
+      audioRef.current.play().catch(() => {});
+    }
+    setHasNewAlert(true);
+    // Then repeat every 8 seconds until owner acknowledges
+    soundIntervalRef.current = setInterval(() => {
+      if (audioRef.current) {
+        audioRef.current.currentTime = 0;
+        audioRef.current.play().catch(() => {});
+      }
+    }, 8000);
+  }, []);
+
+  // Initialise notification sound
+  useEffect(() => {
+    audioRef.current = new Audio('/notification.mp3');
+    audioRef.current.volume = 0.7;
+    return () => {
+      if (soundIntervalRef.current) {
+        clearInterval(soundIntervalRef.current);
+      }
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, []);
+
+  // React to real-time socket events — update badge instantly, start repeating sound on new order
+  useEffect(() => {
+    if (!latestOrderEvent) { return; }
+    if (latestOrderEvent.type === 'new_order' || latestOrderEvent.type === 'order_delivered') {
+      fetchNotificationCount();
+      fetchActiveOrderCount();
+    }
+    if (latestOrderEvent.type === 'new_order') {
+      startRepeatingSound();
+    }
+  }, [latestOrderEvent, fetchNotificationCount, fetchActiveOrderCount, startRepeatingSound]);
+
   const handleLogout = async () => {
     try {
       await logout();
@@ -99,6 +159,23 @@ const OwnerNavbar = () => {
       // console.error("Logout error:", err.message);
     }
   };
+
+  const bellActive = unreadCount > 0 || hasNewAlert;
+  const bellSVG = (
+    <svg
+      className={`w-5 h-5 transition-colors ${bellActive ? 'animate-bounce text-yellow-300' : 'text-white'}`}
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
+      />
+    </svg>
+  );
 
   return (
     <nav className="bg-gray-800 text-white">
@@ -135,8 +212,8 @@ const OwnerNavbar = () => {
                 </span>
               )}
             </Link>
-            <Link to="/owner/notifications" className="hover:underline bg-orange-600 px-3 py-2 rounded relative transition-colors">
-              🔔 Notifications
+            <Link to="/owner/notifications" onClick={stopRepeatingSound} className="hover:underline bg-orange-600 px-3 py-2 rounded relative transition-colors flex items-center gap-2">
+              {bellSVG} Notifications
               {unreadCount > 0 && (
                 <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
                   {unreadCount > 9 ? '9+' : unreadCount}
@@ -173,8 +250,8 @@ const OwnerNavbar = () => {
                 </span>
               )}
             </Link>
-            <Link to="/owner/notifications" className="bg-orange-600 p-2 rounded relative">
-              🔔
+            <Link to="/owner/notifications" onClick={stopRepeatingSound} className="bg-orange-600 p-2 rounded relative flex items-center justify-center">
+              {bellSVG}
               {unreadCount > 0 && (
                 <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold text-[10px]">
                   {unreadCount > 9 ? '9+' : unreadCount}
@@ -221,12 +298,12 @@ const OwnerNavbar = () => {
                 </span>
               )}
             </Link>
-            <Link 
-              to="/owner/notifications" 
+            <Link
+              to="/owner/notifications"
               className="flex items-center justify-between bg-orange-600 hover:bg-orange-700 px-4 py-3 rounded transition-colors"
-              onClick={() => setIsMobileMenuOpen(false)}
+              onClick={() => { stopRepeatingSound(); setIsMobileMenuOpen(false); }}
             >
-              <span>🔔 Notifications</span>
+              <span className="flex items-center gap-2">{bellSVG} Notifications</span>
               {unreadCount > 0 && (
                 <span className="bg-red-500 text-white text-sm rounded-full px-2 py-1 font-bold">
                   {unreadCount}

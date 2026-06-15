@@ -262,9 +262,22 @@ async function sendDemoOrderNotifications(orderId, items, customerInfo, isGuestO
         JSON.stringify(notificationData.metadata)
       ]);
       
+      // Emit real-time socket notification to restaurant owner
+      try {
+        socketService.emitToOwner(restaurant.owner_id, 'new_order', {
+          orderId,
+          restaurantName: restaurant.name,
+          total: total.toFixed(2),
+          customerName: isGuestOrder ? customerInfo.name : (customerInfo.name || 'Customer'),
+          isGuestOrder,
+        });
+      } catch (socketError) {
+        console.error('Failed to emit new_order to owner:', socketError.message);
+      }
+
       // Also send via the queue system for email notifications
-      await jobs.sendNotification('new_order', 
-        { type: 'owner', id: restaurant.owner_id }, 
+      await jobs.sendNotification('new_order',
+        { type: 'owner', id: restaurant.owner_id },
         notificationData
       );
       

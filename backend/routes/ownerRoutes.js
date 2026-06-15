@@ -23,6 +23,7 @@ import {
 } from "../services/emailService.js";
 import { validatePassword } from "../middleware/security.js";
 import crypto from "crypto";
+import socketService from "../services/socketService.js";
 
 function ownerSafeCompare(a, b) {
   const bufA = Buffer.from(String(a));
@@ -1065,6 +1066,18 @@ router.patch("/orders/:id/status", requireOwnerAuth, async (req, res) => {
       } catch (notifError) {
         console.error('Failed to create customer notification:', notifError.message);
       }
+
+      try {
+        socketService.emitToUser(userId, 'order_status_update', {
+          orderId: parseInt(orderId),
+          status,
+          title,
+          message,
+          restaurantName,
+        });
+      } catch (socketError) {
+        console.error('Failed to emit order_status_update:', socketError.message);
+      }
     }
 
     if (customerPhone) {
@@ -1203,6 +1216,18 @@ router.post("/orders/:id/complete", requireOwnerAuth, async (req, res) => {
 
         console.log(`✅ Customer notification created: Order ${orderId} ready at ${restaurantName}`);
 
+        try {
+          socketService.emitToUser(userId, 'order_status_update', {
+            orderId: parseInt(orderId),
+            status: 'ready',
+            title: 'Order Ready! 🍽️',
+            message: `Your order #${orderId} from ${restaurantName} is ready!`,
+            restaurantName,
+          });
+        } catch (socketError) {
+          console.error('Failed to emit order_status_update (ready):', socketError.message);
+        }
+
         // ✅ Send SMS to customer about order ready
         try {
           const notificationService = require('../services/NotificationService.js');
@@ -1283,6 +1308,17 @@ router.post("/orders/:id/complete", requireOwnerAuth, async (req, res) => {
           );
 
           console.log(`✅ Customer notification created: Order ${orderId} fully completed`);
+
+          try {
+            socketService.emitToUser(userId, 'order_status_update', {
+              orderId: parseInt(orderId),
+              status: 'completed',
+              title: 'Order Complete! ✅',
+              message: `Your entire order #${orderId} is now complete. Enjoy your meal!`,
+            });
+          } catch (socketError) {
+            console.error('Failed to emit order_status_update (completed):', socketError.message);
+          }
 
           // ✅ Send SMS to customer about order completion
           try {
