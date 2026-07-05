@@ -75,12 +75,18 @@ const HomePage = () => {
               >
                 🛒 Shop Marketplace
               </Link>
-              <a
-                href="#restaurants"
+              <Link
+                to="/restaurants"
                 className="inline-block px-8 py-4 bg-green-800 text-white rounded-lg hover:bg-green-900 transition-colors font-semibold text-lg border-2 border-white"
               >
                 🍽️ Order Food
-              </a>
+              </Link>
+              <Link
+                to="/grocery-stores"
+                className="inline-block px-8 py-4 bg-purple-700 text-white rounded-lg hover:bg-purple-800 transition-colors font-semibold text-lg border-2 border-purple-400"
+              >
+                🏪 Grocery Stores
+              </Link>
               <Link
                 to="/driver/register"
                 className="inline-block px-8 py-4 bg-yellow-500 text-gray-900 rounded-lg hover:bg-yellow-400 transition-colors font-semibold text-lg shadow-lg border-2 border-yellow-300"

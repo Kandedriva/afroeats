@@ -4,6 +4,7 @@ import Navbar from "./Components/Navbar";
 import OwnerNavbar from "./Components/OwnerNavbar";
 import GroceryOwnerNavbar from "./Components/GroceryOwnerNavbar";
 import RestaurantsPage from "./pages/RestaurantsPage";
+import GroceryStoresPage from "./pages/GroceryStoresPage";
 import RestaurantDetails from "./pages/RestaurantDetails";
 import Register from "./pages/Register";
 import VerifyEmail from "./pages/VerifyEmail";
@@ -112,6 +113,7 @@ function AppContent() {
       <Routes>
         <Route path="/" element={<MarketplaceHome />} />
         <Route path="/restaurants" element={<RestaurantsPage />} />
+        <Route path="/grocery-stores" element={<GroceryStoresPage />} />
         <Route path="/marketplace" element={<MarketplaceHome />} />
         <Route path="/marketplace/product/:productSlug" element={<ProductDetails />} />
         <Route path="/grocery-cart" element={<GroceryCart />} />
