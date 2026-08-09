@@ -14,6 +14,7 @@ const ProductDetails = () => {
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
   const [quantity, setQuantity] = useState(1);
+  const [inputValue, setInputValue] = useState("1");
   const [relatedProducts, setRelatedProducts] = useState([]);
 
   const loadProduct = useCallback(async () => {
@@ -82,6 +83,28 @@ const ProductDetails = () => {
 
     if (newQuantity >= minQuantity && newQuantity <= product.stock_quantity) {
       setQuantity(newQuantity);
+      setInputValue(String(newQuantity));
+    }
+  };
+
+  const handleInputChange = (e) => {
+    setInputValue(e.target.value);
+  };
+
+  const handleInputBlur = () => {
+    const isWeightBased = ['lb', 'kg', 'oz', 'g'].includes(product.unit);
+    const minQuantity = isWeightBased ? 0.1 : 1;
+    const parsed = parseFloat(inputValue);
+    if (isNaN(parsed) || parsed < minQuantity) {
+      setQuantity(minQuantity);
+      setInputValue(String(minQuantity));
+    } else if (parsed > product.stock_quantity) {
+      setQuantity(product.stock_quantity);
+      setInputValue(String(product.stock_quantity));
+    } else {
+      const clamped = isWeightBased ? parseFloat(parsed.toFixed(2)) : Math.floor(parsed);
+      setQuantity(clamped);
+      setInputValue(String(clamped));
     }
   };
 
@@ -298,13 +321,9 @@ const ProductDetails = () => {
                         </button>
                         <input
                           type="number"
-                          value={quantity}
-                          onChange={(e) => {
-                            const val = parseFloat(e.target.value);
-                            if (!isNaN(val) && val >= (isWeightBased ? 0.1 : 1) && val <= product.stock_quantity) {
-                              setQuantity(val);
-                            }
-                          }}
+                          value={inputValue}
+                          onChange={handleInputChange}
+                          onBlur={handleInputBlur}
                           className="w-24 text-center border-x-2 border-gray-300 py-3 font-semibold text-lg"
                           min={isWeightBased ? "0.1" : "1"}
                           step={isWeightBased ? "0.1" : "1"}
