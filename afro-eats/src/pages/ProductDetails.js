@@ -150,7 +150,8 @@ const ProductDetails = () => {
   const stockStatus = getStockStatus();
   const isWeightBased = ['lb', 'kg', 'oz', 'g'].includes(product.unit);
   const pricePerUnit = product.price + (product.platform_fee || 0);
-  const totalPrice = (pricePerUnit * quantity).toFixed(2);
+  const liveQuantity = parseFloat(inputValue);
+  const totalPrice = (pricePerUnit * (liveQuantity > 0 ? liveQuantity : quantity)).toFixed(2);
 
   return (
     <div className="min-h-screen bg-gray-50">
