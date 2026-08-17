@@ -101,12 +101,12 @@ function Navbar() {
             >
               🛒 Marketplace
             </Link>
-            <Link
+            {/* <Link
               to="/restaurants"
               className="text-gray-700 hover:text-green-600 transition-colors duration-200 font-medium"
             >
               🍽️ Restaurants
-            </Link>
+            </Link> */}
             <Link
               to="/grocery-stores"
               className="text-gray-700 hover:text-green-600 transition-colors duration-200 font-medium"
@@ -233,13 +233,13 @@ function Navbar() {
               >
                 🛒 Marketplace
               </Link>
-              <Link
+              {/* <Link
                 to="/restaurants"
                 className="block px-3 py-2 text-gray-700 hover:text-green-600 hover:bg-gray-50 rounded-md transition-colors duration-200 font-medium"
                 onClick={() => setIsMenuOpen(false)}
               >
                 🍽️ Restaurants
-              </Link>
+              </Link> */}
               <Link
                 to="/grocery-stores"
                 className="block px-3 py-2 text-gray-700 hover:text-green-600 hover:bg-gray-50 rounded-md transition-colors duration-200 font-medium"
